@@ -1,1 +1,127 @@
 # ReactX
+
+React-подобный UI-фреймворк на C++20 (только стандарт C++20, без C++23) с подключаемым бэкендом отрисовки.
+
+```cpp
+import reactx;          // C++20-модуль; или #include "reactx/reactx.hpp"
+#include <iostream>
+#include <string>
+using namespace rx;
+
+Element Counter(const Props& props) {
+    auto [count, setCount] = useState(props.get<int>("start", 0));
+
+    useEffect([count] {
+        std::cout << "count = " << count << '\n';
+        return [] { /* cleanup */ };
+    }, deps(count));
+
+    return h("box", {}, {
+        h("text", {}, {"Count: " + std::to_string(count)}),
+        h("button", {{"id", "inc"}, {"onClick", [setCount] { setCount([](int c) { return c + 1; }); }}}, {"+1"}),
+    });
+}
+
+int main() {
+    TextRenderer renderer;          // любой класс, реализующий rx::Renderer
+    Root root(renderer);
+    root.render(h(Counter, {{"start", 5}}));
+    root.dispatch(*renderer.findByProp("id", "inc"), "onClick");
+}
+```
+
+## Что есть
+
+- **Элементы**: `h("tag", props, children)`, `h(Component, props, children)`, строки как текстовые узлы, `fragment(...)`, проп `key`.
+- **Компоненты**: обычные функции `Element(const Props&)`; дети доступны через `props.children()`.
+- **Хуки**: `useState` (значение или функция-updater, пропуск ререндера при равном значении), `useEffect` (без deps / `deps(a, b)` / `deps()` = один раз, cleanup), `useRef`.
+- **Reconciler**: сравнивает деревья, сопоставляет детей по `key` или позиции, переставляет узлы вместо пересоздания, удаляет лишние пропсы.
+- **Батчинг**: `setState` только помечает компонент; перерисовка в `flush()` (автоматически после `render`/`dispatch`), родители раньше детей.
+- **События**: три вида обработчиков — `Callback` (`void()`, например `onClick`), `KeyHandler` (`void(const KeyEvent&)`, `onKey`) и `InputHandler` (`void(const std::string&)`, `onInput`). Бэкенд передаёт данные через `Root::dispatch(node, "onKey", KeyEvent{"Enter"})` или `dispatch(node, "onInput", std::string("текст"))`; если данные не подходят обработчику, `dispatch` вернёт `false`.
+- **Бэкенд**: интерфейс [`rx::Renderer`](include/reactx/renderer.hpp). Обработчики остаются в ядре и в бэкенд не передаются.
+- **TextRenderer**: хранит дерево в памяти, печатает его и лог операций — для отладки и тестов.
+
+## Сборка
+
+С модулями C++20 (`import reactx;`) — нужны CMake 3.28+, Ninja и GCC 14+ / Clang 17+ / MSVC 17.4+:
+
+```sh
+cmake --preset debug            # или release
+cmake --build --preset debug
+ctest --preset debug
+./build/debug/counter
+./build/debug/todo
+```
+
+Без Ninja (генератор Makefiles) модуль отключается сам и всё собирается через заголовки:
+
+```sh
+cmake -S . -B build
+cmake --build build -j
+./build/reactx_tests
+```
+
+Модуль можно выключить вручную: `-DREACTX_MODULES=OFF`.
+
+### `import` или `#include`
+
+- `import reactx;` подключает весь публичный API, включая `TextRenderer`. Стандартные заголовки (`<string>`, `<vector>`, …) нужно подключать самим: модуль их не протаскивает. `import std;` не используется — это C++23.
+- Заголовки (`reactx/reactx.hpp`) работают как раньше; модуль ([modules/reactx.cppm](modules/reactx.cppm)) лишь реэкспортирует их.
+- GCC 15.2 падает при сборке модулей с `-fsanitize=undefined`, поэтому с этим флагом модуль отключается автоматически.
+
+## Структура
+
+```
+include/reactx/   публичный API (element, hooks, renderer, root, text_renderer)
+modules/          reactx.cppm — C++20-модуль (import reactx;)
+src/              реализация; reconciler.cpp — ядро
+examples/         counter, todo
+tests/            тесты ядра; test_module.cpp — проверка import reactx;
+```
+
+Для обычной (быстрой) сборки без отладки:
+
+```sh
+cmake --preset release && cmake --build --preset release
+```
+
+## Как это работает
+
+1. `h(...)` строит дерево **элементов** — неизменяемое описание UI.
+2. `Root::render` передаёт его в **reconciler** ([src/reconciler.cpp](src/reconciler.cpp)). Он хранит дерево **fiber'ов**: смонтированные элементы со состоянием хуков и узлами бэкенда.
+3. При перерисовке reconciler сравнивает новые элементы со старыми fiber'ами:
+   - совпали тип и ключ (или позиция) → fiber обновляется, бэкенду уходят только изменённые пропсы и текст;
+   - не совпали → старый fiber удаляется, новый создаётся.
+4. Затем `sync` приводит порядок детей в бэкенде к нужному с минимумом `insertChild`/`removeChild`.
+5. После commit запускаются эффекты (`useEffect`). Если в них меняется состояние, сразу идёт следующий проход.
+
+Что видно в примерах:
+
+| Действие | Операции бэкенда |
+|---|---|
+| клик `+1` в counter | одна: `text #4 = "Count: 6"` |
+| отметить задачу в todo | две: счётчик «N left» и `[x]` |
+| reverse списка с ключами | две перестановки, ничего не создаётся |
+| ввести текст и нажать Enter | новая задача в конце списка, поле очищается |
+| удалить задачу | `remove` одного узла + `destroy` его поддерева |
+
+## Ограничения сейчас
+
+- Числа вроде `size_t` в props нужно явно приводить к `int64_t`.
+- После `setState` вне `dispatch` нужно самому вызвать `root.flush()`.
+- Дети всегда перерисовываются вместе с родителем (нет `memo`).
+
+## План
+
+- [x] Ядро: элементы, компоненты, props, ключи, фрагменты
+- [x] Хуки: `useState`, `useEffect`, `useRef`
+- [x] Reconciler с переиспользованием узлов по ключам
+- [x] Абстрактный бэкенд `rx::Renderer` + `TextRenderer`
+- [x] Примеры (counter, todo) и тесты
+- [x] Шаг 1 — события с данными: `onKey(const KeyEvent&)`, `onInput(text)`,
+      `Root::dispatch(node, event, data)`
+- [x] Модуль C++20: `import reactx;`
+- [ ] **Шаг 2 — бэкенд для терминала**: ANSI-отрисовка, рамки, цвета, фокус,
+      ввод с клавиатуры; демо — интерактивный todo
+- [ ] Шаг 3 — `useContext`, `useMemo`/`useCallback`, `memo` (пропуск ререндера при тех же props)
+- [ ] Позже — другие бэкенды: SDL/OpenGL, WebAssembly + DOM

@@ -26,7 +26,12 @@
 #include <utility>
 #include <vector>
 
+#include "reactx/path.hpp"
+
 namespace rx::net {
+
+using rx::matchPath;  // shared with the router (reactx/path.hpp)
+using rx::urlDecode;
 
 struct Request {
     std::string method;  // "GET", "POST", ...
@@ -34,10 +39,13 @@ struct Request {
     std::string query;   // raw, after '?': "page=2&q=milk"
     std::map<std::string, std::string> headers;  // names in lower case
     std::string body;
+    std::map<std::string, std::string> pathParams;  // from a route like "/api/todos/:id"
 
     std::string header(const std::string& name) const;
     // Decoded value of a query parameter: query "q=milk%20tea" -> param("q") == "milk tea".
     std::optional<std::string> param(const std::string& name) const;
+    // Value of a path parameter: route "/api/todos/:id", path "/api/todos/7" -> pathParam("id") == "7".
+    std::string pathParam(const std::string& name) const;
 };
 
 struct Response {
@@ -61,10 +69,15 @@ public:
     HttpServer(const HttpServer&) = delete;
     HttpServer& operator=(const HttpServer&) = delete;
 
-    // Routes match the exact path. They are tried before the files.
+    // Routes are tried before the files. A path can have parameters
+    // ("/api/todos/:id") and end with "*" (the rest of the path); exact
+    // routes win over patterns.
     void route(std::string method, std::string path, Handler handler);
     void get(std::string path, Handler handler) { route("GET", std::move(path), std::move(handler)); }
     void post(std::string path, Handler handler) { route("POST", std::move(path), std::move(handler)); }
+    void put(std::string path, Handler handler) { route("PUT", std::move(path), std::move(handler)); }
+    void patch(std::string path, Handler handler) { route("PATCH", std::move(path), std::move(handler)); }
+    void del(std::string path, Handler handler) { route("DELETE", std::move(path), std::move(handler)); }
 
     // Serve files from `root` for GET and HEAD ("/" -> index.html).
     // spaFallback: unknown paths without a file extension get index.html,
@@ -101,8 +114,6 @@ private:
 
 // Content type for a file extension (".wasm" -> "application/wasm").
 std::string mimeType(std::string_view extension);
-// "%20" -> " ", and "+" -> " " when `plusIsSpace` (query strings).
-std::string urlDecode(std::string_view text, bool plusIsSpace = false);
 // Parses the head of an HTTP request ("GET /x?a=1 HTTP/1.1\r\nHost: ...\r\n\r\n").
 // Returns nothing for a malformed request.
 std::optional<Request> parseRequestHead(std::string_view head);

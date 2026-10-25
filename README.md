@@ -198,6 +198,53 @@ server.run();   // до Ctrl+C
 
 Сервер для разработки на своём компьютере (слушает `127.0.0.1`), не для открытого интернета: нет HTTPS, keep-alive и защиты от перегрузки.
 
+## Сайт из нескольких страниц: роутер, данные, API
+
+Полноценное веб-приложение, где и интерфейс, и сервер — C++20 ([examples/web_app.cpp](examples/web_app.cpp) + [examples/api_server.cpp](examples/api_server.cpp)):
+
+```sh
+cmake --build --preset web && cmake --build --preset debug
+./build/debug/api_server build/web/app --port 8091 --data todos.json   # http://127.0.0.1:8091/
+```
+
+**Роутер** ([`reactx/router.hpp`](include/reactx/router.hpp)) — как React Router; в браузере через History API (адрес меняется, «назад»/«вперёд» работают, страница не перезагружается), в терминале — история в памяти:
+
+```cpp
+router::routes({
+    {"/",          h(Home)},
+    {"/todos",     h(TodoList)},
+    {"/todos/:id", h(TodoPage)},     // router::useParam("id")
+    {"*",          h(NotFound)},     // router::useLocation()
+});
+router::link({.to = "/todos/7", .label = "Открыть"});   // <a href>, Ctrl+клик — новая вкладка
+router::navigate("/todos");  router::back();  router::useQuery("show");
+```
+
+**Данные** ([`reactx/fetch.hpp`](include/reactx/fetch.hpp), пока в браузерной сборке):
+
+```cpp
+auto todos = useFetch("/api/todos");            // заново при смене url; todos.reload()
+if (todos.loading) ...; if (!todos.ok()) ... todos.errorText();
+for (const auto& t : todos.json().asArray()) ...
+fetch({.method = "POST", .url = "/api/todos", .body = json::object({{"title", "Молоко"}}).dump()},
+      [](const FetchResponse& r) { ... });
+```
+
+**JSON** ([`reactx/json.hpp`](include/reactx/json.hpp)) — свой, без зависимостей: `json::parse`, `v["key"]`, `v.get<int>("n", 0)`, `json::object({...})`, `json::array({...})`, `dump()` / `dump(2)`; ошибки с позицией; `\uXXXX` и суррогатные пары; `for (auto& x : json::parse(t).asArray())` безопасен (на временном значении возвращается копия).
+
+**API на сервере** ([examples/todo_api.hpp](examples/todo_api.hpp)): маршруты `rx::net::HttpServer` с параметрами и `*`:
+
+| Запрос | Ответ |
+|---|---|
+| `GET /api/todos` | список |
+| `POST /api/todos` `{"title": "..."}` | 201 + новая задача |
+| `GET /api/todos/:id` | задача или 404 |
+| `PATCH /api/todos/:id` `{"done": true}` | обновлённая задача |
+| `DELETE /api/todos/:id` | 204 |
+| любой другой `/api/...` | JSON 404 (а не страница сайта) |
+
+Ошибки — `{"error": "..."}` (400 при неверном JSON или пустом `title`). С `--data файл.json` задачи сохраняются на диск (атомарно, через временный файл) и переживают перезапуск сервера. Сайт отдаётся с SPA-fallback: прямой заход на `/todos/7` получает приложение, дальше страницу выбирает роутер.
+
 ## Сборка
 
 Зависимость одна — [Yoga](https://github.com/facebook/yoga) v3.2.1 (MIT). Если её нет в системе, CMake скачает её сам при первой настройке (нужен интернет; без интернета: `-DFETCHCONTENT_SOURCE_DIR_YOGA=/путь/к/yoga`).
@@ -236,10 +283,12 @@ cmake --build build -j
 include/reactx/   публичный API (element, hooks, renderer, root, text_renderer)
 modules/          reactx.cppm — C++20-модуль (import reactx;)
 src/              реализация; reconciler.cpp — ядро, terminal*.cpp — терминальный бэкенд
-examples/         counter, todo, todo_tui, ui_demo (терминал); web_counter, web_todo, web_ui_demo (браузер)
-web/              shell.html — HTML-шаблон и CSS для веб-примеров
+examples/         counter, todo, todo_tui, ui_demo (терминал); web_counter, web_todo, web_ui_demo (браузер);
+                  web_app + api_server + todo_api.hpp (сайт со страницами и API на C++)
+web/              shell.html — HTML-шаблон и CSS для веб-примеров; app_shell.html — для web_app
 tests/            тесты ядра, test_terminal.cpp — терминал, test_ui.cpp — rx::ui, test_module.cpp — import reactx;
-                  test_dom.cpp, test_ui_web.cpp + web/fake_dom.js — браузер под Node, test_http.cpp — HTTP-сервер
+                  test_dom.cpp, test_ui_web.cpp, test_web_app.cpp + web/fake_dom.js — браузер под Node;
+                  test_http.cpp, test_todo_api.cpp — сервер; test_json.cpp; test_router.cpp
 tools/            serve.cpp — reactx_serve, сервер для разработки
 ```
 
@@ -276,6 +325,7 @@ cmake --preset release && cmake --build --preset release
 - Терминал: ширина символа считается за 1 колонку (эмодзи и иероглифы шириной 2 могут сдвигать строку); курсор в `input` только в конце текста; нет прокрутки — что не влезло по высоте, обрезается; только POSIX (Linux/macOS).
 - `rx::ui`: переключение вкладок стрелками и выбор «по фокусу» пока не сделаны (компонент не может сам переместить фокус); нет прокрутки длинных списков.
 - Браузер: модули (`import reactx;`) в веб-сборке пока выключены; страница строится в браузере (для поисковиков нужен будет серверный рендеринг).
+- Роутер: нет базового пути (сайт должен лежать в корне домена — для GitHub Pages добавим в Шаге 9); `useFetch` в терминальной сборке пока не работает (только браузер).
 - Раскладка пересчитывается целиком на каждую перерисовку (для терминала это быстро, но для тысяч узлов понадобится кэш).
 - Дети перерисовываются вместе с родителем, если не обёрнуты в `memo<...>`; `memo` не сравнивает детей (`props.children()`).
 - Хуки нельзя вызывать в цикле с разным числом итераций (как и в React), поэтому `useCallback` для каждого элемента списка не сделать — нужен отдельный компонент.
@@ -297,8 +347,8 @@ cmake --preset release && cmake --build --preset release
 - [x] Шаг 5 — библиотека компонентов `rx::ui` с темой (Button, Input, Checkbox, Tabs, Modal, List)
 - [x] Шаг 6 — браузер: WebAssembly + DOM-бэкенд, веб-примеры counter и todo
 - [x] Шаг 7 — стили и веб-версия компонентов `rx::ui` (тот же код, что в терминале)
-- [ ] **Шаг 8** — несколько страниц (роутер) и загрузка данных (`fetch`)
-- [ ] Шаг 9 — публикация сайта (GitHub Pages)
+- [x] Шаг 8 — несколько страниц (роутер), загрузка данных (`useFetch`), свой JSON, REST API на C++
+- [ ] **Шаг 9** — публикация сайта (GitHub Pages)
 - [ ] Свой пакетный менеджер и CLI (аналог `npm`): создание проекта, зависимости, сборка;
       команда для разработки (как `npm run dev`) собирает веб-версию и сама запускает `reactx_serve`
 - [ ] Позже — окна на рабочем столе: SDL3 + Skia/ThorVG

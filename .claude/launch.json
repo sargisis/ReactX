@@ -6,6 +6,12 @@
       "runtimeExecutable": "build/debug/reactx_serve",
       "runtimeArgs": ["build/web", "--port", "8090"],
       "port": 8090
+    },
+    {
+      "name": "app",
+      "runtimeExecutable": "build/debug/api_server",
+      "runtimeArgs": ["build/web/app", "--port", "8091"],
+      "port": 8091
     }
   ]
 }

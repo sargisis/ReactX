@@ -21,8 +21,9 @@ endif()
 if(EMSCRIPTEN)
   set(REACTX_MODULES_DEFAULT OFF)
 endif()
-# GCC (checked with 15.2) crashes compiling modules with -fsanitize=undefined.
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_FLAGS MATCHES "sanitize=[a-z,]*undefined")
+# GCC (checked with 15.2) fails compiling modules with -fsanitize=undefined
+# (internal compiler error) and -fsanitize=thread (TU-local entity errors).
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_FLAGS MATCHES "sanitize=[a-z,]*(undefined|thread)")
   set(REACTX_MODULES_DEFAULT OFF)
 endif()
 option(REACTX_MODULES "Build the reactx C++20 module (import reactx;)" ${REACTX_MODULES_DEFAULT})
@@ -38,6 +39,9 @@ if(EMSCRIPTEN)
     src/reconciler.cpp
     src/root.cpp
     src/text_renderer.cpp
+    src/json.cpp
+    src/router.cpp
+    src/fetch.cpp
     src/dom.cpp
     src/ui_web.cpp
     src/ui_helpers.cpp
@@ -48,6 +52,7 @@ if(EMSCRIPTEN)
   target_link_options(reactx INTERFACE
     "SHELL:-sEXPORTED_FUNCTIONS=_main,_rx_dom_event"
     "SHELL:-sEXPORTED_RUNTIME_METHODS=ccall"
+    "SHELL:-sDEFAULT_LIBRARY_FUNCS_TO_INCLUDE=$stringToNewUTF8"
     "SHELL:-sALLOW_MEMORY_GROWTH=1")
   message(STATUS "ReactX: web build (Emscripten) - DOM backend")
 
@@ -61,6 +66,15 @@ if(EMSCRIPTEN)
   reactx_web_example(web_counter)
   reactx_web_example(web_todo)
   reactx_web_example(web_ui_demo)
+
+  # Full app with pages: built as build/web/app/index.html, run it with
+  # api_server (native build), which also serves its REST API.
+  add_executable(web_app examples/web_app.cpp)
+  target_link_libraries(web_app PRIVATE reactx)
+  set_target_properties(web_app PROPERTIES OUTPUT_NAME index SUFFIX ".html"
+                                           RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/app)
+  target_link_options(web_app PRIVATE "SHELL:--shell-file ${CMAKE_SOURCE_DIR}/web/app_shell.html")
+  set_property(TARGET web_app APPEND PROPERTY LINK_DEPENDS ${CMAKE_SOURCE_DIR}/web/app_shell.html)
   # Start page with links to the demos (http://localhost:8090/).
   configure_file(${CMAKE_SOURCE_DIR}/web/index.html ${CMAKE_BINARY_DIR}/index.html COPYONLY)
 
@@ -72,6 +86,13 @@ if(EMSCRIPTEN)
     "SHELL:--pre-js ${CMAKE_SOURCE_DIR}/tests/web/fake_dom.js" "SHELL:-sENVIRONMENT=node")
   set_property(TARGET reactx_dom_tests APPEND PROPERTY LINK_DEPENDS ${CMAKE_SOURCE_DIR}/tests/web/fake_dom.js)
   add_test(NAME reactx_dom_tests COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} $<TARGET_FILE:reactx_dom_tests>)
+
+  add_executable(reactx_web_app_tests tests/test_web_app.cpp)
+  target_link_libraries(reactx_web_app_tests PRIVATE reactx)
+  target_link_options(reactx_web_app_tests PRIVATE
+    "SHELL:--pre-js ${CMAKE_SOURCE_DIR}/tests/web/fake_dom.js" "SHELL:-sENVIRONMENT=node")
+  set_property(TARGET reactx_web_app_tests APPEND PROPERTY LINK_DEPENDS ${CMAKE_SOURCE_DIR}/tests/web/fake_dom.js)
+  add_test(NAME reactx_web_app_tests COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} $<TARGET_FILE:reactx_web_app_tests>)
 
   add_executable(reactx_ui_web_tests tests/test_ui_web.cpp)
   target_link_libraries(reactx_ui_web_tests PRIVATE reactx)
@@ -108,6 +129,9 @@ add_library(reactx
   src/reconciler.cpp
   src/root.cpp
   src/text_renderer.cpp
+  src/json.cpp
+  src/router.cpp
+  src/fetch.cpp
   src/terminal_renderer.cpp
   src/terminal.cpp
   src/ui_terminal.cpp
@@ -138,6 +162,10 @@ endif()
 add_executable(reactx_serve tools/serve.cpp)
 target_link_libraries(reactx_serve PRIVATE reactx_net)
 
+# Site + REST API in one process (examples/web_app.cpp is its front end).
+add_executable(api_server examples/api_server.cpp)
+target_link_libraries(api_server PRIVATE reactx reactx_net)
+
 function(reactx_example name)
   add_executable(${name} examples/${name}.cpp)
   target_link_libraries(${name} PRIVATE reactx)
@@ -158,6 +186,18 @@ add_test(NAME reactx_tests COMMAND reactx_tests)
 add_executable(reactx_terminal_tests tests/test_terminal.cpp)
 target_link_libraries(reactx_terminal_tests PRIVATE reactx)
 add_test(NAME reactx_terminal_tests COMMAND reactx_terminal_tests)
+
+add_executable(reactx_router_tests tests/test_router.cpp)
+target_link_libraries(reactx_router_tests PRIVATE reactx)
+add_test(NAME reactx_router_tests COMMAND reactx_router_tests)
+
+add_executable(reactx_json_tests tests/test_json.cpp)
+target_link_libraries(reactx_json_tests PRIVATE reactx)
+add_test(NAME reactx_json_tests COMMAND reactx_json_tests)
+
+add_executable(reactx_todo_api_tests tests/test_todo_api.cpp)
+target_link_libraries(reactx_todo_api_tests PRIVATE reactx reactx_net)
+add_test(NAME reactx_todo_api_tests COMMAND reactx_todo_api_tests)
 
 add_executable(reactx_http_tests tests/test_http.cpp)
 target_link_libraries(reactx_http_tests PRIVATE reactx_net)

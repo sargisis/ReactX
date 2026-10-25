@@ -2,7 +2,11 @@
 // The headers stay the source of truth; this file only re-exports them.
 module;
 
+#include "reactx/fetch.hpp"
+#include "reactx/json.hpp"
+#include "reactx/path.hpp"
 #include "reactx/reactx.hpp"
+#include "reactx/router.hpp"
 #include "reactx/terminal.hpp"
 #include "reactx/text_renderer.hpp"
 #include "reactx/ui.hpp"
@@ -52,6 +56,16 @@ using rx::Renderer;
 using rx::Root;
 using rx::TextRenderer;
 
+// fetch.hpp, path.hpp
+using rx::FetchRequest;
+using rx::FetchResponse;
+using rx::FetchState;
+using rx::fetch;
+using rx::useFetch;
+using rx::matchPath;
+using rx::urlDecode;
+using rx::queryParam;
+
 // terminal.hpp
 using rx::decodeKeys;
 using rx::Terminal;
@@ -59,6 +73,36 @@ using rx::TerminalApp;
 using rx::TerminalRenderer;
 
 }  // namespace rx
+
+// json.hpp
+export namespace rx::json {
+using rx::json::Value;
+using rx::json::Array;
+using rx::json::Object;
+using rx::json::Error;
+using rx::json::Type;
+using rx::json::object;
+using rx::json::array;
+using rx::json::parse;
+using rx::json::quote;
+}  // namespace rx::json
+
+// router.hpp
+export namespace rx::router {
+using rx::router::Params;
+using rx::router::Route;
+using rx::router::LinkProps;
+using rx::router::routes;
+using rx::router::link;
+using rx::router::navigate;
+using rx::router::back;
+using rx::router::currentPath;
+using rx::router::reset;
+using rx::router::useLocation;
+using rx::router::useParams;
+using rx::router::useParam;
+using rx::router::useQuery;
+}  // namespace rx::router
 
 // ui.hpp
 export namespace rx::ui {

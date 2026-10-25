@@ -139,7 +139,17 @@ EM_JS(void, rx_js_listen, (int app, double rootId), {
     const resync = function(el) {
         if (el && el.__rxValue !== undefined && el.value !== el.__rxValue) el.value = el.__rxValue;
     };
-    root.addEventListener("click", function(e) { send(e, "onClick", ""); });
+    root.addEventListener("click", function(e) {
+        // Router links: stay on the page (unless the user wants a new tab).
+        for (let el = e.target; el && el !== root; el = el.parentNode) {
+            if (el.getAttribute && el.getAttribute("data-rx-link") !== null) {
+                if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.button) e.preventDefault();
+                else return;  // the browser opens it; don't navigate here too
+                break;
+            }
+        }
+        send(e, "onClick", "");
+    });
     root.addEventListener("input", function(e) { send(e, "onInput", e.target.value ?? ""); resync(e.target); });
     root.addEventListener("change", function(e) {
         const t = e.target;
@@ -244,6 +254,10 @@ void DomRenderer::insertChild(NodeHandle parent, NodeHandle child, std::size_t i
 void DomRenderer::removeChild(NodeHandle parent, NodeHandle child) { rx_js_remove(js(parent), js(child)); }
 
 void DomRenderer::destroyNode(NodeHandle node) { rx_js_destroy(js(node)); }
+
+void flushDom() {
+    for (Root* root : apps()) root->flush();
+}
 
 Root& mountDom(Element element, const std::string& container) {
     // Lives for the whole page: the runtime keeps running after main().

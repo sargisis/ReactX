@@ -1,0 +1,178 @@
+// Tests for rx::json.
+#include <functional>
+#include <utility>
+#include <iostream>
+#include <string>
+#include <vector>
+
+#include "reactx/json.hpp"
+
+using namespace rx;
+
+namespace {
+
+int failures = 0;
+std::vector<std::pair<std::string, std::function<void()>>> tests;
+
+#define CHECK(cond)                                                                   \
+    do {                                                                              \
+        if (!(cond)) {                                                                \
+            ++failures;                                                               \
+            std::cerr << "  FAIL " << __FILE__ << ":" << __LINE__ << ": " #cond "\n"; \
+        }                                                                             \
+    } while (0)
+
+#define TEST(name)                                                            \
+    void name();                                                              \
+    const bool name##_registered = (tests.emplace_back(#name, name), true);   \
+    void name()
+
+bool fails(std::string_view text) {
+    try {
+        json::parse(text);
+        return false;
+    } catch (const json::Error&) {
+        return true;
+    }
+}
+
+TEST(parses_scalars) {
+    CHECK(json::parse("null").isNull());
+    CHECK(json::parse("true").asBool());
+    CHECK(!json::parse(" false ").asBool());
+    CHECK(json::parse("42").asInt() == 42);
+    CHECK(json::parse("-0.5").asNumber() == -0.5);
+    CHECK(json::parse("1e3").asNumber() == 1000);
+    CHECK(json::parse("2.5E-1").asNumber() == 0.25);
+    CHECK(json::parse(R"("hi")").asString() == "hi");
+}
+
+TEST(parses_nested_values) {
+    auto v = json::parse(R"({"title": "Buy milk", "done": false, "tags": ["home", "shop"], "meta": {"n": 3}})");
+    CHECK(v.isObject());
+    CHECK(v.size() == 4);
+    CHECK(v["title"].asString() == "Buy milk");
+    CHECK(v["tags"].size() == 2);
+    CHECK(v["tags"][1].asString() == "shop");
+    CHECK(v["meta"]["n"].asInt() == 3);
+    CHECK(v["missing"].isNull());        // const-style lookup of a missing key
+    CHECK(std::as_const(v)["tags"][9].isNull());  // out of range on a const value: null
+}
+
+TEST(string_escapes_and_unicode) {
+    CHECK(json::parse(R"("a\"b\\c\/d\n\t")").asString() == "a\"b\\c/d\n\t");
+    CHECK(json::parse(R"("привет")").asString() == "привет");
+    CHECK(json::parse(R"("😀")").asString() == "😀");  // surrogate pair
+    CHECK(json::parse(R"("уже UTF-8")").asString() == "уже UTF-8");
+    CHECK(json::quote("a\"b\n\x01") == R"("a\"b\n\u0001")");
+}
+
+TEST(rejects_invalid_json) {
+    CHECK(fails(""));
+    CHECK(fails("{"));
+    CHECK(fails("[1, 2,]"));
+    CHECK(fails(R"({"a" 1})"));
+    CHECK(fails(R"({a: 1})"));
+    CHECK(fails("01"));
+    CHECK(fails("1."));
+    CHECK(fails("-"));
+    CHECK(fails("tru"));
+    CHECK(fails(R"("unterminated)"));
+    CHECK(fails("\"tab\there\""));      // raw control character
+    CHECK(fails(R"("\ud83d")"));        // lone surrogate
+    CHECK(fails("1e400"));               // out of range
+    CHECK(fails("[1] [2]"));
+    CHECK(fails(std::string(600, '[') + std::string(600, ']')));  // too deep
+}
+
+TEST(error_has_offset) {
+    try {
+        json::parse(R"({"a": tru})");
+        CHECK(false);
+    } catch (const json::Error& e) {
+        CHECK(e.offset() == 6);
+        CHECK(std::string(e.what()).find("offset 6") != std::string::npos);
+    }
+}
+
+TEST(dump_is_compact_and_sorted) {
+    auto v = json::parse(R"({ "b": [1, 2.5, -3], "a": "x", "c": {"z": null, "y": true} })");
+    CHECK(v.dump() == R"({"a":"x","b":[1,2.5,-3],"c":{"y":true,"z":null}})");
+    CHECK(json::parse(v.dump()) == v);  // round trip
+}
+
+TEST(pretty_print) {
+    auto v = json::object({{"a", 1}, {"list", json::array({true, "x"})}});
+    CHECK(v.dump(2) == "{\n  \"a\": 1,\n  \"list\": [\n    true,\n    \"x\"\n  ]\n}");
+    CHECK(json::array().dump(2) == "[]");
+}
+
+TEST(builders_and_mutation) {
+    json::Value todo = json::object({{"id", 7}, {"title", "Read"}});
+    todo["done"] = true;
+    todo["tags"].push("book");
+    todo["tags"].push(2);
+    CHECK(todo.dump() == R"({"done":true,"id":7,"tags":["book",2],"title":"Read"})");
+
+    json::Value empty;
+    empty["x"]["y"] = 1;  // null becomes nested objects
+    CHECK(empty.dump() == R"({"x":{"y":1}})");
+}
+
+TEST(get_with_fallback) {
+    auto v = json::parse(R"({"n": 5, "s": "str", "b": true})");
+    CHECK(v.get<int>("n") == 5);
+    CHECK(v.get<int>("missing", -1) == -1);
+    CHECK(v.get<int>("s", -1) == -1);  // wrong type
+    CHECK(v.get<std::string>("s") == "str");
+    CHECK(v.get<bool>("b"));
+    CHECK(v.contains("n") && !v.contains("zzz"));
+}
+
+TEST(type_mismatch_throws) {
+    bool threw = false;
+    try {
+        (void)json::parse("[1]").asString();
+    } catch (const json::Error& e) {
+        threw = std::string(e.what()) == "json: expected string, got array";
+    }
+    CHECK(threw);
+}
+
+TEST(temporaries_are_safe_in_range_for) {
+    // C++20 would destroy the parsed value before the loop if asArray()
+    // returned a reference here; on a temporary it returns a copy.
+    int sum = 0;
+    for (const auto& n : json::parse("[1, 2, 3]").asArray()) sum += static_cast<int>(n.asInt());
+    CHECK(sum == 6);
+    std::string s = json::parse(R"("moved")").asString();
+    CHECK(s == "moved");
+    std::size_t keys = 0;
+    for (const auto& [k, v] : json::parse(R"({"a": 1, "b": 2})").asObject()) keys += k.size();
+    CHECK(keys == 2);
+}
+
+TEST(numbers_print_cleanly) {
+    CHECK(json::Value(3).dump() == "3");
+    CHECK(json::Value(0.1).dump() == "0.1");
+    CHECK(json::Value(-2.5e-8).dump() == "-2.5e-08");
+    CHECK(json::Value(1e20).dump() == "1e+20");  // beyond 2^53: shortest exact form
+    CHECK(json::parse("9007199254740993").dump() == "9007199254740992");  // beyond 2^53: nearest double
+}
+
+}  // namespace
+
+int main() {
+    for (auto& [name, fn] : tests) {
+        std::cout << name << '\n';
+        try {
+            fn();
+        } catch (const std::exception& e) {
+            ++failures;
+            std::cerr << "  EXCEPTION: " << e.what() << '\n';
+        }
+    }
+    std::cout << (failures ? "FAILED: " : "OK, all tests passed") << (failures ? std::to_string(failures) : "")
+              << '\n';
+    return failures ? 1 : 0;
+}

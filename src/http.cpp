@@ -98,28 +98,10 @@ std::string mimeType(std::string_view ext) {
     return it == types.end() ? "application/octet-stream" : it->second;
 }
 
-std::string urlDecode(std::string_view text, bool plusIsSpace) {
-    std::string out;
-    out.reserve(text.size());
-    auto hex = [](char c) -> int {
-        if (c >= '0' && c <= '9') return c - '0';
-        if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-        if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-        return -1;
-    };
-    for (std::size_t i = 0; i < text.size(); ++i) {
-        char c = text[i];
-        if (c == '%' && i + 2 < text.size()) {
-            int hi = hex(text[i + 1]), lo = hex(text[i + 2]);
-            if (hi >= 0 && lo >= 0) {
-                out += static_cast<char>(hi * 16 + lo);
-                i += 2;
-                continue;
-            }
-        }
-        out += (plusIsSpace && c == '+') ? ' ' : c;
-    }
-    return out;
+
+std::string Request::pathParam(const std::string& name) const {
+    auto it = pathParams.find(name);
+    return it == pathParams.end() ? std::string{} : it->second;
 }
 
 std::string Request::header(const std::string& name) const {
@@ -127,18 +109,7 @@ std::string Request::header(const std::string& name) const {
     return it == headers.end() ? std::string{} : it->second;
 }
 
-std::optional<std::string> Request::param(const std::string& name) const {
-    std::string_view rest = query;
-    while (!rest.empty()) {
-        auto amp = rest.find('&');
-        std::string_view pair = rest.substr(0, amp);
-        rest = amp == std::string_view::npos ? std::string_view{} : rest.substr(amp + 1);
-        auto eq = pair.find('=');
-        if (urlDecode(pair.substr(0, eq), true) != name) continue;
-        return eq == std::string_view::npos ? std::string{} : urlDecode(pair.substr(eq + 1), true);
-    }
-    return std::nullopt;
-}
+std::optional<std::string> Request::param(const std::string& name) const { return queryParam(query, name); }
 
 Response Response::text(std::string body, int status) {
     return {status, "text/plain; charset=utf-8", std::move(body), {}};
@@ -324,10 +295,33 @@ Response HttpServer::handle(const Request& req) const {
     std::string method = req.method == "HEAD" ? "GET" : req.method;
     if (auto it = routes_.find({method, req.path}); it != routes_.end()) return it->second(req);
 
+    // Patterns: first those with ":param" only, then those ending in "*"
+    // (catch-alls like "/api/*" must not hide "/api/todos/:id").
+    bool otherMethod = false;
+    for (bool wildcards : {false, true}) {
+        for (const auto& [key, handler] : routes_) {
+            const auto& [m, pattern] = key;
+            if (pattern.find_first_of(":*") == std::string::npos) {
+                if (!wildcards && pattern == req.path) otherMethod = true;
+                continue;
+            }
+            if ((pattern.find('*') != std::string::npos) != wildcards) continue;
+            std::map<std::string, std::string> params;
+            if (!matchPath(pattern, req.path, params)) continue;
+            if (m != method) {
+                otherMethod = true;
+                continue;
+            }
+            Request withParams = req;
+            withParams.pathParams = std::move(params);
+            return handler(withParams);
+        }
+        if (otherMethod) break;  // a more specific pattern exists for another method
+    }
+
     if (method == "GET")
         if (auto file = serveFile(req)) return *file;
 
-    bool otherMethod = std::ranges::any_of(routes_, [&](const auto& r) { return r.first.second == req.path; });
     if (otherMethod || (!root_.empty() && method != "GET")) return Response::text("method not allowed\n", 405);
     return Response::text("not found\n", 404);
 }

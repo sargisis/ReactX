@@ -99,6 +99,43 @@
     createTextNode(text) { return new Text(text); },
   };
 
+  // Browser history and fetch, enough for rx::router and rx::useFetch.
+  const windowListeners = {};
+  globalThis.window = {
+    addEventListener(type, fn) { (windowListeners[type] ||= []).push(fn); },
+    scrollTo() {},
+  };
+  globalThis.location = { pathname: "/", search: "" };
+  const entries = [{ pathname: "/", search: "" }];
+  let current = 0;
+  const setLocation = (url) => {
+    const q = url.indexOf("?");
+    location.pathname = q < 0 ? url : url.slice(0, q);
+    location.search = q < 0 ? "" : url.slice(q);
+  };
+  globalThis.history = {
+    pushState(_s, _t, url) { entries.splice(current + 1); entries.push(url); current++; setLocation(url); },
+    replaceState(_s, _t, url) { entries[current] = url; setLocation(url); },
+    back() {
+      if (current === 0) return;
+      current--;
+      setLocation(typeof entries[current] === "string" ? entries[current] : "/");
+      setTimeout(() => (windowListeners.popstate || []).forEach(fn => fn({ type: "popstate" })), 0);  // async, like browsers
+    },
+  };
+  // fetch: answers come from rxTest.mock(); every request is recorded.
+  const mocks = {};
+  const requests = [];
+  globalThis.fetch = (url, opts) => {
+    const method = (opts && opts.method) || "GET";
+    requests.push(method + " " + url + (opts && opts.body ? " " + opts.body : ""));
+    const m = mocks[method + " " + url];
+    return new Promise((resolve, reject) => setTimeout(() => {
+      if (!m) return reject(new Error("no route " + method + " " + url));
+      resolve({ status: m.status, text: () => Promise.resolve(m.body) });
+    }, 0));
+  };
+
   // Helpers the C++ tests call through emscripten_run_script.
   const byId = (id) => {
     const el = document.querySelector("#" + id);
@@ -116,6 +153,12 @@
   const nth = (list, i, what) => { const el = list[i || 0]; if (!el) throw new Error("not found: " + what); return el; };
   const byText = (text) => nth(all(e => e.textContent === text).reverse(), 0, "text " + text);  // deepest match
   globalThis.rxTest = {
+    mock: (method, url, status, body) => { mocks[method + " " + url] = { status, body }; },
+    requests: () => requests.join("\n"),
+    path: () => location.pathname + location.search,
+    back: () => history.back(),
+    clickPrevented: (id) => { const e = event("click", { button: 0 }); byId(id).dispatchEvent(e); return e.defaultPrevented ? "prevented" : "followed"; },
+    ctrlClick: (id) => { const e = event("click", { button: 0, ctrlKey: true }); byId(id).dispatchEvent(e); return e.defaultPrevented ? "prevented" : "followed"; },
     clickText: (text) => byText(text).dispatchEvent(event("click")),
     clickClass: (cls, i) => nth(byClass(cls), i, cls).dispatchEvent(event("click")),
     countClass: (cls) => String(byClass(cls).length),

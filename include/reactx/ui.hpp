@@ -26,7 +26,7 @@ struct Theme {
     std::string success = "green";
     std::string warning = "yellow";
     std::string danger = "red";
-    std::string surface;            // modal background ("" = terminal default)
+    std::string surface{};          // modal background ("" = terminal default)
 
     bool operator==(const Theme&) const = default;
 };

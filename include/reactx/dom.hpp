@@ -25,6 +25,8 @@
 // Events bubble like in React: the target's handler runs, then the handlers of
 // all its ancestors. Elements with the data-rx-self attribute only get clicks
 // on themselves, not on their children (dialog backdrops).
+// data-rx-link: a click on this <a> doesn't load the page (the router handles
+// it); Ctrl/Cmd/Shift+click and middle click still work as usual.
 // data-rx-trap: while such an element is on the page, Tab stays inside the
 // last one; it takes focus when it appears and gives it back when removed.
 
@@ -59,5 +61,9 @@ private:
 // running after main() returns (a web page has no main loop). Returns the Root,
 // e.g. to call render() again later.
 Root& mountDom(Element element, const std::string& container = "#app");
+
+// Re-renders every mounted app whose state changed outside of a DOM event
+// (a fetch answer, the Back button, a timer). The router and useFetch call it.
+void flushDom();
 
 }  // namespace rx

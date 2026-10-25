@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <map>
 #include <iostream>
 #include <string>
 #include <thread>
@@ -212,6 +213,41 @@ TEST(routes_and_methods) {
     CHECK(request(r.port(), "DELETE", "/api/echo").status == 405);
     CHECK(request(r.port(), "POST", "/index.html").status == 405);
     CHECK(request(r.port(), "GET", "/api/fail").status == 500);
+}
+
+TEST(path_patterns) {
+    std::map<std::string, std::string> p;
+    CHECK(matchPath("/api/todos/:id", "/api/todos/7", p) && p["id"] == "7");
+    CHECK(matchPath("/u/:name/posts/:post", "/u/ann%20b/posts/3/", p) && p["name"] == "ann b" && p["post"] == "3");
+    CHECK(!matchPath("/api/todos/:id", "/api/todos", p));
+    CHECK(!matchPath("/api/todos/:id", "/api/todos/7/x", p));
+    CHECK(matchPath("/files/*", "/files/a/b.txt", p) && p["*"] == "a/b.txt");
+    CHECK(matchPath("/", "/", p));
+}
+
+TEST(routes_with_params) {
+    Running r([](HttpServer& s) {
+        s.get("/api/todos/:id", [](const Request& q) { return Response::text("get " + q.pathParam("id")); });
+        s.del("/api/todos/:id", [](const Request& q) { return Response::text("del " + q.pathParam("id")); });
+        s.patch("/api/todos/:id", [](const Request& q) { return Response::text("patch " + q.pathParam("id") + " " + q.body); });
+        s.get("/api/todos/special", [](const Request&) { return Response::text("exact"); });
+    });
+    CHECK(request(r.port(), "GET", "/api/todos/7").body == "get 7");
+    CHECK(request(r.port(), "DELETE", "/api/todos/7").body == "del 7");
+    CHECK(request(r.port(), "PATCH", "/api/todos/3", "{}").body == "patch 3 {}");
+    CHECK(request(r.port(), "GET", "/api/todos/special").body == "exact");  // exact wins
+    CHECK(request(r.port(), "POST", "/api/todos/7").status == 405);
+    CHECK(request(r.port(), "GET", "/api/todos").status == 404);
+}
+
+TEST(wildcards_come_last) {
+    Running r([](HttpServer& s) {
+        s.get("/api/*", [](const Request& q) { return Response::text("any " + q.pathParam("*"), 404); });
+        s.get("/api/items/:id", [](const Request& q) { return Response::text("item " + q.pathParam("id")); });
+    });
+    CHECK(request(r.port(), "GET", "/api/items/5").body == "item 5");
+    auto other = request(r.port(), "GET", "/api/whatever/x");
+    CHECK(other.status == 404 && other.body == "any whatever/x");
 }
 
 TEST(bad_requests) {

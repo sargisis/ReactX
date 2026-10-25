@@ -58,6 +58,28 @@
       if (this.disabled) attrs += ` .disabled`;
       return `<${tag}${attrs}>${this.innerHTML}</${tag}>`;
     }
+    // Selectors: "tag", "[attr]", "tag[attr]", comma-separated.
+    querySelectorAll(selector) {
+      const tests = selector.split(",").map(part => {
+        const m = part.trim().match(/^([a-z0-9]*)(?:\[([a-z0-9-]+)\])?$/);
+        if (!m) throw new Error("fake DOM: unsupported selector " + part);
+        return el => (!m[1] || el.tagName === m[1].toUpperCase()) && (!m[2] || el.getAttribute(m[2]) !== null);
+      });
+      const out = [];
+      const walk = el => {
+        for (const c of el.childNodes) if (c instanceof Element) {
+          if (tests.some(t => t(c))) out.push(c);
+          walk(c);
+        }
+      };
+      walk(this);
+      return out;
+    }
+    focus() { document.activeElement = this; }
+    contains(other) { for (let n = other; n; n = n.parentNode) if (n === this) return true; return false; }
+    get isConnected() { for (let n = this; n; n = n.parentNode) if (n === app || n === head) return true; return false; }
+    set textContent(text) { this.childNodes = [new Text(text)]; }
+    get textContent() { return this.childNodes.map(c => c instanceof Text ? c.nodeValue : c.textContent).join(""); }
     find(pred) {
       if (pred(this)) return this;
       for (const c of this.childNodes) if (c instanceof Element) { const r = c.find(pred); if (r) return r; }
@@ -67,7 +89,11 @@
 
   const app = new Element("div");
   app.setAttribute("id", "app");
+  const head = new Element("head");
   globalThis.document = {
+    head,
+    activeElement: null,
+    getElementById(id) { return head.find(e => e.id === id || e.getAttribute("id") === id) || app.find(e => e.getAttribute("id") === id); },
     querySelector(sel) { return sel === "#app" ? app : app.find(e => "#" + e.getAttribute("id") === sel); },
     createElement(tag) { return new Element(tag); },
     createTextNode(text) { return new Text(text); },
@@ -80,7 +106,24 @@
     return el;
   };
   const event = (type, extra) => Object.assign({ type, preventDefault() { this.defaultPrevented = true; } }, extra);
+  const all = (pred) => {
+    const out = [];
+    const walk = (el) => { for (const c of el.childNodes) if (c instanceof Element) { if (pred(c)) out.push(c); walk(c); } };
+    walk(app);
+    return out;
+  };
+  const byClass = (cls) => all(e => (e.getAttribute("class") || "").split(" ").includes(cls));
+  const nth = (list, i, what) => { const el = list[i || 0]; if (!el) throw new Error("not found: " + what); return el; };
+  const byText = (text) => nth(all(e => e.textContent === text).reverse(), 0, "text " + text);  // deepest match
   globalThis.rxTest = {
+    clickText: (text) => byText(text).dispatchEvent(event("click")),
+    clickClass: (cls, i) => nth(byClass(cls), i, cls).dispatchEvent(event("click")),
+    countClass: (cls) => String(byClass(cls).length),
+    typeClass: (cls, text, i) => { const el = nth(byClass(cls), i, cls); el.value = text; el.dispatchEvent(event("input")); },
+    keyClass: (cls, key, i) => nth(byClass(cls), i, cls).dispatchEvent(event("keydown", { key })),
+    toggleIn: (cls, i) => { const el = nth(byClass(cls), i, cls).querySelectorAll("input")[0]; el.checked = !el.checked; el.dispatchEvent(event("change")); },
+    focusText: (text) => byText(text).focus(),
+    keyFocused: (key, shift) => { const e = event("keydown", { key, shiftKey: !!shift }); document.activeElement.dispatchEvent(e); return e.defaultPrevented ? "prevented" : ""; },
     html: () => app.innerHTML,
     click: (id) => byId(id).dispatchEvent(event("click")),
     type: (id, text) => { const el = byId(id); el.value = text; el.dispatchEvent(event("input")); },
@@ -88,5 +131,6 @@
     key: (id, key, shift) => byId(id).dispatchEvent(event("keydown", { key, shiftKey: !!shift })),
     submit: (id) => { const e = event("submit"); byId(id).dispatchEvent(e); return e.defaultPrevented ? "prevented" : "reloaded"; },
     value: (id) => byId(id).value,
+    focused: () => document.activeElement ? (document.activeElement.textContent || document.activeElement.tagName) : "",
   };
 })();

@@ -52,6 +52,12 @@ Element App(const Props&) {
         // Only the outer div has onClick: the click on the span bubbles to it.
         h("div", {{"id", "outer"}, {"onClick", [setCount] { setCount([](int c) { return c + 10; }); }}}, {
             h("span", {{"id", "inner"}}, {"inner"}),
+            // Both run, like React: +100 here, then +10 on the outer div.
+            h("button", {{"id", "both"}, {"onClick", [setCount] { setCount([](int c) { return c + 100; }); }}}, {"both"}),
+            // data-rx-self: only clicks on this element itself.
+            h("div", {{"id", "self"}, {"data-rx-self", true}, {"onClick", [setCount] { setCount([](int c) { return c + 1000; }); }}}, {
+                h("span", {{"id", "selfchild"}}, {"child"}),
+            }),
         }),
         h("input", {{"type", "text"}, {"id", "name"}, {"value", text},
                     {"onInput", [setText, upper](const std::string& t) {
@@ -90,6 +96,12 @@ int main() {
     std::cout << "click bubbles to the nearest handler\n";
     js("rxTest.click('inner')");
     CHECK(has("count=12"));
+    js("rxTest.click('both')");
+    CHECK(has("count=122"));  // the button's handler and the outer div's
+    js("rxTest.click('selfchild')");
+    CHECK(has("count=132"));  // the data-rx-self div skipped, the outer div ran
+    js("rxTest.click('self')");
+    CHECK(has("count=1142"));
 
     std::cout << "input is controlled\n";
     js("rxTest.type('name', 'ann')");

@@ -39,6 +39,8 @@ if(EMSCRIPTEN)
     src/root.cpp
     src/text_renderer.cpp
     src/dom.cpp
+    src/ui_web.cpp
+    src/ui_helpers.cpp
   )
   target_include_directories(reactx PUBLIC include)
   target_compile_options(reactx PRIVATE -Wall -Wextra -Wpedantic)
@@ -58,6 +60,7 @@ if(EMSCRIPTEN)
   endfunction()
   reactx_web_example(web_counter)
   reactx_web_example(web_todo)
+  reactx_web_example(web_ui_demo)
   # Start page with links to the demos (http://localhost:8090/).
   configure_file(${CMAKE_SOURCE_DIR}/web/index.html ${CMAKE_BINARY_DIR}/index.html COPYONLY)
 
@@ -69,6 +72,13 @@ if(EMSCRIPTEN)
     "SHELL:--pre-js ${CMAKE_SOURCE_DIR}/tests/web/fake_dom.js" "SHELL:-sENVIRONMENT=node")
   set_property(TARGET reactx_dom_tests APPEND PROPERTY LINK_DEPENDS ${CMAKE_SOURCE_DIR}/tests/web/fake_dom.js)
   add_test(NAME reactx_dom_tests COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} $<TARGET_FILE:reactx_dom_tests>)
+
+  add_executable(reactx_ui_web_tests tests/test_ui_web.cpp)
+  target_link_libraries(reactx_ui_web_tests PRIVATE reactx)
+  target_link_options(reactx_ui_web_tests PRIVATE
+    "SHELL:--pre-js ${CMAKE_SOURCE_DIR}/tests/web/fake_dom.js" "SHELL:-sENVIRONMENT=node")
+  set_property(TARGET reactx_ui_web_tests APPEND PROPERTY LINK_DEPENDS ${CMAKE_SOURCE_DIR}/tests/web/fake_dom.js)
+  add_test(NAME reactx_ui_web_tests COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} $<TARGET_FILE:reactx_ui_web_tests>)
   return()
 endif()
 
@@ -100,7 +110,8 @@ add_library(reactx
   src/text_renderer.cpp
   src/terminal_renderer.cpp
   src/terminal.cpp
-  src/ui.cpp
+  src/ui_terminal.cpp
+  src/ui_helpers.cpp
 )
 target_include_directories(reactx PUBLIC include)
 target_link_libraries(reactx PRIVATE ${REACTX_YOGA_TARGET})

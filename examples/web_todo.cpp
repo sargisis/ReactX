@@ -71,7 +71,7 @@ Element App(const Props&) {
                             {"onClick", [setFilter, name] { setFilter(name); }}}, {name});
     };
 
-    return h("div", {{"className", "card"}}, {
+    return h("div", {{"className", "card demo"}}, {
         h("h1", {}, {"ReactX todo"}),
         h("form", {{"className", "row"}, {"id", "form"},
                    {"onSubmit", [setTodos, setDraft, draft, &nextId] {

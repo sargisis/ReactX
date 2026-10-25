@@ -70,17 +70,40 @@ EM_JS(void, rx_js_remove_prop, (double id, const char* name), {
     else el.removeAttribute(n === "className" ? "class" : n === "htmlFor" ? "for" : n);
 });
 
+// Focusable elements inside `el`, in tab order (enough for dialogs).
+EM_JS(void, rx_js_init_focus, (), {
+    if (Module.rxFocusables) return;
+    Module.rxFocusables = function(el) {
+        return Array.from(el.querySelectorAll("button, input, select, textarea, a[href], [tabindex]"))
+            .filter(function(n) { return !n.disabled && n.getAttribute("tabindex") !== "-1"; });
+    };
+});
+
 EM_JS(void, rx_js_insert, (double parentId, double childId, int index), {
     const parent = Module.rxNodes.get(parentId);
     const child = Module.rxNodes.get(childId);
+    const fresh = !child.parentNode;
     if (child.parentNode === parent) parent.removeChild(child);
     parent.insertBefore(child, parent.childNodes[index] || null);
+    // data-rx-trap (dialogs): move focus inside when it appears, remember where it was.
+    if (fresh && child.getAttribute && child.getAttribute("data-rx-trap") !== null) {
+        child.__rxPrevFocus = document.activeElement;
+        const focusFirst = function() {
+            const first = Module.rxFocusables(child)[0];
+            if (first) first.focus();
+        };
+        // Already on the page: focus now; otherwise once its parent is attached.
+        if (child.isConnected) focusFirst(); else queueMicrotask(focusFirst);
+    }
 });
 
 EM_JS(void, rx_js_remove, (double parentId, double childId), {
     const parent = Module.rxNodes.get(parentId);
     const child = Module.rxNodes.get(childId);
     if (child.parentNode === parent) parent.removeChild(child);
+    // A dialog closed: give focus back to where it was.
+    const prev = child.__rxPrevFocus;
+    if (prev && prev.focus && prev.isConnected !== false) prev.focus();
 });
 
 EM_JS(void, rx_js_destroy, (double id), {
@@ -93,17 +116,24 @@ EM_JS(void, rx_js_listen, (int app, double rootId), {
     const keyName = function(k) {
         return { ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right", Esc: "Escape" }[k] || k;
     };
-    // Calls the handler on the target, then on its ancestors until one exists.
+    // Like React: the handler of the target runs, then those of all its
+    // ancestors. An element with data-rx-self only gets clicks on itself
+    // (a dialog backdrop must not close on clicks inside the dialog).
     const send = function(e, name, text) {
+        const path = [];
         for (let el = e.target; el; el = el.parentNode) {
-            if (el.__rxId === undefined) continue;
-            const handled = Module.ccall("rx_dom_event", "number",
-                ["number", "number", "string", "string", "number", "number", "number"],
-                [app, el.__rxId, name, text, e.ctrlKey ? 1 : 0, e.altKey ? 1 : 0, e.shiftKey ? 1 : 0]);
-            if (handled) return true;
+            const selfOnly = name === "onClick" && el !== e.target && el.getAttribute("data-rx-self") !== null;
+            if (el.__rxId !== undefined && !selfOnly) path.push(el.__rxId);
             if (el === root) break;
         }
-        return false;
+        let handled = false;
+        for (const id of path) {
+            if (!Module.rxNodes.has(id)) continue;  // removed by an earlier handler
+            handled = Module.ccall("rx_dom_event", "number",
+                ["number", "number", "string", "string", "number", "number", "number"],
+                [app, id, name, text, e.ctrlKey ? 1 : 0, e.altKey ? 1 : 0, e.shiftKey ? 1 : 0]) !== 0 || handled;
+        }
+        return handled;
     };
     // Keep controlled inputs in sync with the value from C++ state.
     const resync = function(el) {
@@ -116,7 +146,22 @@ EM_JS(void, rx_js_listen, (int app, double rootId), {
         send(e, "onChange", t.type === "checkbox" || t.type === "radio" ? (t.checked ? "true" : "false") : (t.value ?? ""));
     });
     // No preventDefault: typing must keep working even if a parent has onKey.
-    root.addEventListener("keydown", function(e) { if (!e.isComposing) send(e, "onKey", keyName(e.key)); });
+    root.addEventListener("keydown", function(e) {
+        if (e.isComposing) return;
+        if (e.key === "Tab") {  // keep Tab inside the last open dialog
+            const traps = root.querySelectorAll("[data-rx-trap]");
+            const trap = traps[traps.length - 1];
+            if (trap) {
+                const items = Module.rxFocusables(trap);
+                const i = items.indexOf(document.activeElement);
+                if (items.length && (i < 0 || (e.shiftKey && i === 0) || (!e.shiftKey && i === items.length - 1))) {
+                    e.preventDefault();
+                    items[e.shiftKey ? items.length - 1 : 0].focus();
+                }
+            }
+        }
+        send(e, "onKey", keyName(e.key));
+    });
     root.addEventListener("submit", function(e) { e.preventDefault(); send(e, "onSubmit", ""); });
 });
 
@@ -158,6 +203,7 @@ namespace rx {
 
 DomRenderer::DomRenderer(std::string container) : root_(nextId++) {
     rx_js_init();
+    rx_js_init_focus();
     rx_js_root(js(root_), container.c_str());
 }
 

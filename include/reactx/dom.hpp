@@ -22,7 +22,11 @@
 //   onKey     KeyHandler(KeyEvent)       keydown; arrows are "Up", "Down",
 //                                        "Left", "Right" like the terminal
 //   onSubmit  Callback                   form submit (the page does not reload)
-// Events bubble: if the target has no handler, its parent is tried, and so on.
+// Events bubble like in React: the target's handler runs, then the handlers of
+// all its ancestors. Elements with the data-rx-self attribute only get clicks
+// on themselves, not on their children (dialog backdrops).
+// data-rx-trap: while such an element is on the page, Tab stays inside the
+// last one; it takes focus when it appears and gives it back when removed.
 
 #include <string>
 

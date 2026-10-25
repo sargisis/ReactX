@@ -8,7 +8,7 @@ using namespace rx;
 
 Element Counter(const Props& props) {
     auto [count, setCount] = useState(props.get<int>("start", 0));
-    return h("div", {{"className", "card"}}, {
+    return h("div", {{"className", "card demo"}}, {
         h("h1", {}, {"ReactX in the browser"}),
         h("p", {{"className", "count"}, {"id", "count"}}, {std::to_string(count)}),
         h("div", {{"className", "row"}}, {

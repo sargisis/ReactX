@@ -43,6 +43,9 @@ std::vector<KeyEvent> decodeKeys(std::string_view bytes);
 //   gap, rowGap, columnGap
 //   position (absolute | relative), top, left, right, bottom
 //   display (none | flex), overflow (visible | hidden; a border always clips)
+//   opaque (bool): clear what is drawn under the box (modals)
+//   trapFocus (bool): while such a node exists, Tab stays inside the last one;
+//                     focus returns to where it was when it goes away
 // Look: border (bool), title, color, bg, bold, dim, underline.
 // Colors: black red green yellow blue magenta cyan white gray, bright-<color>.
 //
@@ -84,7 +87,8 @@ public:
 
     // Default key handling:
     //   Tab / Down -> next focusable, Shift+Tab / Up -> previous
-    //   any key    -> "onKey" of the focused node
+    //   any key    -> "onKey" of the focused node, then of each ancestor
+    //                 (bubbling, like the DOM)
     //   input      -> printable keys and Backspace edit "value" via "onInput"
     //   Enter / Space -> "onClick" of the focused node
     // Returns true if the key did something.
@@ -115,6 +119,8 @@ private:
     bool isFocusable(const Node& n) const;
     void collectFocusable(NodeHandle h, std::vector<NodeHandle>& out) const;
     void fixFocus();
+    NodeHandle focusTrap(NodeHandle h) const;
+    bool bubbleKey(Root& root, const KeyEvent& key);
     static std::string lineToAnsi(const std::vector<Cell>& line);
 
     Output output_;
@@ -125,6 +131,8 @@ private:
     bool fullRedraw_ = true;
     NodeHandle focused_ = 0;
     std::size_t focusIndex_ = 0;  // where focus was, to recover after removal
+    NodeHandle trap_ = 0;         // current focus trap
+    NodeHandle savedFocus_ = 0;   // focus before the trap appeared
 };
 
 // ---- terminal ----

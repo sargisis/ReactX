@@ -51,6 +51,7 @@ add_library(reactx
   src/text_renderer.cpp
   src/terminal_renderer.cpp
   src/terminal.cpp
+  src/ui.cpp
 )
 target_include_directories(reactx PUBLIC include)
 target_link_libraries(reactx PRIVATE ${REACTX_YOGA_TARGET})
@@ -76,6 +77,7 @@ endfunction()
 reactx_example(counter)
 reactx_example(todo)
 reactx_example(todo_tui)
+reactx_example(ui_demo)
 
 enable_testing()
 add_executable(reactx_tests tests/test_core.cpp)
@@ -85,6 +87,10 @@ add_test(NAME reactx_tests COMMAND reactx_tests)
 add_executable(reactx_terminal_tests tests/test_terminal.cpp)
 target_link_libraries(reactx_terminal_tests PRIVATE reactx)
 add_test(NAME reactx_terminal_tests COMMAND reactx_terminal_tests)
+
+add_executable(reactx_ui_tests tests/test_ui.cpp)
+target_link_libraries(reactx_ui_tests PRIVATE reactx)
+add_test(NAME reactx_ui_tests COMMAND reactx_ui_tests)
 
 if(REACTX_MODULES)
   add_executable(reactx_module_tests tests/test_module.cpp)

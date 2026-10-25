@@ -449,7 +449,15 @@ void TerminalRenderer::draw(const Layout& layout, NodeHandle h, float originX, f
         return;
     }
 
-    // Box.
+    // Box. opaque=true clears what was drawn under it (for modals).
+    if (flag(n->props, "opaque")) {
+        for (int yy = visible.top; yy < visible.bottom; ++yy) {
+            Style blank;
+            blank.bg = st.bg;
+            put(canvas, visible.left, yy, visible,
+                std::string(static_cast<std::size_t>(std::max(visible.right - visible.left, 0)), ' '), blank);
+        }
+    }
     if (!st.bg.empty() || st.reverse) {
         for (int yy = visible.top; yy < visible.bottom; ++yy) {
             put(canvas, visible.left, yy, visible, "", st);  // make sure the row exists
@@ -589,13 +597,33 @@ void TerminalRenderer::collectFocusable(NodeHandle h, std::vector<NodeHandle>& o
     for (NodeHandle c : n->children) collectFocusable(c, out);
 }
 
+// Last node (in tree order) with trapFocus=true, or 0.
+NodeHandle TerminalRenderer::focusTrap(NodeHandle h) const {
+    const Node* n = findNode(h);
+    if (!n || n->isText) return 0;
+    NodeHandle found = flag(n->props, "trapFocus") ? h : 0;
+    for (NodeHandle c : n->children)
+        if (NodeHandle inner = focusTrap(c)) found = inner;
+    return found;
+}
+
 std::vector<NodeHandle> TerminalRenderer::focusable() const {
     std::vector<NodeHandle> out;
-    collectFocusable(kRoot, out);
+    NodeHandle trap = focusTrap(kRoot);
+    collectFocusable(trap ? trap : kRoot, out);
     return out;
 }
 
 void TerminalRenderer::fixFocus() {
+    // A focus trap (e.g. a modal) appeared or went away.
+    if (NodeHandle trap = focusTrap(kRoot); trap != trap_) {
+        if (trap && !trap_) savedFocus_ = focused_;  // to restore when it closes
+        focused_ = 0;
+        focusIndex_ = 0;
+        if (!trap && savedFocus_ && findNode(savedFocus_)) focused_ = savedFocus_;
+        if (!trap) savedFocus_ = 0;
+        trap_ = trap;
+    }
     auto list = focusable();
     if (auto it = std::ranges::find(list, focused_); focused_ && it != list.end()) {
         focusIndex_ = static_cast<std::size_t>(it - list.begin());
@@ -637,11 +665,24 @@ void TerminalRenderer::focusPrev() {
     focus(list[i]);
 }
 
-bool TerminalRenderer::handleKey(Root& root, const KeyEvent& key) {
-    if (key.ctrl || key.alt) {
-        // No default action; still let the app see it.
-        return focused_ && root.dispatch(focused_, "onKey", key);
+bool TerminalRenderer::bubbleKey(Root& root, const KeyEvent& key) {
+    if (!focused_) return false;
+    // Collect the path first: handlers may change the tree.
+    std::vector<NodeHandle> path;
+    for (NodeHandle h = focused_; h && h != kRoot;) {
+        const Node* n = findNode(h);
+        if (!n) break;
+        path.push_back(h);
+        h = n->parent;
     }
+    bool handled = false;
+    for (NodeHandle h : path)
+        if (findNode(h)) handled = root.dispatch(h, "onKey", key) || handled;
+    return handled;
+}
+
+bool TerminalRenderer::handleKey(Root& root, const KeyEvent& key) {
+    if (key.ctrl || key.alt) return bubbleKey(root, key);  // no default action
     if ((key.key == "Tab" && !key.shift) || key.key == "Down") {
         focusNext();
         return true;
@@ -653,7 +694,7 @@ bool TerminalRenderer::handleKey(Root& root, const KeyEvent& key) {
     if (!focused_) return false;
 
     NodeHandle target = focused_;
-    bool handled = root.dispatch(target, "onKey", key);
+    bool handled = bubbleKey(root, key);
     const Node* n = findNode(target);
     if (!n) return handled;  // the handler removed the node
 

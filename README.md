@@ -81,6 +81,46 @@ Flex-пропсы (как в CSS): `direction` (`row`, `column`, `row-reverse`, 
 
 Отличия от браузера: корень занимает весь терминал; `flexShrink` по умолчанию 1 в строках и 0 в столбцах (что не влезло по высоте — обрезается), кнопки не сжимаются; рамка всегда обрезает содержимое, без рамки по умолчанию `overflow: visible`.
 
+## Компоненты `rx::ui`
+
+Готовые компоненты для терминала ([`reactx/ui.hpp`](include/reactx/ui.hpp)) с темой через контекст. Свойства задаются назначенными инициализаторами C++20, поэтому опечатку в имени поймает компилятор:
+
+```cpp
+#include "reactx/ui.hpp"   // или import reactx;
+
+ui::Theme theme;
+theme.accent = "magenta";
+
+ui::themeProvider(theme, {
+    ui::tabs({.tabs = {
+        {"Задачи", {
+            ui::input({.value = draft, .onChange = setDraftFn, .onSubmit = addFn, .label = "Новая:"}),
+            ui::list({.title = "Список", .items = {
+                ui::listItem({.label = "Купить молоко", .detail = "сегодня", .onSelect = toggleFn}),
+            }}),
+            ui::button({.label = "Удалить всё", .onClick = askFn, .variant = ui::Variant::Danger}),
+        }},
+        {"Настройки", {ui::checkbox({.label = "Тёмная тема", .checked = dark, .onToggle = flipFn})}},
+    }}),
+    ui::modal({.title = "Точно?", .open = asking, .onClose = closeFn, .children = {/* ... */}}),
+});
+```
+
+| Компонент | Что умеет |
+|---|---|
+| `button` | `label`, `onClick`, `variant` (`Default`, `Primary`, `Danger`, `Success`), `disabled` (не получает фокус) |
+| `input` | `value`, `onChange(text)`, `onSubmit(text)` по Enter, `placeholder`, `label`; Escape очищает |
+| `checkbox` | `label`, `checked`, `onToggle` (Enter / Space) |
+| `tabs` | вкладки `{label, content}`, `initial`; Enter на заголовке открывает вкладку |
+| `modal` | `title`, `open`, `onClose` (Escape), `width`; закрывает то, что под ним, держит фокус внутри и возвращает его после закрытия |
+| `list` / `listItem` | рамка с заголовком, `emptyText`; пункт: `label`, `detail` справа, `selected`, `onSelect`, `onKey` |
+
+Тема (`ui::Theme`): `accent`, `text`, `muted`, `success`, `warning`, `danger`, `surface`. Каждый компонент есть и как обычная функция с `Props` (`h(ui::Button, {{"label", "OK"}})`).
+
+Для этого в терминальный бэкенд добавлены: всплытие `onKey` от элемента в фокусе к родителям (как в DOM), `trapFocus` (Tab не выходит из окна) и `opaque` (коробка стирает то, что под ней).
+
+Демо: `./build/debug/ui_demo` — вкладки, список задач, настройки, смена темы и окно подтверждения.
+
 Клавиши по умолчанию: Tab/↓ и Shift+Tab/↑ — фокус; любая клавиша уходит в `onKey` элемента в фокусе;
 в `input` символы и Backspace меняют `value` через `onInput` (поле управляемое: держите `value` в `useState`);
 Enter/Space — `onClick`; Ctrl+C — выход. Фокус получают `input`, `button` и узлы с `focusable=true`; элемент в фокусе рисуется инверсией.
@@ -100,6 +140,7 @@ ctest --preset debug
 ./build/debug/counter
 ./build/debug/todo
 ./build/debug/todo_tui          # интерактивный todo в терминале
+./build/debug/ui_demo           # демо компонентов rx::ui
 ```
 
 Без Ninja (генератор Makefiles) модуль отключается сам и всё собирается через заголовки:
@@ -124,8 +165,8 @@ cmake --build build -j
 include/reactx/   публичный API (element, hooks, renderer, root, text_renderer)
 modules/          reactx.cppm — C++20-модуль (import reactx;)
 src/              реализация; reconciler.cpp — ядро, terminal*.cpp — терминальный бэкенд
-examples/         counter, todo, todo_tui (интерактивный)
-tests/            тесты ядра, test_terminal.cpp — терминал, test_module.cpp — import reactx;
+examples/         counter, todo, todo_tui, ui_demo (интерактивные — последние два)
+tests/            тесты ядра, test_terminal.cpp — терминал, test_ui.cpp — rx::ui, test_module.cpp — import reactx;
 ```
 
 Для обычной (быстрой) сборки без отладки:
@@ -159,6 +200,7 @@ cmake --preset release && cmake --build --preset release
 - Числа вроде `size_t` в props нужно явно приводить к `int64_t`.
 - После `setState` вне `dispatch` нужно самому вызвать `root.flush()` (в `TerminalApp` это делается автоматически).
 - Терминал: ширина символа считается за 1 колонку (эмодзи и иероглифы шириной 2 могут сдвигать строку); курсор в `input` только в конце текста; нет прокрутки — что не влезло по высоте, обрезается; только POSIX (Linux/macOS).
+- `rx::ui`: переключение вкладок стрелками и выбор «по фокусу» пока не сделаны (компонент не может сам переместить фокус); нет прокрутки длинных списков.
 - Раскладка пересчитывается целиком на каждую перерисовку (для терминала это быстро, но для тысяч узлов понадобится кэш).
 - Дети перерисовываются вместе с родителем, если не обёрнуты в `memo<...>`; `memo` не сравнивает детей (`props.children()`).
 - Хуки нельзя вызывать в цикле с разным числом итераций (как и в React), поэтому `useCallback` для каждого элемента списка не сделать — нужен отдельный компонент.
@@ -177,5 +219,5 @@ cmake --preset release && cmake --build --preset release
       ввод с клавиатуры; демо — интерактивный todo
 - [x] Шаг 3 — `useContext`, `useMemo`/`useCallback`, `memo` (пропуск ререндера при тех же props)
 - [x] Шаг 4 — раскладка Flexbox на Yoga (`flexGrow`, `justifyContent`, `alignItems`, …)
-- [ ] **Шаг 5** — библиотека компонентов `rx::ui` с темой (Button, Input, Checkbox, Tabs, Modal, List)
+- [x] Шаг 5 — библиотека компонентов `rx::ui` с темой (Button, Input, Checkbox, Tabs, Modal, List)
 - [ ] Позже — другие бэкенды: SDL3 + Skia/ThorVG (окна), WebAssembly + DOM (браузер и CSS)

@@ -29,6 +29,8 @@ add_library(reactx
   src/reconciler.cpp
   src/root.cpp
   src/text_renderer.cpp
+  src/terminal_renderer.cpp
+  src/terminal.cpp
 )
 target_include_directories(reactx PUBLIC include)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -52,11 +54,16 @@ function(reactx_example name)
 endfunction()
 reactx_example(counter)
 reactx_example(todo)
+reactx_example(todo_tui)
 
 enable_testing()
 add_executable(reactx_tests tests/test_core.cpp)
 target_link_libraries(reactx_tests PRIVATE reactx)
 add_test(NAME reactx_tests COMMAND reactx_tests)
+
+add_executable(reactx_terminal_tests tests/test_terminal.cpp)
+target_link_libraries(reactx_terminal_tests PRIVATE reactx)
+add_test(NAME reactx_terminal_tests COMMAND reactx_terminal_tests)
 
 if(REACTX_MODULES)
   add_executable(reactx_module_tests tests/test_module.cpp)

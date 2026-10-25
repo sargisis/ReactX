@@ -35,7 +35,7 @@ public:
     std::size_t nodeCount() const { return nodes_.size(); }
     std::size_t operationCount() const { return ops_; }
 
-private:
+protected:
     static constexpr NodeHandle kRoot = 1;
 
     struct Node {
@@ -48,10 +48,17 @@ private:
     };
 
     Node& node(NodeHandle h);
+    // nullptr if the node does not exist (for subclasses that read the tree).
+    const Node* findNode(NodeHandle h) const;
+
+private:
     void print(std::ostream& out, NodeHandle h, int depth) const;
     void log(const std::string& line);
 
+protected:
     std::unordered_map<NodeHandle, Node> nodes_;
+
+private:
     NodeHandle next_ = kRoot + 1;
     std::ostream* log_;
     std::size_t ops_ = 0;

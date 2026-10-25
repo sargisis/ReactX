@@ -40,6 +40,30 @@ int main() {
 - **События**: три вида обработчиков — `Callback` (`void()`, например `onClick`), `KeyHandler` (`void(const KeyEvent&)`, `onKey`) и `InputHandler` (`void(const std::string&)`, `onInput`). Бэкенд передаёт данные через `Root::dispatch(node, "onKey", KeyEvent{"Enter"})` или `dispatch(node, "onInput", std::string("текст"))`; если данные не подходят обработчику, `dispatch` вернёт `false`.
 - **Бэкенд**: интерфейс [`rx::Renderer`](include/reactx/renderer.hpp). Обработчики остаются в ядре и в бэкенд не передаются.
 - **TextRenderer**: хранит дерево в памяти, печатает его и лог операций — для отладки и тестов.
+- **Терминал** ([`reactx/terminal.hpp`](include/reactx/terminal.hpp)): `TerminalRenderer` рисует дерево ANSI-кодами и перерисовывает только изменившиеся строки; `TerminalApp` включает raw-режим и запускает цикл событий; `decodeKeys` превращает байты терминала в `KeyEvent` (стрелки, Tab/Shift+Tab, Delete, Ctrl/Alt, UTF-8).
+
+## Терминальный бэкенд
+
+```cpp
+TerminalApp app;
+app.run(h(App, {{"onQuit", Callback([&app] { app.quit(); })}}));
+```
+
+| Тег | Что рисует |
+|---|---|
+| `box` (и любой неизвестный тег) | детей друг под другом; с `direction="row"` — в ряд |
+| `text` | свой текст; `\n` делит на строки |
+| `input` | поле ввода: `value`, `placeholder`, курсор `_` в фокусе |
+| `button` | `[ label ]` |
+
+Пропсы для любого тега: `border`, `title`, `padding`, `gap`, `width`, `color`, `bg`, `bold`, `dim`, `underline`, `focusable`.
+Цвета: `black red green yellow blue magenta cyan white gray`, `bright-<цвет>`.
+
+Клавиши по умолчанию: Tab/↓ и Shift+Tab/↑ — фокус; любая клавиша уходит в `onKey` элемента в фокусе;
+в `input` символы и Backspace меняют `value` через `onInput` (поле управляемое: держите `value` в `useState`);
+Enter/Space — `onClick`; Ctrl+C — выход. Фокус получают `input`, `button` и узлы с `focusable=true`; элемент в фокусе рисуется инверсией.
+
+Демо: `./build/debug/todo_tui` (нужен настоящий терминал).
 
 ## Сборка
 
@@ -51,6 +75,7 @@ cmake --build --preset debug
 ctest --preset debug
 ./build/debug/counter
 ./build/debug/todo
+./build/debug/todo_tui          # интерактивный todo в терминале
 ```
 
 Без Ninja (генератор Makefiles) модуль отключается сам и всё собирается через заголовки:
@@ -74,9 +99,9 @@ cmake --build build -j
 ```
 include/reactx/   публичный API (element, hooks, renderer, root, text_renderer)
 modules/          reactx.cppm — C++20-модуль (import reactx;)
-src/              реализация; reconciler.cpp — ядро
-examples/         counter, todo
-tests/            тесты ядра; test_module.cpp — проверка import reactx;
+src/              реализация; reconciler.cpp — ядро, terminal*.cpp — терминальный бэкенд
+examples/         counter, todo, todo_tui (интерактивный)
+tests/            тесты ядра, test_terminal.cpp — терминал, test_module.cpp — import reactx;
 ```
 
 Для обычной (быстрой) сборки без отладки:
@@ -108,7 +133,8 @@ cmake --preset release && cmake --build --preset release
 ## Ограничения сейчас
 
 - Числа вроде `size_t` в props нужно явно приводить к `int64_t`.
-- После `setState` вне `dispatch` нужно самому вызвать `root.flush()`.
+- После `setState` вне `dispatch` нужно самому вызвать `root.flush()` (в `TerminalApp` это делается автоматически).
+- Терминал: ширина символа считается за 1 колонку (эмодзи и иероглифы шириной 2 могут сдвигать строку); курсор в `input` только в конце текста; нет прокрутки — что не влезло по высоте, обрезается; только POSIX (Linux/macOS).
 - Дети всегда перерисовываются вместе с родителем (нет `memo`).
 
 ## План
@@ -121,7 +147,7 @@ cmake --preset release && cmake --build --preset release
 - [x] Шаг 1 — события с данными: `onKey(const KeyEvent&)`, `onInput(text)`,
       `Root::dispatch(node, event, data)`
 - [x] Модуль C++20: `import reactx;`
-- [ ] **Шаг 2 — бэкенд для терминала**: ANSI-отрисовка, рамки, цвета, фокус,
+- [x] Шаг 2 — бэкенд для терминала: ANSI-отрисовка, рамки, цвета, фокус,
       ввод с клавиатуры; демо — интерактивный todo
-- [ ] Шаг 3 — `useContext`, `useMemo`/`useCallback`, `memo` (пропуск ререндера при тех же props)
+- [ ] **Шаг 3** — `useContext`, `useMemo`/`useCallback`, `memo` (пропуск ререндера при тех же props)
 - [ ] Позже — другие бэкенды: SDL/OpenGL, WebAssembly + DOM

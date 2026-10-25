@@ -2,7 +2,13 @@
 #include <iostream>
 #include <string>
 
+// The VS Code C/C++ extension can't parse GCC modules yet: show it the headers.
+#ifdef __INTELLISENSE__
+#include "reactx/reactx.hpp"
+#include "reactx/text_renderer.hpp"
+#else
 import reactx;
+#endif
 
 using namespace rx;
 

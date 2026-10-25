@@ -16,6 +16,11 @@ TextRenderer::Node& TextRenderer::node(NodeHandle h) {
     return it->second;
 }
 
+const TextRenderer::Node* TextRenderer::findNode(NodeHandle h) const {
+    auto it = nodes_.find(h);
+    return it == nodes_.end() ? nullptr : &it->second;
+}
+
 void TextRenderer::log(const std::string& line) {
     ++ops_;
     if (log_) *log_ << "  [op] " << line << '\n';

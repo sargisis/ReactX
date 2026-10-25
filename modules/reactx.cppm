@@ -3,6 +3,7 @@
 module;
 
 #include "reactx/reactx.hpp"
+#include "reactx/terminal.hpp"
 #include "reactx/text_renderer.hpp"
 
 export module reactx;
@@ -41,5 +42,11 @@ using rx::NodeHandle;
 using rx::Renderer;
 using rx::Root;
 using rx::TextRenderer;
+
+// terminal.hpp
+using rx::decodeKeys;
+using rx::Terminal;
+using rx::TerminalApp;
+using rx::TerminalRenderer;
 
 }  // namespace rx

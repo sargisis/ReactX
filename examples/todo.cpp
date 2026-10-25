@@ -6,7 +6,9 @@
 #include <string>
 #include <vector>
 
-#ifdef REACTX_USE_MODULES
+// __INTELLISENSE__: the VS Code C/C++ extension can't parse GCC modules yet,
+// so the editor reads the headers while the compiler uses the module.
+#if defined(REACTX_USE_MODULES) && !defined(__INTELLISENSE__)
 import reactx;
 #else
 #include "reactx/reactx.hpp"

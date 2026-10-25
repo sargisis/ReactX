@@ -1,0 +1,112 @@
+#pragma once
+
+// Small HTTP/1.1 server (POSIX sockets, C++20) for developing ReactX sites:
+// serves the files of a web build and lets you add your own routes (an API
+// for the page to fetch from).
+//
+//   rx::net::HttpServer server("127.0.0.1", 8090);
+//   server.get("/api/hello", [](const rx::net::Request&) {
+//       return rx::net::Response::json(R"({"text": "hi"})");
+//   });
+//   server.serveDirectory("build/web");
+//   server.start();   // bind and listen
+//   server.run();     // until stop() or Ctrl+C
+//
+// Each connection gets its own thread and is closed after one response.
+// Meant for local development, not for the open internet.
+
+#include <atomic>
+#include <cstddef>
+#include <filesystem>
+#include <functional>
+#include <map>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+namespace rx::net {
+
+struct Request {
+    std::string method;  // "GET", "POST", ...
+    std::string path;    // decoded, without the query: "/api/items"
+    std::string query;   // raw, after '?': "page=2&q=milk"
+    std::map<std::string, std::string> headers;  // names in lower case
+    std::string body;
+
+    std::string header(const std::string& name) const;
+    // Decoded value of a query parameter: query "q=milk%20tea" -> param("q") == "milk tea".
+    std::optional<std::string> param(const std::string& name) const;
+};
+
+struct Response {
+    int status = 200;
+    std::string contentType = "text/plain; charset=utf-8";
+    std::string body;
+    std::vector<std::pair<std::string, std::string>> headers;  // extra headers
+
+    static Response text(std::string body, int status = 200);
+    static Response html(std::string body, int status = 200);
+    static Response json(std::string body, int status = 200);
+};
+
+using Handler = std::function<Response(const Request&)>;
+
+class HttpServer {
+public:
+    // port 0 picks a free port (see port() after start()).
+    explicit HttpServer(std::string host = "127.0.0.1", int port = 8080);
+    ~HttpServer();
+    HttpServer(const HttpServer&) = delete;
+    HttpServer& operator=(const HttpServer&) = delete;
+
+    // Routes match the exact path. They are tried before the files.
+    void route(std::string method, std::string path, Handler handler);
+    void get(std::string path, Handler handler) { route("GET", std::move(path), std::move(handler)); }
+    void post(std::string path, Handler handler) { route("POST", std::move(path), std::move(handler)); }
+
+    // Serve files from `root` for GET and HEAD ("/" -> index.html).
+    // spaFallback: unknown paths without a file extension get index.html,
+    // so a client-side router can handle them.
+    void serveDirectory(std::filesystem::path root, bool spaFallback = false);
+
+    // Print one line per request ("GET /app.wasm 200 145765").
+    void setLogging(bool on) { logging_ = on; }
+
+    void start();  // bind + listen; throws std::runtime_error on failure
+    void run();    // accept connections until stop()
+    void stop();   // safe to call from another thread or a signal handler
+
+    int port() const { return port_; }
+    const std::string& host() const { return host_; }
+
+    // Builds the response for one request (used by run(); handy for tests).
+    Response handle(const Request& request) const;
+
+private:
+    void serveConnection(int fd);
+    std::optional<Response> serveFile(const Request& request) const;
+
+    std::string host_;
+    int port_;
+    int listenFd_ = -1;
+    std::atomic<bool> running_{false};
+    std::atomic<int> active_{0};  // connections being served
+    bool logging_ = false;
+    std::map<std::pair<std::string, std::string>, Handler> routes_;
+    std::filesystem::path root_;
+    bool spaFallback_ = false;
+};
+
+// Content type for a file extension (".wasm" -> "application/wasm").
+std::string mimeType(std::string_view extension);
+// "%20" -> " ", and "+" -> " " when `plusIsSpace` (query strings).
+std::string urlDecode(std::string_view text, bool plusIsSpace = false);
+// Parses the head of an HTTP request ("GET /x?a=1 HTTP/1.1\r\nHost: ...\r\n\r\n").
+// Returns nothing for a malformed request.
+std::optional<Request> parseRequestHead(std::string_view head);
+// Serializes a response (headers + body; no body for HEAD requests).
+std::string serializeResponse(const Response& response, bool headOnly = false);
+
+}  // namespace rx::net

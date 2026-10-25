@@ -127,6 +127,69 @@ Enter/Space — `onClick`; Ctrl+C — выход. Фокус получают `i
 
 Демо: `./build/debug/todo_tui` (нужен настоящий терминал).
 
+## В браузере (WebAssembly)
+
+Тот же код компонентов работает в браузере: бэкенд [`DomRenderer`](include/reactx/dom.hpp) рисует в настоящий DOM, поэтому теги — обычный HTML, а оформление — обычный CSS.
+
+```cpp
+#include "reactx/dom.hpp"
+#include "reactx/reactx.hpp"
+using namespace rx;
+
+Element Counter(const Props&) {
+    auto [count, setCount] = useState(0);
+    return h("div", {{"className", "card"}}, {
+        h("h1", {}, {"Count: " + std::to_string(count)}),
+        h("button", {{"className", "primary"}, {"onClick", [setCount] { setCount([](int c) { return c + 1; }); }}}, {"+1"}),
+    });
+}
+
+int main() { mountDom(h(Counter)); }   // в <div id="app"> страницы
+```
+
+| Пропс / событие | В браузере |
+|---|---|
+| `className`, `style` (строка CSS), `htmlFor` | `class`, `style`, `for` |
+| `value` | значение поля; поле управляемое — показывает то, что в состоянии |
+| `checked`, `disabled`, `selected` | свойства DOM |
+| остальное | атрибуты (`true` — есть, `false` — убрать) |
+| `onClick`, `onInput(text)`, `onChange`, `onKey(KeyEvent)`, `onSubmit` | события; всплывают к ближайшему обработчику; `onSubmit` не перезагружает страницу |
+
+Сборка и запуск (нужен [Emscripten](https://emscripten.org), переменная `EMSDK`):
+
+```sh
+cmake --preset web && cmake --build --preset web
+ctest --preset web                                   # тесты DOM-бэкенда под Node
+./build/debug/reactx_serve build/web --port 8090       # наш сервер на C++; открыть http://localhost:8090/
+```
+
+Результат — обычные файлы (`.html`, `.js`, `.wasm`, счётчик весит ~135 КБ), их можно выложить на любой статический хостинг.
+
+### Сервер на C++ (`reactx_serve`, `rx::net::HttpServer`)
+
+Для разработки не нужен Python: свой HTTP/1.1-сервер на C++20 ([`reactx/http.hpp`](include/reactx/http.hpp), POSIX-сокеты, поток на соединение).
+
+```sh
+./build/debug/reactx_serve [ПАПКА] [--port 8090] [--host 127.0.0.1] [--spa] [--quiet]
+```
+
+- отдаёт файлы с правильными типами (`.wasm` → `application/wasm`), `/` → `index.html`;
+- не выпускает за пределы папки (`/../секрет` → 403);
+- `--spa`: неизвестные пути без расширения получают `index.html` (для будущего роутера);
+- как библиотека — свои маршруты, например API, которое страница загрузит через `fetch`:
+
+```cpp
+rx::net::HttpServer server("127.0.0.1", 8090);
+server.get("/api/todos", [](const rx::net::Request& req) {
+    return rx::net::Response::json(R"([{"title": "Buy milk"}])");
+});
+server.serveDirectory("build/web");
+server.start();
+server.run();   // до Ctrl+C
+```
+
+Сервер для разработки на своём компьютере (слушает `127.0.0.1`), не для открытого интернета: нет HTTPS, keep-alive и защиты от перегрузки.
+
 ## Сборка
 
 Зависимость одна — [Yoga](https://github.com/facebook/yoga) v3.2.1 (MIT). Если её нет в системе, CMake скачает её сам при первой настройке (нужен интернет; без интернета: `-DFETCHCONTENT_SOURCE_DIR_YOGA=/путь/к/yoga`).
@@ -165,8 +228,11 @@ cmake --build build -j
 include/reactx/   публичный API (element, hooks, renderer, root, text_renderer)
 modules/          reactx.cppm — C++20-модуль (import reactx;)
 src/              реализация; reconciler.cpp — ядро, terminal*.cpp — терминальный бэкенд
-examples/         counter, todo, todo_tui, ui_demo (интерактивные — последние два)
+examples/         counter, todo, todo_tui, ui_demo (терминал); web_counter, web_todo (браузер)
+web/              shell.html — HTML-шаблон и CSS для веб-примеров
 tests/            тесты ядра, test_terminal.cpp — терминал, test_ui.cpp — rx::ui, test_module.cpp — import reactx;
+                  test_dom.cpp + web/fake_dom.js — DOM-бэкенд под Node, test_http.cpp — HTTP-сервер
+tools/            serve.cpp — reactx_serve, сервер для разработки
 ```
 
 Для обычной (быстрой) сборки без отладки:
@@ -201,6 +267,7 @@ cmake --preset release && cmake --build --preset release
 - После `setState` вне `dispatch` нужно самому вызвать `root.flush()` (в `TerminalApp` это делается автоматически).
 - Терминал: ширина символа считается за 1 колонку (эмодзи и иероглифы шириной 2 могут сдвигать строку); курсор в `input` только в конце текста; нет прокрутки — что не влезло по высоте, обрезается; только POSIX (Linux/macOS).
 - `rx::ui`: переключение вкладок стрелками и выбор «по фокусу» пока не сделаны (компонент не может сам переместить фокус); нет прокрутки длинных списков.
+- Браузер: модули (`import reactx;`) в веб-сборке пока выключены; страница строится в браузере (для поисковиков нужен будет серверный рендеринг); `rx::ui` пока только для терминала.
 - Раскладка пересчитывается целиком на каждую перерисовку (для терминала это быстро, но для тысяч узлов понадобится кэш).
 - Дети перерисовываются вместе с родителем, если не обёрнуты в `memo<...>`; `memo` не сравнивает детей (`props.children()`).
 - Хуки нельзя вызывать в цикле с разным числом итераций (как и в React), поэтому `useCallback` для каждого элемента списка не сделать — нужен отдельный компонент.
@@ -220,4 +287,10 @@ cmake --preset release && cmake --build --preset release
 - [x] Шаг 3 — `useContext`, `useMemo`/`useCallback`, `memo` (пропуск ререндера при тех же props)
 - [x] Шаг 4 — раскладка Flexbox на Yoga (`flexGrow`, `justifyContent`, `alignItems`, …)
 - [x] Шаг 5 — библиотека компонентов `rx::ui` с темой (Button, Input, Checkbox, Tabs, Modal, List)
-- [ ] Позже — другие бэкенды: SDL3 + Skia/ThorVG (окна), WebAssembly + DOM (браузер и CSS)
+- [x] Шаг 6 — браузер: WebAssembly + DOM-бэкенд, веб-примеры counter и todo
+- [ ] **Шаг 7** — стили и веб-версия компонентов `rx::ui`
+- [ ] Шаг 8 — несколько страниц (роутер) и загрузка данных (`fetch`)
+- [ ] Шаг 9 — публикация сайта (GitHub Pages)
+- [ ] Свой пакетный менеджер и CLI (аналог `npm`): создание проекта, зависимости, сборка;
+      команда для разработки (как `npm run dev`) собирает веб-версию и сама запускает `reactx_serve`
+- [ ] Позже — окна на рабочем столе: SDL3 + Skia/ThorVG

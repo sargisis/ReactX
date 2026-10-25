@@ -17,11 +17,60 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.28 AND
     (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 19.34)))
   set(REACTX_MODULES_DEFAULT ON)
 endif()
+# Web build: headers for now (the module also exports the terminal API).
+if(EMSCRIPTEN)
+  set(REACTX_MODULES_DEFAULT OFF)
+endif()
 # GCC (checked with 15.2) crashes compiling modules with -fsanitize=undefined.
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_FLAGS MATCHES "sanitize=[a-z,]*undefined")
   set(REACTX_MODULES_DEFAULT OFF)
 endif()
 option(REACTX_MODULES "Build the reactx C++20 module (import reactx;)" ${REACTX_MODULES_DEFAULT})
+
+if(EMSCRIPTEN)
+  # ---- Web build (emcmake cmake ...): core + DOM backend ----
+  # Native WebAssembly exceptions (all current browsers and Node support them).
+  add_compile_options(-fwasm-exceptions)
+  add_link_options(-fwasm-exceptions)
+  add_library(reactx
+    src/element.cpp
+    src/hooks.cpp
+    src/reconciler.cpp
+    src/root.cpp
+    src/text_renderer.cpp
+    src/dom.cpp
+  )
+  target_include_directories(reactx PUBLIC include)
+  target_compile_options(reactx PRIVATE -Wall -Wextra -Wpedantic)
+  # Functions and helpers the page's JavaScript calls (see src/dom.cpp).
+  target_link_options(reactx INTERFACE
+    "SHELL:-sEXPORTED_FUNCTIONS=_main,_rx_dom_event"
+    "SHELL:-sEXPORTED_RUNTIME_METHODS=ccall"
+    "SHELL:-sALLOW_MEMORY_GROWTH=1")
+  message(STATUS "ReactX: web build (Emscripten) - DOM backend")
+
+  function(reactx_web_example name)
+    add_executable(${name} examples/${name}.cpp)
+    target_link_libraries(${name} PRIVATE reactx)
+    set_target_properties(${name} PROPERTIES SUFFIX ".html")
+    target_link_options(${name} PRIVATE "SHELL:--shell-file ${CMAKE_SOURCE_DIR}/web/shell.html")
+    set_property(TARGET ${name} APPEND PROPERTY LINK_DEPENDS ${CMAKE_SOURCE_DIR}/web/shell.html)
+  endfunction()
+  reactx_web_example(web_counter)
+  reactx_web_example(web_todo)
+  # Start page with links to the demos (http://localhost:8090/).
+  configure_file(${CMAKE_SOURCE_DIR}/web/index.html ${CMAKE_BINARY_DIR}/index.html COPYONLY)
+
+  # Tests run under Node with a tiny fake DOM (tests/web/fake_dom.js).
+  enable_testing()
+  add_executable(reactx_dom_tests tests/test_dom.cpp)
+  target_link_libraries(reactx_dom_tests PRIVATE reactx)
+  target_link_options(reactx_dom_tests PRIVATE
+    "SHELL:--pre-js ${CMAKE_SOURCE_DIR}/tests/web/fake_dom.js" "SHELL:-sENVIRONMENT=node")
+  set_property(TARGET reactx_dom_tests APPEND PROPERTY LINK_DEPENDS ${CMAKE_SOURCE_DIR}/tests/web/fake_dom.js)
+  add_test(NAME reactx_dom_tests COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} $<TARGET_FILE:reactx_dom_tests>)
+  return()
+endif()
 
 # ---- Yoga (Flexbox layout for the terminal backend) ----
 # Uses an installed Yoga if CMake can find it, otherwise downloads v3.2.1.
@@ -67,6 +116,17 @@ else()
   message(STATUS "ReactX: C++20 module disabled, using headers (needs CMake 3.28+ and -G Ninja)")
 endif()
 
+# ---- HTTP server (development server for the web build, API routes) ----
+find_package(Threads REQUIRED)
+add_library(reactx_net src/http.cpp)
+target_include_directories(reactx_net PUBLIC include)
+target_link_libraries(reactx_net PUBLIC Threads::Threads)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  target_compile_options(reactx_net PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+add_executable(reactx_serve tools/serve.cpp)
+target_link_libraries(reactx_serve PRIVATE reactx_net)
+
 function(reactx_example name)
   add_executable(${name} examples/${name}.cpp)
   target_link_libraries(${name} PRIVATE reactx)
@@ -87,6 +147,10 @@ add_test(NAME reactx_tests COMMAND reactx_tests)
 add_executable(reactx_terminal_tests tests/test_terminal.cpp)
 target_link_libraries(reactx_terminal_tests PRIVATE reactx)
 add_test(NAME reactx_terminal_tests COMMAND reactx_terminal_tests)
+
+add_executable(reactx_http_tests tests/test_http.cpp)
+target_link_libraries(reactx_http_tests PRIVATE reactx_net)
+add_test(NAME reactx_http_tests COMMAND reactx_http_tests)
 
 add_executable(reactx_ui_tests tests/test_ui.cpp)
 target_link_libraries(reactx_ui_tests PRIVATE reactx)

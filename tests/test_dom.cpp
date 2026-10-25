@@ -1,0 +1,133 @@
+// DOM backend tests: WebAssembly under Node with tests/web/fake_dom.js.
+#include <emscripten.h>
+
+#include <functional>
+#include <iostream>
+#include <string>
+#include <vector>
+
+#include "reactx/dom.hpp"
+#include "reactx/reactx.hpp"
+
+using namespace rx;
+
+namespace {
+
+int failures = 0;
+
+#define CHECK(cond)                                                                   \
+    do {                                                                              \
+        if (!(cond)) {                                                                \
+            ++failures;                                                               \
+            std::cerr << "  FAIL " << __FILE__ << ":" << __LINE__ << ": " #cond "\n"; \
+        }                                                                             \
+    } while (0)
+
+std::string js(const std::string& code) { return emscripten_run_script_string(code.c_str()); }
+std::string html() { return js("rxTest.html()"); }
+bool has(const std::string& part) { return html().find(part) != std::string::npos; }
+
+// ---- app ----
+
+Element Item(const Props& p) {
+    return h("li", {{"key", p.get<std::string>("name")}, {"id", "item-" + p.get<std::string>("name")}},
+             {p.get<std::string>("name")});
+}
+
+Element App(const Props&) {
+    auto [count, setCount] = useState(0);
+    auto [text, setText] = useState(std::string{});
+    auto [agree, setAgree] = useState(false);
+    auto [lastKey, setLastKey] = useState(std::string{});
+    auto [submits, setSubmits] = useState(0);
+    auto [order, setOrder] = useState(std::string("abc"));
+    auto [upper, setUpper] = useState(false);
+
+    std::vector<Element> items;
+    for (char c : order) items.push_back(h(Item, {{"key", std::string(1, c)}, {"name", std::string(1, c)}}));
+
+    return h("div", {{"className", "card"}}, {
+        h("button", {{"id", "inc"}, {"className", count ? "primary" : ""},
+                     {"onClick", [setCount] { setCount([](int c) { return c + 1; }); }}}, {"count=" + std::to_string(count)}),
+        // Only the outer div has onClick: the click on the span bubbles to it.
+        h("div", {{"id", "outer"}, {"onClick", [setCount] { setCount([](int c) { return c + 10; }); }}}, {
+            h("span", {{"id", "inner"}}, {"inner"}),
+        }),
+        h("input", {{"type", "text"}, {"id", "name"}, {"value", text},
+                    {"onInput", [setText, upper](const std::string& t) {
+                         std::string v = t;
+                         if (upper) for (auto& ch : v) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+                         setText(v);
+                     }},
+                    {"onKey", [setLastKey](const KeyEvent& e) { setLastKey(e.key + (e.shift ? "+shift" : "")); }}}),
+        h("input", {{"type", "checkbox"}, {"id", "agree"}, {"checked", agree},
+                    {"onChange", [setAgree, agree] { setAgree(!agree); }}}),
+        h("button", {{"id", "upper"}, {"onClick", [setUpper] { setUpper(true); }}}, {"upper"}),
+        h("form", {{"id", "form"}, {"onSubmit", [setSubmits] { setSubmits([](int s) { return s + 1; }); }}}, {
+            h("button", {{"type", "submit"}}, {"go"}),
+        }),
+        h("p", {{"id", "out"}, {"style", agree ? "color: green" : ""}, {"disabled", agree}},
+          {"text=" + text + " agree=" + (agree ? "yes" : "no") + " key=" + lastKey + " submits=" + std::to_string(submits)}),
+        h("button", {{"id", "reverse"}, {"onClick", [setOrder] { setOrder(std::string("cba")); }}}, {"reverse"}),
+        h("button", {{"id", "drop"}, {"onClick", [setOrder] { setOrder(std::string("ac")); }}}, {"drop"}),
+        h("ul", {{"id", "list"}}, std::move(items)),
+    });
+}
+
+}  // namespace
+
+int main() {
+    mountDom(h(App));
+
+    std::cout << "mount\n";
+    CHECK(has("<div class=\"card\"><button class id=\"inc\">count=0</button>"));
+
+    std::cout << "click updates text and attributes\n";
+    js("rxTest.click('inc')");
+    js("rxTest.click('inc')");
+    CHECK(has("<button class=\"primary\" id=\"inc\">count=2</button>"));
+
+    std::cout << "click bubbles to the nearest handler\n";
+    js("rxTest.click('inner')");
+    CHECK(has("count=12"));
+
+    std::cout << "input is controlled\n";
+    js("rxTest.type('name', 'ann')");
+    CHECK(has("text=ann "));
+    CHECK(js("rxTest.value('name')") == "ann");
+    js("rxTest.click('upper')");
+    js("rxTest.type('name', 'bob')");
+    CHECK(has("text=BOB "));
+    CHECK(js("rxTest.value('name')") == "BOB");  // the page shows the state, not the raw typing
+
+    std::cout << "keys\n";
+    js("rxTest.key('name', 'ArrowUp')");
+    CHECK(has("key=Up "));
+    js("rxTest.key('name', 'Tab', true)");
+    CHECK(has("key=Tab+shift "));
+
+    std::cout << "checkbox, style, boolean props\n";
+    js("rxTest.toggle('agree')");
+    CHECK(has("agree=yes"));
+    CHECK(has("style=\"color: green\""));
+    CHECK(js("String(document.querySelector('#out').disabled)") == "true");  // a property, not an attribute
+    js("rxTest.toggle('agree')");
+    CHECK(has("agree=no"));
+    CHECK(!has("style="));
+    CHECK(js("String(document.querySelector('#out').disabled)") == "false");
+
+    std::cout << "form submit does not reload the page\n";
+    CHECK(js("rxTest.submit('form')") == "prevented");
+    CHECK(has("submits=1"));
+
+    std::cout << "keyed list reorders and removes nodes\n";
+    js("globalThis.firstA = document.querySelector('#item-a')");
+    js("rxTest.click('reverse')");
+    CHECK(has("<ul id=\"list\"><li id=\"item-c\">c</li><li id=\"item-b\">b</li><li id=\"item-a\">a</li></ul>"));
+    CHECK(js("String(document.querySelector('#item-a') === globalThis.firstA)") == "true");  // moved, not recreated
+    js("rxTest.click('drop')");
+    CHECK(has("<ul id=\"list\"><li id=\"item-a\">a</li><li id=\"item-c\">c</li></ul>"));
+
+    std::cout << (failures ? "FAILED: " + std::to_string(failures) : std::string("OK, all tests passed")) << '\n';
+    return failures ? 1 : 0;
+}

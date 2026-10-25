@@ -1,0 +1,212 @@
+// DOM backend: the C++ side keeps node ids, the JavaScript side (EM_JS below)
+// keeps a Map from id to DOM node and forwards browser events back to C++.
+#include "reactx/dom.hpp"
+
+#include <emscripten.h>
+
+#include <memory>
+#include <string>
+#include <variant>
+#include <vector>
+
+namespace {
+
+// ---- JavaScript side ----
+
+EM_JS(void, rx_js_init, (), {
+    if (Module.rxNodes) return;
+    Module.rxNodes = new Map();
+    Module.rxSetProp = function(el, name, kind, str, num) {
+        if (name === "className") name = "class";
+        if (name === "htmlFor") name = "for";
+        if (name === "style") { el.style.cssText = kind === 3 ? str : ""; return; }
+        if (name === "value") {
+            const v = kind === 3 ? str : kind === 2 ? String(num) : "";
+            el.__rxValue = v;
+            if (el.value !== v) el.value = v;
+            return;
+        }
+        if (name === "checked" || name === "disabled" || name === "selected") { el[name] = kind === 1 && num !== 0; return; }
+        if (kind === 1) {  // boolean attribute
+            if (num !== 0) el.setAttribute(name, ""); else el.removeAttribute(name);
+            return;
+        }
+        el.setAttribute(name, kind === 3 ? str : kind === 2 ? String(num) : "");
+    };
+});
+
+EM_JS(void, rx_js_root, (double id, const char* selector), {
+    const sel = UTF8ToString(selector);
+    const el = document.querySelector(sel);
+    if (!el) throw new Error("ReactX: no element matches " + sel);
+    el.__rxId = id;
+    Module.rxNodes.set(id, el);
+});
+
+EM_JS(void, rx_js_create_element, (double id, const char* tag), {
+    const el = document.createElement(UTF8ToString(tag));
+    el.__rxId = id;
+    Module.rxNodes.set(id, el);
+});
+
+EM_JS(void, rx_js_create_text, (double id, const char* text), {
+    Module.rxNodes.set(id, document.createTextNode(UTF8ToString(text)));
+});
+
+EM_JS(void, rx_js_set_text, (double id, const char* text), {
+    Module.rxNodes.get(id).nodeValue = UTF8ToString(text);
+});
+
+EM_JS(void, rx_js_set_prop, (double id, const char* name, int kind, const char* str, double num), {
+    Module.rxSetProp(Module.rxNodes.get(id), UTF8ToString(name), kind, kind === 3 ? UTF8ToString(str) : "", num);
+});
+
+EM_JS(void, rx_js_remove_prop, (double id, const char* name), {
+    const el = Module.rxNodes.get(id);
+    const n = UTF8ToString(name);
+    if (n === "style") el.style.cssText = "";
+    else if (n === "value") { delete el.__rxValue; el.value = ""; }
+    else if (n === "checked" || n === "disabled" || n === "selected") el[n] = false;
+    else el.removeAttribute(n === "className" ? "class" : n === "htmlFor" ? "for" : n);
+});
+
+EM_JS(void, rx_js_insert, (double parentId, double childId, int index), {
+    const parent = Module.rxNodes.get(parentId);
+    const child = Module.rxNodes.get(childId);
+    if (child.parentNode === parent) parent.removeChild(child);
+    parent.insertBefore(child, parent.childNodes[index] || null);
+});
+
+EM_JS(void, rx_js_remove, (double parentId, double childId), {
+    const parent = Module.rxNodes.get(parentId);
+    const child = Module.rxNodes.get(childId);
+    if (child.parentNode === parent) parent.removeChild(child);
+});
+
+EM_JS(void, rx_js_destroy, (double id), {
+    Module.rxNodes.delete(id);
+});
+
+// One delegated listener per event type on the container.
+EM_JS(void, rx_js_listen, (int app, double rootId), {
+    const root = Module.rxNodes.get(rootId);
+    const keyName = function(k) {
+        return { ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right", Esc: "Escape" }[k] || k;
+    };
+    // Calls the handler on the target, then on its ancestors until one exists.
+    const send = function(e, name, text) {
+        for (let el = e.target; el; el = el.parentNode) {
+            if (el.__rxId === undefined) continue;
+            const handled = Module.ccall("rx_dom_event", "number",
+                ["number", "number", "string", "string", "number", "number", "number"],
+                [app, el.__rxId, name, text, e.ctrlKey ? 1 : 0, e.altKey ? 1 : 0, e.shiftKey ? 1 : 0]);
+            if (handled) return true;
+            if (el === root) break;
+        }
+        return false;
+    };
+    // Keep controlled inputs in sync with the value from C++ state.
+    const resync = function(el) {
+        if (el && el.__rxValue !== undefined && el.value !== el.__rxValue) el.value = el.__rxValue;
+    };
+    root.addEventListener("click", function(e) { send(e, "onClick", ""); });
+    root.addEventListener("input", function(e) { send(e, "onInput", e.target.value ?? ""); resync(e.target); });
+    root.addEventListener("change", function(e) {
+        const t = e.target;
+        send(e, "onChange", t.type === "checkbox" || t.type === "radio" ? (t.checked ? "true" : "false") : (t.value ?? ""));
+    });
+    // No preventDefault: typing must keep working even if a parent has onKey.
+    root.addEventListener("keydown", function(e) { if (!e.isComposing) send(e, "onKey", keyName(e.key)); });
+    root.addEventListener("submit", function(e) { e.preventDefault(); send(e, "onSubmit", ""); });
+});
+
+// ---- C++ side ----
+
+rx::NodeHandle nextId = 1;
+
+double js(rx::NodeHandle h) { return static_cast<double>(h); }
+
+std::vector<rx::Root*>& apps() {
+    static std::vector<rx::Root*> list;
+    return list;
+}
+
+struct DomApp {
+    rx::DomRenderer renderer;
+    rx::Root root;
+    explicit DomApp(const std::string& container) : renderer(container), root(renderer) {}
+};
+
+}  // namespace
+
+// Called from JavaScript for every DOM event. Returns 1 if a handler ran.
+extern "C" EMSCRIPTEN_KEEPALIVE int rx_dom_event(int app, double node, const char* event, const char* text, int ctrl,
+                                                  int alt, int shift) {
+    if (app < 0 || static_cast<std::size_t>(app) >= apps().size()) return 0;
+    rx::Root& root = *apps()[static_cast<std::size_t>(app)];
+    auto handle = static_cast<rx::NodeHandle>(node);
+    std::string name = event;
+    rx::EventData data;
+    if (name == "onKey")
+        data = rx::KeyEvent{.key = text, .ctrl = ctrl != 0, .alt = alt != 0, .shift = shift != 0};
+    else if (name == "onInput" || name == "onChange")
+        data = std::string(text);
+    return root.dispatch(handle, name, data) ? 1 : 0;
+}
+
+namespace rx {
+
+DomRenderer::DomRenderer(std::string container) : root_(nextId++) {
+    rx_js_init();
+    rx_js_root(js(root_), container.c_str());
+}
+
+NodeHandle DomRenderer::createElement(std::string_view type) {
+    NodeHandle h = nextId++;
+    rx_js_create_element(js(h), std::string(type).c_str());
+    return h;
+}
+
+NodeHandle DomRenderer::createText(std::string_view text) {
+    NodeHandle h = nextId++;
+    rx_js_create_text(js(h), std::string(text).c_str());
+    return h;
+}
+
+void DomRenderer::setText(NodeHandle node, std::string_view text) {
+    rx_js_set_text(js(node), std::string(text).c_str());
+}
+
+void DomRenderer::setProp(NodeHandle node, std::string_view name, const PropValue& value) {
+    std::string n(name);
+    if (const auto* b = std::get_if<bool>(&value)) rx_js_set_prop(js(node), n.c_str(), 1, "", *b ? 1 : 0);
+    else if (const auto* i = std::get_if<std::int64_t>(&value))
+        rx_js_set_prop(js(node), n.c_str(), 2, "", static_cast<double>(*i));
+    else if (const auto* d = std::get_if<double>(&value)) rx_js_set_prop(js(node), n.c_str(), 2, "", *d);
+    else if (const auto* s = std::get_if<std::string>(&value)) rx_js_set_prop(js(node), n.c_str(), 3, s->c_str(), 0);
+    else rx_js_remove_prop(js(node), n.c_str());
+}
+
+void DomRenderer::removeProp(NodeHandle node, std::string_view name) {
+    rx_js_remove_prop(js(node), std::string(name).c_str());
+}
+
+void DomRenderer::insertChild(NodeHandle parent, NodeHandle child, std::size_t index) {
+    rx_js_insert(js(parent), js(child), static_cast<int>(index));
+}
+
+void DomRenderer::removeChild(NodeHandle parent, NodeHandle child) { rx_js_remove(js(parent), js(child)); }
+
+void DomRenderer::destroyNode(NodeHandle node) { rx_js_destroy(js(node)); }
+
+Root& mountDom(Element element, const std::string& container) {
+    // Lives for the whole page: the runtime keeps running after main().
+    auto* app = new DomApp(container);
+    int index = static_cast<int>(apps().size());
+    apps().push_back(&app->root);
+    rx_js_listen(index, js(app->renderer.rootNode()));
+    app->root.render(std::move(element));
+    return app->root;
+}
+
+}  // namespace rx

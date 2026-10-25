@@ -6,22 +6,65 @@
       "displayName": "Debug (Ninja, C++20 modules)",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/debug",
-      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
     },
     {
       "name": "release",
       "displayName": "Release (Ninja, C++20 modules)",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/release",
-      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "web",
+      "displayName": "Web (Emscripten, WebAssembly + DOM)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/web",
+      "toolchainFile": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
     }
   ],
   "buildPresets": [
-    { "name": "debug", "configurePreset": "debug" },
-    { "name": "release", "configurePreset": "release" }
+    {
+      "name": "debug",
+      "configurePreset": "debug"
+    },
+    {
+      "name": "release",
+      "configurePreset": "release"
+    },
+    {
+      "name": "web",
+      "configurePreset": "web"
+    }
   ],
   "testPresets": [
-    { "name": "debug", "configurePreset": "debug", "output": { "outputOnFailure": true } },
-    { "name": "release", "configurePreset": "release", "output": { "outputOnFailure": true } }
+    {
+      "name": "debug",
+      "configurePreset": "debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "release",
+      "configurePreset": "release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "web",
+      "configurePreset": "web",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
   ]
 }

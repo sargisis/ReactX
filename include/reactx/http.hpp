@@ -83,6 +83,12 @@ public:
     // spaFallback: unknown paths without a file extension get index.html,
     // so a client-side router can handle them.
     void serveDirectory(std::filesystem::path root, bool spaFallback = false);
+    // Serve the files under a URL prefix: "/ReactX" -> /ReactX/index.html is
+    // root/index.html (like a GitHub Pages project site).
+    void setUrlPrefix(std::string prefix);
+    // For GET requests that match nothing: this file (relative to the root)
+    // with status 404, like GitHub Pages' 404.html.
+    void setNotFoundPage(std::filesystem::path file);
 
     // Print one line per request ("GET /app.wasm 200 145765").
     void setLogging(bool on) { logging_ = on; }
@@ -110,6 +116,8 @@ private:
     std::map<std::pair<std::string, std::string>, Handler> routes_;
     std::filesystem::path root_;
     bool spaFallback_ = false;
+    std::string prefix_;
+    std::filesystem::path notFound_;
 };
 
 // Content type for a file extension (".wasm" -> "application/wasm").

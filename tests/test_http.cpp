@@ -191,6 +191,24 @@ TEST(spa_fallback) {
     CHECK(request(r.port(), "GET", "/missing.js").status == 404);        // a file: still 404
 }
 
+TEST(prefix_and_not_found_page_like_github_pages) {
+    Site site;
+    site.write("404.html", "<p>app</p>");
+    Running r([&](HttpServer& s) {
+        s.serveDirectory(site.root);
+        s.setUrlPrefix("/ReactX/");
+        s.setNotFoundPage("404.html");
+    });
+    CHECK(request(r.port(), "GET", "/ReactX/").body == "<h1>home</h1>");
+    CHECK(request(r.port(), "GET", "/ReactX").body == "<h1>home</h1>");
+    CHECK(request(r.port(), "GET", "/ReactX/app.js").body == "console.log(1)");
+    auto deep = request(r.port(), "GET", "/ReactX/todos/7");
+    CHECK(deep.status == 404 && deep.body == "<p>app</p>");  // the app handles it in the browser
+    CHECK(deep.hasHeader("Content-Type: text/html"));
+    CHECK(request(r.port(), "GET", "/app.js").status == 404);       // outside the prefix
+    CHECK(request(r.port(), "GET", "/ReactXtra/app.js").status == 404);
+}
+
 TEST(routes_and_methods) {
     Site site;
     Running r([&](HttpServer& s) {

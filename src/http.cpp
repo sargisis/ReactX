@@ -185,6 +185,13 @@ void HttpServer::serveDirectory(std::filesystem::path root, bool spaFallback) {
     spaFallback_ = spaFallback;
 }
 
+void HttpServer::setUrlPrefix(std::string prefix) {
+    while (!prefix.empty() && prefix.back() == '/') prefix.pop_back();
+    prefix_ = std::move(prefix);
+}
+
+void HttpServer::setNotFoundPage(std::filesystem::path file) { notFound_ = std::move(file); }
+
 void HttpServer::start() {
     listenFd_ = ::socket(AF_INET, SOCK_STREAM, 0);
     if (listenFd_ < 0) throw std::runtime_error("ReactX http: socket() failed");
@@ -322,6 +329,15 @@ Response HttpServer::handle(const Request& req) const {
     if (method == "GET")
         if (auto file = serveFile(req)) return *file;
 
+    if (method == "GET" && !notFound_.empty() && !root_.empty()) {
+        std::ifstream in(root_ / notFound_, std::ios::binary);
+        if (in) {
+            Response r = Response::html(std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()), 404);
+            r.contentType = mimeType(notFound_.extension().string());
+            return r;
+        }
+    }
+
     if (otherMethod || (!root_.empty() && method != "GET")) return Response::text("method not allowed\n", 405);
     return Response::text("not found\n", 404);
 }
@@ -330,13 +346,19 @@ std::optional<Response> HttpServer::serveFile(const Request& req) const {
     namespace fs = std::filesystem;
     if (root_.empty()) return std::nullopt;
 
+    std::string urlPath = req.path;
+    if (!prefix_.empty()) {  // "/ReactX/x" -> "/x"; anything outside the prefix isn't ours
+        if (urlPath != prefix_ && !urlPath.starts_with(prefix_ + "/")) return std::nullopt;
+        urlPath = urlPath.substr(prefix_.size());
+        if (urlPath.empty()) urlPath = "/";
+    }
     std::error_code ec;
-    fs::path target = fs::weakly_canonical(root_ / fs::path(req.path).relative_path(), ec);
+    fs::path target = fs::weakly_canonical(root_ / fs::path(urlPath).relative_path(), ec);
     if (ec || !inside(root_, target)) return Response::text("forbidden\n", 403);  // "../" tricks
     if (fs::is_directory(target, ec)) target /= "index.html";
 
     if (!fs::is_regular_file(target, ec)) {
-        bool looksLikeRoute = fs::path(req.path).extension().empty();
+        bool looksLikeRoute = fs::path(urlPath).extension().empty();
         if (!spaFallback_ || !looksLikeRoute) return std::nullopt;
         target = root_ / "index.html";
         if (!fs::is_regular_file(target, ec)) return std::nullopt;

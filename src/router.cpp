@@ -23,6 +23,7 @@ namespace {
 // ---- location store: the current path and who wants to know about it ----
 
 struct Store {
+    std::string base;  // "/ReactX" on GitHub Pages, "" at the root of a domain
     std::string path = "/";
     std::vector<std::string> history{"/"};  // terminal only; the browser keeps its own
     std::vector<std::pair<int, std::function<void()>>> listeners;
@@ -44,10 +45,36 @@ std::string queryOf(const std::string& path) {
 
 void setPath(std::string path);
 
+// "/ReactX/todos/7" -> "/todos/7" (paths inside the app never include the base).
+[[maybe_unused]] std::string inside(const std::string& full) {  // browser only
+    const std::string& base = store().base;
+    if (base.empty() || !full.starts_with(base)) return full.empty() ? "/" : full;
+    std::string rest = full.substr(base.size());
+    if (rest.empty() || rest.front() == '?') return "/" + rest;
+    return rest.front() == '/' ? rest : full;  // "/ReactXtra" is not inside "/ReactX"
+}
+
+// "/todos/7" -> "/ReactX/todos/7"; "/" -> "/ReactX/" (the folder itself).
+std::string outside(const std::string& path) {
+    const std::string& base = store().base;
+    if (base.empty()) return path;
+    return base + (path.empty() || path.front() == '?' ? "/" + path : path);
+}
+
 #ifdef __EMSCRIPTEN__
 
 EM_JS(char*, rx_router_js_current, (), {
     return stringToNewUTF8(location.pathname + location.search);
+});
+
+// Path of <base href="..."> without the trailing slash ("/ReactX"), or "".
+EM_JS(char*, rx_router_js_base, (), {
+    const el = document.querySelector("base[href]");
+    if (!el) return stringToNewUTF8("");
+    const page = location.href || ("http://localhost" + location.pathname);
+    let path = new URL(el.getAttribute("href"), page).pathname;
+    while (path.endsWith("/")) path = path.slice(0, -1);
+    return stringToNewUTF8(path);
 });
 
 EM_JS(void, rx_router_js_listen, (), {
@@ -71,8 +98,11 @@ void start() {
     if (s.started) return;
     s.started = true;
 #ifdef __EMSCRIPTEN__
+    char* base = rx_router_js_base();
+    s.base = base;
+    std::free(base);
     char* current = rx_router_js_current();
-    s.path = current;
+    s.path = inside(current);
     std::free(current);
     rx_router_js_listen();
 #endif
@@ -139,7 +169,8 @@ Element Link(const Props& p) {
     std::vector<Element> content = p.children();
     if (content.empty()) content.push_back(p.get<std::string>("label"));
 #ifdef __EMSCRIPTEN__
-    return h("a", {{"href", to}, {"className", className}, {"data-rx-link", true}, {"onClick", go}}, std::move(content));
+    return h("a", {{"href", outside(to)}, {"className", className}, {"data-rx-link", true}, {"onClick", go}},
+             std::move(content));
 #else
     return h("text", {{"focusable", true}, {"underline", true}, {"bold", active}, {"wrap", false}, {"onClick", go}},
              std::move(content));
@@ -170,7 +201,7 @@ void navigate(const std::string& path, bool replace) {
     start();
     if (path == store().path) return;
 #ifdef __EMSCRIPTEN__
-    rx_router_js_go(path.c_str(), replace ? 1 : 0);
+    rx_router_js_go(outside(path).c_str(), replace ? 1 : 0);
 #else
     auto& h = store().history;
     if (replace && !h.empty()) h.back() = path;
@@ -191,6 +222,22 @@ void back() {
 #endif
 }
 
+std::string base() {
+    start();
+    return store().base;
+}
+
+void setBase(std::string path) {
+    start();
+    while (!path.empty() && path.back() == '/') path.pop_back();
+    store().base = std::move(path);
+}
+
+std::string href(const std::string& path) {
+    start();
+    return outside(path);
+}
+
 std::string currentPath() {
     start();
     return store().path;
@@ -200,7 +247,7 @@ void reset(const std::string& path) {
     start();
     store().history = {path};
 #ifdef __EMSCRIPTEN__
-    rx_router_js_go(path.c_str(), 1);
+    rx_router_js_go(outside(path).c_str(), 1);
 #endif
     setPath(path);
 }
@@ -227,5 +274,7 @@ std::string useQuery(const std::string& name) {
 
 #ifdef __EMSCRIPTEN__
 // Back / Forward in the browser.
-extern "C" EMSCRIPTEN_KEEPALIVE void rx_router_popstate(const char* path) { rx::router::setPath(path); }
+extern "C" EMSCRIPTEN_KEEPALIVE void rx_router_popstate(const char* path) {
+    rx::router::setPath(rx::router::inside(path));
+}
 #endif

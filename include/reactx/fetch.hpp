@@ -11,10 +11,11 @@
 //   rx::fetch({.method = "POST", .url = "/api/todos", .body = R"({"title":"Milk"})"},
 //             [](const rx::FetchResponse& r) { ... });
 //
-// Browser build only for now: in the terminal build the request fails with
-// an error message.
+// The network is used in the browser build; in the terminal build requests
+// only reach a setLocalFetch() handler (otherwise they fail with an error).
 
 #include <functional>
+#include <optional>
 #include <string>
 
 #include "reactx/json.hpp"
@@ -42,6 +43,14 @@ struct FetchResponse {
 // Starts a request; `done` runs when the response arrives, and the page is
 // re-rendered after it.
 void fetch(FetchRequest request, std::function<void(const FetchResponse&)> done);
+
+// A "server" inside the app: requests go to `handler` first; if it returns a
+// response, that is the answer (delivered later, like a network one in the
+// browser; right away in the terminal build), otherwise the request goes to
+// the network. Used for static sites with no backend, and for tests.
+// Pass {} to remove it.
+using LocalFetch = std::function<std::optional<FetchResponse>(const FetchRequest&)>;
+void setLocalFetch(LocalFetch handler);
 
 struct FetchState {
     bool loading = true;

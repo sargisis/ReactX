@@ -1,5 +1,7 @@
 # ReactX
 
+**Сайт с документацией и демо: https://sargisis.github.io/ReactX/** — сам сайт тоже написан на ReactX (C++20 → WebAssembly).
+
 React-подобный UI-фреймворк на C++20 (только стандарт C++20, без C++23) с подключаемым бэкендом отрисовки.
 
 ```cpp
@@ -230,6 +232,8 @@ fetch({.method = "POST", .url = "/api/todos", .body = json::object({{"title", "�
       [](const FetchResponse& r) { ... });
 ```
 
+**`setLocalFetch`** — «сервер внутри приложения»: запросы сначала идут в обработчик на C++ (например, `todo_api::handle`), сеть не нужна; так работают тесты API без сокетов.
+
 **JSON** ([`reactx/json.hpp`](include/reactx/json.hpp)) — свой, без зависимостей: `json::parse`, `v["key"]`, `v.get<int>("n", 0)`, `json::object({...})`, `json::array({...})`, `dump()` / `dump(2)`; ошибки с позицией; `\uXXXX` и суррогатные пары; `for (auto& x : json::parse(t).asArray())` безопасен (на временном значении возвращается копия).
 
 **API на сервере** ([examples/todo_api.hpp](examples/todo_api.hpp)): маршруты `rx::net::HttpServer` с параметрами и `*`:
@@ -244,6 +248,28 @@ fetch({.method = "POST", .url = "/api/todos", .body = json::object({{"title", "�
 | любой другой `/api/...` | JSON 404 (а не страница сайта) |
 
 Ошибки — `{"error": "..."}` (400 при неверном JSON или пустом `title`). С `--data файл.json` задачи сохраняются на диск (атомарно, через временный файл) и переживают перезапуск сервера. Сайт отдаётся с SPA-fallback: прямой заход на `/todos/7` получает приложение, дальше страницу выбирает роутер.
+
+## Публикация сайта (GitHub Pages)
+
+Сайт собирается и публикуется автоматически ([.github/workflows/pages.yml](.github/workflows/pages.yml)) при каждом `push` в `main`: нативные тесты (GCC 14), сборка Emscripten, веб-тесты под Node, затем выкладка `build/pages/site`. Один раз нужно включить в репозитории **Settings → Pages → Source: GitHub Actions**.
+
+Что внутри сайта ([examples/site.cpp](examples/site.cpp), тоже на ReactX):
+- главная с описанием и примером кода;
+- **документация** (`/docs`, тексты — [examples/site_docs.hpp](examples/site_docs.hpp)): быстрый старт, элементы, хуки, контекст и memo, события, терминал, браузер, `rx::ui`, роутер, данные, сервер;
+- **демо**: счётчик и компоненты `rx::ui`;
+- базовый путь `/ReactX/` берётся из `<base href>`; маршруты и ссылки в коде пишутся без него;
+- `404.html` — копия сайта, поэтому прямые ссылки вида `/ReactX/docs/hooks` открываются (у GitHub Pages нет другого способа отдать SPA).
+
+Пример полного стека с сервером (todo-приложение [examples/web_app.cpp](examples/web_app.cpp) + `api_server`) на сайт не выкладывается — он запускается локально.
+
+Собрать и проверить локально точно как на GitHub Pages:
+
+```sh
+cmake --preset pages && cmake --build --preset pages && ctest --preset pages
+./build/debug/reactx_serve build/pages/site --base /ReactX/ --not-found 404.html   # http://127.0.0.1:8090/ReactX/
+```
+
+`reactx_serve --base` отдаёт папку по URL-префиксу, `--not-found` — свой файл с кодом 404 (как GitHub Pages).
 
 ## Сборка
 
@@ -284,12 +310,13 @@ include/reactx/   публичный API (element, hooks, renderer, root, text_r
 modules/          reactx.cppm — C++20-модуль (import reactx;)
 src/              реализация; reconciler.cpp — ядро, terminal*.cpp — терминальный бэкенд
 examples/         counter, todo, todo_tui, ui_demo (терминал); web_counter, web_todo, web_ui_demo (браузер);
-                  web_app + api_server + todo_api.hpp (сайт со страницами и API на C++)
+                  site.cpp + site_docs.hpp (сайт с документацией); web_app + api_server + todo_api.hpp (полный стек)
 web/              shell.html — HTML-шаблон и CSS для веб-примеров; app_shell.html — для web_app
 tests/            тесты ядра, test_terminal.cpp — терминал, test_ui.cpp — rx::ui, test_module.cpp — import reactx;
-                  test_dom.cpp, test_ui_web.cpp, test_web_app.cpp + web/fake_dom.js — браузер под Node;
+                  test_dom.cpp, test_ui_web.cpp, test_web_app.cpp, test_web_base.cpp + web/fake_dom.js — браузер под Node;
                   test_http.cpp, test_todo_api.cpp — сервер; test_json.cpp; test_router.cpp
 tools/            serve.cpp — reactx_serve, сервер для разработки
+.github/workflows pages.yml — тесты, сборка и публикация сайта
 ```
 
 Для обычной (быстрой) сборки без отладки:
@@ -325,7 +352,7 @@ cmake --preset release && cmake --build --preset release
 - Терминал: ширина символа считается за 1 колонку (эмодзи и иероглифы шириной 2 могут сдвигать строку); курсор в `input` только в конце текста; нет прокрутки — что не влезло по высоте, обрезается; только POSIX (Linux/macOS).
 - `rx::ui`: переключение вкладок стрелками и выбор «по фокусу» пока не сделаны (компонент не может сам переместить фокус); нет прокрутки длинных списков.
 - Браузер: модули (`import reactx;`) в веб-сборке пока выключены; страница строится в браузере (для поисковиков нужен будет серверный рендеринг).
-- Роутер: нет базового пути (сайт должен лежать в корне домена — для GitHub Pages добавим в Шаге 9); `useFetch` в терминальной сборке пока не работает (только браузер).
+- `useFetch` в терминальной сборке ходит только в `setLocalFetch`-обработчик (сети там нет). Сервер на C++ пока не выложен в интернет: на GitHub Pages только статический сайт.
 - Раскладка пересчитывается целиком на каждую перерисовку (для терминала это быстро, но для тысяч узлов понадобится кэш).
 - Дети перерисовываются вместе с родителем, если не обёрнуты в `memo<...>`; `memo` не сравнивает детей (`props.children()`).
 - Хуки нельзя вызывать в цикле с разным числом итераций (как и в React), поэтому `useCallback` для каждого элемента списка не сделать — нужен отдельный компонент.
@@ -348,7 +375,7 @@ cmake --preset release && cmake --build --preset release
 - [x] Шаг 6 — браузер: WebAssembly + DOM-бэкенд, веб-примеры counter и todo
 - [x] Шаг 7 — стили и веб-версия компонентов `rx::ui` (тот же код, что в терминале)
 - [x] Шаг 8 — несколько страниц (роутер), загрузка данных (`useFetch`), свой JSON, REST API на C++
-- [ ] **Шаг 9** — публикация сайта (GitHub Pages)
+- [x] Шаг 9 — сайт с документацией на GitHub Pages: автосборка, базовый путь, прямые ссылки на страницы
 - [ ] Свой пакетный менеджер и CLI (аналог `npm`): создание проекта, зависимости, сборка;
       команда для разработки (как `npm run dev`) собирает веб-версию и сама запускает `reactx_serve`
 - [ ] Позже — окна на рабочем столе: SDL3 + Skia/ThorVG

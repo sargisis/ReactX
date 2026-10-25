@@ -67,14 +67,45 @@ if(EMSCRIPTEN)
   reactx_web_example(web_todo)
   reactx_web_example(web_ui_demo)
 
-  # Full app with pages: built as build/web/app/index.html, run it with
-  # api_server (native build), which also serves its REST API.
-  add_executable(web_app examples/web_app.cpp)
-  target_link_libraries(web_app PRIVATE reactx)
-  set_target_properties(web_app PROPERTIES OUTPUT_NAME index SUFFIX ".html"
-                                           RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/app)
-  target_link_options(web_app PRIVATE "SHELL:--shell-file ${CMAKE_SOURCE_DIR}/web/app_shell.html")
-  set_property(TARGET web_app APPEND PROPERTY LINK_DEPENDS ${CMAKE_SOURCE_DIR}/web/app_shell.html)
+  # Pages with a router use web/app_shell.html; @REACTX_WEB_BASE@ becomes
+  # <base href>: "/" for web_app, REACTX_WEB_BASE for the website.
+  set(REACTX_WEB_BASE "/" CACHE STRING "Base path of the website (<base href>), e.g. /ReactX/ on GitHub Pages")
+  set(REACTX_SITE_BASE ${REACTX_WEB_BASE})
+  set(REACTX_WEB_BASE "/")
+  configure_file(${CMAKE_SOURCE_DIR}/web/app_shell.html ${CMAKE_BINARY_DIR}/app_shell_root.html @ONLY)
+  set(REACTX_WEB_BASE ${REACTX_SITE_BASE})
+  configure_file(${CMAKE_SOURCE_DIR}/web/app_shell.html ${CMAKE_BINARY_DIR}/app_shell_site.html @ONLY)
+
+  function(reactx_web_page target source outdir shell)
+    add_executable(${target} ${source})
+    target_link_libraries(${target} PRIVATE reactx)
+    set_target_properties(${target} PROPERTIES OUTPUT_NAME index SUFFIX ".html"
+                                               RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${outdir})
+    target_link_options(${target} PRIVATE "SHELL:--shell-file ${shell}")
+    set_property(TARGET ${target} APPEND PROPERTY LINK_DEPENDS ${shell})
+  endfunction()
+
+  # Full-stack todo example: build/web/app/index.html, served with its REST API
+  # by api_server (native build).
+  reactx_web_page(web_app examples/web_app.cpp app ${CMAKE_BINARY_DIR}/app_shell_root.html)
+
+  # The ReactX website (docs + demos). build/<preset>/site is everything for a
+  # static host: the site is the start page and also 404.html, so direct links
+  # like /ReactX/docs/hooks open it (GitHub Pages has no other fallback).
+  reactx_web_page(website examples/site.cpp site_app ${CMAKE_BINARY_DIR}/app_shell_site.html)
+  add_custom_target(site ALL
+    COMMAND ${CMAKE_COMMAND} -E rm -rf ${CMAKE_BINARY_DIR}/site
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/site
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/site_app/index.html ${CMAKE_BINARY_DIR}/site_app/index.js
+            ${CMAKE_BINARY_DIR}/site_app/index.wasm ${CMAKE_BINARY_DIR}/site/
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/site_app/index.html ${CMAKE_BINARY_DIR}/site/404.html
+    COMMAND ${CMAKE_COMMAND} -E copy
+            ${CMAKE_BINARY_DIR}/web_counter.html ${CMAKE_BINARY_DIR}/web_counter.js ${CMAKE_BINARY_DIR}/web_counter.wasm
+            ${CMAKE_BINARY_DIR}/web_ui_demo.html ${CMAKE_BINARY_DIR}/web_ui_demo.js ${CMAKE_BINARY_DIR}/web_ui_demo.wasm
+            ${CMAKE_BINARY_DIR}/site/
+    COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_BINARY_DIR}/site/.nojekyll
+    DEPENDS website web_counter web_ui_demo
+    COMMENT "Assembling the website in ${CMAKE_BINARY_DIR}/site")
   # Start page with links to the demos (http://localhost:8090/).
   configure_file(${CMAKE_SOURCE_DIR}/web/index.html ${CMAKE_BINARY_DIR}/index.html COPYONLY)
 
@@ -93,6 +124,13 @@ if(EMSCRIPTEN)
     "SHELL:--pre-js ${CMAKE_SOURCE_DIR}/tests/web/fake_dom.js" "SHELL:-sENVIRONMENT=node")
   set_property(TARGET reactx_web_app_tests APPEND PROPERTY LINK_DEPENDS ${CMAKE_SOURCE_DIR}/tests/web/fake_dom.js)
   add_test(NAME reactx_web_app_tests COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} $<TARGET_FILE:reactx_web_app_tests>)
+
+  add_executable(reactx_web_base_tests tests/test_web_base.cpp)
+  target_link_libraries(reactx_web_base_tests PRIVATE reactx)
+  target_link_options(reactx_web_base_tests PRIVATE
+    "SHELL:--pre-js ${CMAKE_SOURCE_DIR}/tests/web/fake_dom.js" "SHELL:-sENVIRONMENT=node")
+  set_property(TARGET reactx_web_base_tests APPEND PROPERTY LINK_DEPENDS ${CMAKE_SOURCE_DIR}/tests/web/fake_dom.js)
+  add_test(NAME reactx_web_base_tests COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} $<TARGET_FILE:reactx_web_base_tests>)
 
   add_executable(reactx_ui_web_tests tests/test_ui_web.cpp)
   target_link_libraries(reactx_ui_web_tests PRIVATE reactx)

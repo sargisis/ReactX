@@ -16,11 +16,26 @@ namespace rx {
 
 namespace {
 
+LocalFetch& localFetch() {
+    static LocalFetch handler;
+    return handler;
+}
+
 #ifdef __EMSCRIPTEN__
 std::map<int, std::function<void(const FetchResponse&)>>& pending() {
     static std::map<int, std::function<void(const FetchResponse&)>> map;
     return map;
 }
+
+std::map<int, FetchResponse>& localAnswers() {
+    static std::map<int, FetchResponse> map;
+    return map;
+}
+
+// Delivers a local answer on a timer, like a network response.
+EM_JS(void, rx_fetch_js_later, (int id), {
+    setTimeout(function() { Module.ccall("rx_fetch_local_done", null, ["number"], [id]); }, 0);
+});
 
 EM_JS(void, rx_fetch_js, (int id, const char* method, const char* url, const char* body, const char* contentType), {
     const m = UTF8ToString(method);
@@ -47,15 +62,30 @@ struct Loaded {
 
 }  // namespace
 
+void setLocalFetch(LocalFetch handler) { localFetch() = std::move(handler); }
+
 void fetch(FetchRequest request, std::function<void(const FetchResponse&)> done) {
+    std::optional<FetchResponse> local;
+    if (localFetch()) {
+        try {
+            local = localFetch()(request);
+        } catch (const std::exception& e) {
+            local = FetchResponse{.status = 500, .body = e.what(), .error = {}};
+        }
+    }
 #ifdef __EMSCRIPTEN__
     static int nextId = 1;
     int id = nextId++;
     pending()[id] = std::move(done);
+    if (local) {
+        localAnswers()[id] = std::move(*local);
+        rx_fetch_js_later(id);
+        return;
+    }
     rx_fetch_js(id, request.method.c_str(), request.url.c_str(), request.body.c_str(), request.contentType.c_str());
 #else
-    (void)request;
-    done(FetchResponse{.status = 0, .body = {}, .error = "fetch is only available in the browser build"});
+    if (local) done(*local);
+    else done(FetchResponse{.status = 0, .body = {}, .error = "no network in the terminal build (use setLocalFetch)"});
 #endif
 }
 
@@ -91,6 +121,21 @@ FetchState useFetch(const std::string& url) {
 }  // namespace rx
 
 #ifdef __EMSCRIPTEN__
+extern "C" EMSCRIPTEN_KEEPALIVE void rx_fetch_local_done(int id) {
+    auto& answers = rx::localAnswers();
+    auto it = answers.find(id);
+    if (it == answers.end()) return;
+    rx::FetchResponse r = std::move(it->second);
+    answers.erase(it);
+    auto& map = rx::pending();
+    auto cb = map.find(id);
+    if (cb == map.end()) return;
+    auto done = std::move(cb->second);
+    map.erase(cb);
+    done(r);
+    rx::flushDom();
+}
+
 extern "C" EMSCRIPTEN_KEEPALIVE void rx_fetch_done(int id, int status, const char* body, const char* error) {
     auto& map = rx::pending();
     auto it = map.find(id);

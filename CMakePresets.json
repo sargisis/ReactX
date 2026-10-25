@@ -28,6 +28,16 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
+    },
+    {
+      "name": "pages",
+      "displayName": "GitHub Pages (the website at /ReactX/)",
+      "inherits": "web",
+      "binaryDir": "${sourceDir}/build/pages",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "REACTX_WEB_BASE": "/ReactX/"
+      }
     }
   ],
   "buildPresets": [
@@ -42,6 +52,10 @@
     {
       "name": "web",
       "configurePreset": "web"
+    },
+    {
+      "name": "pages",
+      "configurePreset": "pages"
     }
   ],
   "testPresets": [
@@ -62,6 +76,13 @@
     {
       "name": "web",
       "configurePreset": "web",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "pages",
+      "configurePreset": "pages",
       "output": {
         "outputOnFailure": true
       }

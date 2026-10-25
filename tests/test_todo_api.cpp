@@ -14,7 +14,10 @@
 #include <vector>
 
 #include "../examples/todo_api.hpp"
+#include "reactx/fetch.hpp"
 #include "reactx/json.hpp"
+#include "reactx/reactx.hpp"
+#include "reactx/text_renderer.hpp"
 
 using namespace rx;
 namespace fs = std::filesystem;
@@ -81,7 +84,7 @@ TEST(lists_the_seed_todos) {
     auto r = call(api.port(), "GET", "/api/todos");
     CHECK(r.status == 200);
     CHECK(r.json().size() == 3);
-    CHECK(r.json()[0]["title"].asString() == "Write the reconciler");
+    CHECK(r.json()[0]["title"].asString() == "Написать reconciler");
 }
 
 TEST(create_read_update_delete) {
@@ -141,6 +144,39 @@ TEST(saves_to_a_file) {
         CHECK(next.json()["id"].asInt() == 5);
     }
     fs::remove(file);
+}
+
+// The same API without any network: rx::setLocalFetch + todo_api::handle,
+// which is how the static site (GitHub Pages) works in the browser.
+Element LocalList(const Props&) {
+    auto todos = useFetch("/api/todos");
+    return h("p", {}, {todos.ok() ? std::to_string(todos.json().size()) + " todos" : "loading"});
+}
+
+TEST(local_fetch_runs_the_api_in_process) {
+    std::string saved;
+    todo_api::Store store({.load = [&saved] { return saved; }, .save = [&saved](const std::string& t) { saved = t; }});
+    setLocalFetch([&store](const FetchRequest& r) -> std::optional<FetchResponse> {
+        if (!r.url.starts_with("/api/")) return std::nullopt;
+        auto reply = todo_api::handle(store, r.method, r.url, r.body);
+        return FetchResponse{.status = reply.status, .body = reply.body, .error = {}};
+    });
+
+    TextRenderer screen;
+    Root root(screen);
+    root.render(h(LocalList));
+    CHECK(screen.toString().find("\"3 todos\"") != std::string::npos);
+
+    FetchResponse created;
+    fetch({.method = "POST", .url = "/api/todos", .body = R"({"title": "offline"})"},
+          [&created](const FetchResponse& r) { created = r; });
+    CHECK(created.status == 201);
+    CHECK(saved.find("offline") != std::string::npos);  // persisted through Storage
+
+    FetchResponse other;
+    fetch({.method = "GET", .url = "https://example.com/"}, [&other](const FetchResponse& r) { other = r; });
+    CHECK(other.status == 0 && !other.error.empty());  // not handled locally, no network here
+    setLocalFetch({});
 }
 
 TEST(parallel_posts_get_unique_ids) {

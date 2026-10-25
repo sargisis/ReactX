@@ -13,8 +13,12 @@
 //
 // In the browser it uses the History API: the address bar changes, Back and
 // Forward work, and the page never reloads. Serve the app with a fallback to
-// index.html for unknown paths (reactx_serve --spa). In the terminal the
-// history lives in memory.
+// index.html for unknown paths (reactx_serve --spa, or a 404.html copy on
+// GitHub Pages). In the terminal the history lives in memory.
+//
+// Base path: when the page has <base href="/ReactX/">, the app lives under
+// /ReactX/ (GitHub Pages). Routes, links and navigate() still use paths
+// without it ("/todos/7"); the router adds and removes the base itself.
 
 #include <map>
 #include <string>
@@ -53,6 +57,13 @@ void back();
 std::string currentPath();
 // Clears the history and goes to `path` (tests, terminal apps).
 void reset(const std::string& path = "/");
+
+// The base path ("/ReactX", or "" at the root). Read from <base href> in the
+// browser; setBase() overrides it.
+std::string base();
+void setBase(std::string path);
+// Full URL path for an app path: href("/todos/7") == "/ReactX/todos/7".
+std::string href(const std::string& path);
 
 // ---- hooks ----
 

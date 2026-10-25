@@ -1,27 +1,33 @@
 #pragma once
 
-// REST API for todos on rx::net::HttpServer, used by examples/api_server.cpp
-// and tests/test_todo_api.cpp.
+// REST API for todos. The API itself (Store + handle()) doesn't know about
+// sockets, so the same C++ code runs
+//   - behind rx::net::HttpServer in examples/api_server.cpp, and
+//   - inside the browser in the static site (examples/web_app.cpp with
+//     rx::setLocalFetch, data in localStorage) — no server needed.
 //
 //   GET    /api/todos          -> [{"id":1,"title":"...","done":false}, ...]
 //   POST   /api/todos          {"title":"..."}          -> 201 + the new todo
 //   GET    /api/todos/:id      -> the todo, or 404
 //   PATCH  /api/todos/:id      {"title"?:"...","done"?:true} -> the todo
 //   DELETE /api/todos/:id      -> 204
-// Errors are {"error": "..."} with status 400 / 404.
+// Errors are {"error": "..."} with status 400 / 404 / 405.
 
 #include <algorithm>
 #include <charconv>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iterator>
+#include <map>
 #include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include "reactx/http.hpp"
 #include "reactx/json.hpp"
+#include "reactx/path.hpp"
 
 namespace todo_api {
 
@@ -33,11 +39,35 @@ struct Todo {
     rx::json::Value toJson() const { return rx::json::object({{"id", id}, {"title", title}, {"done", done}}); }
 };
 
-// Thread-safe list of todos; saved to a JSON file after every change when a
-// path is given.
+// Where the todos are kept between runs: load() returns the saved JSON text
+// ("" = nothing saved yet), save() stores it. Empty functions = memory only.
+struct Storage {
+    std::function<std::string()> load{};
+    std::function<void(const std::string&)> save{};
+};
+
+// A JSON file, written atomically (a temporary file, then rename).
+inline Storage fileStorage(std::filesystem::path file) {
+    if (file.empty()) return {};
+    return {
+        .load = [file] {
+            std::ifstream in(file);
+            return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        },
+        .save = [file](const std::string& text) {
+            std::filesystem::path tmp = file;
+            tmp += ".tmp";
+            std::ofstream(tmp) << text << '\n';
+            std::filesystem::rename(tmp, file);
+        },
+    };
+}
+
+// Thread-safe list of todos, saved after every change.
 class Store {
 public:
-    explicit Store(std::filesystem::path file = {}) : file_(std::move(file)) { load(); }
+    explicit Store(Storage storage = {}) : storage_(std::move(storage)) { load(); }
+    explicit Store(std::filesystem::path file) : Store(fileStorage(std::move(file))) {}
 
     std::vector<Todo> all() const {
         std::scoped_lock lock(mutex_);
@@ -73,13 +103,12 @@ public:
 
 private:
     void load() {
-        if (file_.empty() || !std::filesystem::exists(file_)) {
-            todos_ = {{1, "Write the reconciler", true}, {2, "Run it in the browser", true}, {3, "Load data from a C++ server"}};
+        std::string text = storage_.load ? storage_.load() : std::string{};
+        if (text.find_first_not_of(" \t\r\n") == std::string::npos) {
+            todos_ = {{1, "Написать reconciler", true}, {2, "Запустить в браузере", true}, {3, "Загрузить данные с сервера на C++"}};
             nextId_ = 4;
             return;
         }
-        std::ifstream in(file_);
-        std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
         const rx::json::Value saved = rx::json::parse(text);
         for (const auto& v : saved.asArray()) {
             todos_.push_back({static_cast<int>(v.get<int>("id")), v.get<std::string>("title"), v.get<bool>("done")});
@@ -87,23 +116,27 @@ private:
         }
     }
     void save() const {  // called with the lock held
-        if (file_.empty()) return;
+        if (!storage_.save) return;
         rx::json::Value list = rx::json::array();
         for (const auto& t : todos_) list.push(t.toJson());
-        std::filesystem::path tmp = file_;
-        tmp += ".tmp";
-        std::ofstream(tmp) << list.dump(2) << '\n';
-        std::filesystem::rename(tmp, file_);  // never leave a half-written file
+        storage_.save(list.dump(2));
     }
 
-    std::filesystem::path file_;
+    Storage storage_;
     mutable std::mutex mutex_;
     std::vector<Todo> todos_;
     int nextId_ = 1;
 };
 
-inline rx::net::Response error(int status, const std::string& message) {
-    return rx::net::Response::json(rx::json::object({{"error", message}}).dump(), status);
+// ---- the API, without any networking ----
+
+struct Reply {
+    int status = 200;
+    std::string body{};  // JSON (empty for 204)
+};
+
+inline Reply error(int status, const std::string& message) {
+    return {status, rx::json::object({{"error", message}}).dump()};
 }
 
 inline std::optional<int> parseId(const std::string& s) {
@@ -128,70 +161,87 @@ inline std::optional<std::string> validTitle(const rx::json::Value& v, std::stri
     return std::nullopt;
 }
 
-inline void addRoutes(rx::net::HttpServer& server, Store& store) {
-    using rx::net::Request;
-    using rx::net::Response;
-
-    server.get("/api/todos", [&store](const Request&) {
-        rx::json::Value list = rx::json::array();
-        for (const auto& t : store.all()) list.push(t.toJson());
-        return Response::json(list.dump());
-    });
-
-    server.post("/api/todos", [&store](const Request& req) {
-        rx::json::Value body;
+// Answers one request. `path` has no query string.
+inline Reply handle(Store& store, std::string_view method, std::string_view path, std::string_view body) {
+    auto parseBody = [&](rx::json::Value& out) -> std::optional<Reply> {
         try {
-            body = rx::json::parse(req.body);
+            out = rx::json::parse(body);
+            return std::nullopt;
         } catch (const rx::json::Error& e) {
             return error(400, e.what());
         }
-        std::string why;
-        auto title = validTitle(body, why);
-        if (!title) return error(400, why);
-        return Response::json(store.add(*title).toJson().dump(), 201);
-    });
+    };
 
-    server.get("/api/todos/:id", [&store](const Request& req) {
-        auto id = parseId(req.pathParam("id"));
-        if (!id) return error(400, "bad id");
-        auto t = store.find(*id);
-        return t ? Response::json(t->toJson().dump()) : error(404, "no todo " + req.pathParam("id"));
-    });
-
-    server.patch("/api/todos/:id", [&store](const Request& req) {
-        auto id = parseId(req.pathParam("id"));
-        if (!id) return error(400, "bad id");
-        rx::json::Value body;
-        try {
-            body = rx::json::parse(req.body);
-        } catch (const rx::json::Error& e) {
-            return error(400, e.what());
+    std::map<std::string, std::string> params;
+    if (rx::matchPath("/api/todos", path, params)) {
+        if (method == "GET") {
+            rx::json::Value list = rx::json::array();
+            for (const auto& t : store.all()) list.push(t.toJson());
+            return {200, list.dump()};
         }
-        std::optional<std::string> title;
-        std::optional<bool> done;
-        if (body.contains("title")) {
+        if (method == "POST") {
+            rx::json::Value v;
+            if (auto bad = parseBody(v)) return *bad;
             std::string why;
-            title = validTitle(body, why);
+            auto title = validTitle(v, why);
             if (!title) return error(400, why);
+            return {201, store.add(*title).toJson().dump()};
         }
-        if (body.contains("done")) {
-            if (!body["done"].isBool()) return error(400, "done must be true or false");
-            done = body["done"].asBool();
-        }
-        auto t = store.update(*id, title, done);
-        return t ? Response::json(t->toJson().dump()) : error(404, "no todo " + req.pathParam("id"));
-    });
+        return error(405, "method not allowed");
+    }
 
-    server.del("/api/todos/:id", [&store](const Request& req) {
-        auto id = parseId(req.pathParam("id"));
+    if (rx::matchPath("/api/todos/:id", path, params)) {
+        auto id = parseId(params["id"]);
         if (!id) return error(400, "bad id");
-        return store.remove(*id) ? Response{.status = 204, .contentType = "text/plain", .body = {}, .headers = {}}
-                                 : error(404, "no todo " + req.pathParam("id"));
-    });
+        if (method == "GET") {
+            auto t = store.find(*id);
+            return t ? Reply{200, t->toJson().dump()} : error(404, "no todo " + params["id"]);
+        }
+        if (method == "PATCH") {
+            rx::json::Value v;
+            if (auto bad = parseBody(v)) return *bad;
+            std::optional<std::string> title;
+            std::optional<bool> done;
+            if (v.contains("title")) {
+                std::string why;
+                title = validTitle(v, why);
+                if (!title) return error(400, why);
+            }
+            if (v.contains("done")) {
+                if (!v["done"].isBool()) return error(400, "done must be true or false");
+                done = v["done"].asBool();
+            }
+            auto t = store.update(*id, title, done);
+            return t ? Reply{200, t->toJson().dump()} : error(404, "no todo " + params["id"]);
+        }
+        if (method == "DELETE") return store.remove(*id) ? Reply{204, {}} : error(404, "no todo " + params["id"]);
+        return error(405, "method not allowed");
+    }
 
-    // Unknown API paths get a JSON 404, not the site's index.html.
-    for (const char* method : {"GET", "POST", "PATCH", "PUT", "DELETE"})
-        server.route(method, "/api/*", [](const Request& req) { return error(404, "no API route " + req.path); });
+    return error(404, "no API route " + std::string(path));
 }
 
 }  // namespace todo_api
+
+// ---- on the HTTP server (native builds) ----
+
+#ifndef __EMSCRIPTEN__
+#include "reactx/http.hpp"
+
+namespace todo_api {
+
+// Routes every /api/... request to handle().
+inline void addRoutes(rx::net::HttpServer& server, Store& store) {
+    for (const char* method : {"GET", "POST", "PATCH", "PUT", "DELETE"}) {
+        server.route(method, "/api/*", [&store](const rx::net::Request& req) {
+            Reply r = handle(store, req.method, req.path, req.body);
+            return rx::net::Response{.status = r.status,
+                                     .contentType = r.body.empty() ? "text/plain" : "application/json; charset=utf-8",
+                                     .body = std::move(r.body),
+                                     .headers = {}};
+        });
+    }
+}
+
+}  // namespace todo_api
+#endif

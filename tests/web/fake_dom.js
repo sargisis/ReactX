@@ -94,7 +94,10 @@
     head,
     activeElement: null,
     getElementById(id) { return head.find(e => e.id === id || e.getAttribute("id") === id) || app.find(e => e.getAttribute("id") === id); },
-    querySelector(sel) { return sel === "#app" ? app : app.find(e => "#" + e.getAttribute("id") === sel); },
+    querySelector(sel) {
+      if (sel === "base[href]") return head.find(e => e.tagName === "BASE" && e.getAttribute("href") !== null);
+      return sel === "#app" ? app : app.find(e => "#" + e.getAttribute("id") === sel);
+    },
     createElement(tag) { return new Element(tag); },
     createTextNode(text) { return new Text(text); },
   };
@@ -153,6 +156,14 @@
   const nth = (list, i, what) => { const el = list[i || 0]; if (!el) throw new Error("not found: " + what); return el; };
   const byText = (text) => nth(all(e => e.textContent === text).reverse(), 0, "text " + text);  // deepest match
   globalThis.rxTest = {
+    // Like GitHub Pages: <base href="/ReactX/"> and the page opened at `path`.
+    setBase: (href, path) => {
+      const b = new Element("base");
+      b.setAttribute("href", href);
+      head.appendChild(b);
+      setLocation(path);
+      entries[0] = path;
+    },
     mock: (method, url, status, body) => { mocks[method + " " + url] = { status, body }; },
     requests: () => requests.join("\n"),
     path: () => location.pathname + location.search,

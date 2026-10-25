@@ -51,15 +51,35 @@ TerminalApp app;
 app.run(h(App, {{"onQuit", Callback([&app] { app.quit(); })}}));
 ```
 
+Раскладка — **Flexbox**, её считает [Yoga](https://github.com/facebook/yoga) (движок React Native). Единица — клетка терминала.
+
+```cpp
+h("box", {{"flexGrow", 1}, {"justifyContent", "center"}, {"alignItems", "center"}}, {   // центр экрана
+    h("box", {{"border", true}, {"title", "Окно"}, {"padding", 1}, {"gap", 1}, {"width", "60%"}}, {
+        h("box", {{"direction", "row"}, {"gap", 1}}, {
+            h("text", {}, {"Имя:"}),
+            h("input", {{"flexGrow", 1}, {"value", name}}),                          // тянется на всю ширину
+        }),
+        h("box", {{"direction", "row"}, {"justifyContent", "space-between"}}, {
+            h("button", {}, {"Отмена"}), h("button", {}, {"OK"}),
+        }),
+    }),
+});
+```
+
 | Тег | Что рисует |
 |---|---|
-| `box` (и любой неизвестный тег) | детей друг под другом; с `direction="row"` — в ряд |
-| `text` | свой текст; `\n` делит на строки |
+| `box` (и любой неизвестный тег) | flex-контейнер, по умолчанию столбец |
+| `text` | свой текст; переносится по словам (`wrap=false` — обрезать) |
 | `input` | поле ввода: `value`, `placeholder`, курсор `_` в фокусе |
 | `button` | `[ label ]` |
 
-Пропсы для любого тега: `border`, `title`, `padding`, `gap`, `width`, `color`, `bg`, `bold`, `dim`, `underline`, `focusable`.
+Flex-пропсы (как в CSS): `direction` (`row`, `column`, `row-reverse`, `column-reverse`), `justifyContent` (`start`, `center`, `end`, `space-between`, `space-around`, `space-evenly`), `alignItems` / `alignSelf` (`start`, `center`, `end`, `stretch`), `flexGrow`, `flexShrink`, `flexBasis`, `flexWrap`, `width` / `height` / `min*` / `max*` (число или `"50%"`), `padding*` и `margin*` (`X`, `Y`, `Left`, …; `margin: "auto"`), `gap` / `rowGap` / `columnGap`, `position: "absolute"` + `top` / `left` / `right` / `bottom`, `display: "none"`, `overflow: "hidden"`.
+
+Оформление: `border`, `title`, `color`, `bg`, `bold`, `dim`, `underline`, `focusable`.
 Цвета: `black red green yellow blue magenta cyan white gray`, `bright-<цвет>`.
+
+Отличия от браузера: корень занимает весь терминал; `flexShrink` по умолчанию 1 в строках и 0 в столбцах (что не влезло по высоте — обрезается), кнопки не сжимаются; рамка всегда обрезает содержимое, без рамки по умолчанию `overflow: visible`.
 
 Клавиши по умолчанию: Tab/↓ и Shift+Tab/↑ — фокус; любая клавиша уходит в `onKey` элемента в фокусе;
 в `input` символы и Backspace меняют `value` через `onInput` (поле управляемое: держите `value` в `useState`);
@@ -68,6 +88,8 @@ Enter/Space — `onClick`; Ctrl+C — выход. Фокус получают `i
 Демо: `./build/debug/todo_tui` (нужен настоящий терминал).
 
 ## Сборка
+
+Зависимость одна — [Yoga](https://github.com/facebook/yoga) v3.2.1 (MIT). Если её нет в системе, CMake скачает её сам при первой настройке (нужен интернет; без интернета: `-DFETCHCONTENT_SOURCE_DIR_YOGA=/путь/к/yoga`).
 
 С модулями C++20 (`import reactx;`) — нужны CMake 3.28+, Ninja и GCC 14+ / Clang 17+ / MSVC 17.4+:
 
@@ -137,6 +159,7 @@ cmake --preset release && cmake --build --preset release
 - Числа вроде `size_t` в props нужно явно приводить к `int64_t`.
 - После `setState` вне `dispatch` нужно самому вызвать `root.flush()` (в `TerminalApp` это делается автоматически).
 - Терминал: ширина символа считается за 1 колонку (эмодзи и иероглифы шириной 2 могут сдвигать строку); курсор в `input` только в конце текста; нет прокрутки — что не влезло по высоте, обрезается; только POSIX (Linux/macOS).
+- Раскладка пересчитывается целиком на каждую перерисовку (для терминала это быстро, но для тысяч узлов понадобится кэш).
 - Дети перерисовываются вместе с родителем, если не обёрнуты в `memo<...>`; `memo` не сравнивает детей (`props.children()`).
 - Хуки нельзя вызывать в цикле с разным числом итераций (как и в React), поэтому `useCallback` для каждого элемента списка не сделать — нужен отдельный компонент.
 
@@ -153,6 +176,6 @@ cmake --preset release && cmake --build --preset release
 - [x] Шаг 2 — бэкенд для терминала: ANSI-отрисовка, рамки, цвета, фокус,
       ввод с клавиатуры; демо — интерактивный todo
 - [x] Шаг 3 — `useContext`, `useMemo`/`useCallback`, `memo` (пропуск ререндера при тех же props)
-- [ ] **Шаг 4** — раскладка Flexbox на Yoga (`flexGrow`, `justifyContent`, `alignItems`)
-- [ ] Шаг 5 — библиотека компонентов `rx::ui` с темой (Button, Input, Checkbox, Tabs, Modal, List)
+- [x] Шаг 4 — раскладка Flexbox на Yoga (`flexGrow`, `justifyContent`, `alignItems`, …)
+- [ ] **Шаг 5** — библиотека компонентов `rx::ui` с темой (Button, Input, Checkbox, Tabs, Modal, List)
 - [ ] Позже — другие бэкенды: SDL3 + Skia/ThorVG (окна), WebAssembly + DOM (браузер и CSS)

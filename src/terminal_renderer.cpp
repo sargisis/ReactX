@@ -1,6 +1,11 @@
+#include <yoga/Yoga.h>
+
 #include <algorithm>
 #include <charconv>
+#include <cmath>
+#include <deque>
 #include <string>
+#include <unordered_map>
 #include <utility>
 
 #include "reactx/terminal.hpp"
@@ -19,12 +24,7 @@ std::string prop(const PropMap& props, std::string_view name, std::string fallba
 
 bool flag(const PropMap& props, std::string_view name) { return prop(props, name) == "true"; }
 
-int intProp(const PropMap& props, std::string_view name, int fallback = 0) {
-    std::string s = prop(props, name);
-    int value = fallback;
-    if (!s.empty()) std::from_chars(s.data(), s.data() + s.size(), value);
-    return std::max(value, 0);
-}
+bool isLeafType(std::string_view type) { return type == "text" || type == "button" || type == "input"; }
 
 std::vector<std::string> splitLines(const std::string& text) {
     std::vector<std::string> lines;
@@ -44,6 +44,59 @@ int textWidth(const std::string& text) {
     return w;
 }
 
+// Word wrap to `width` columns. Lines that fit are kept as they are
+// (including leading spaces); words longer than a line are split.
+std::vector<std::string> wrapText(const std::string& text, int width) {
+    width = std::max(width, 1);
+    std::vector<std::string> out;
+    for (const std::string& paragraph : splitLines(text)) {
+        if (detail::utf8Length(paragraph) <= width) {
+            out.push_back(paragraph);
+            continue;
+        }
+        std::string line;
+        int lineLen = 0;
+        std::size_t start = 0;
+        while (start <= paragraph.size()) {
+            auto end = paragraph.find(' ', start);
+            if (end == std::string::npos) end = paragraph.size();
+            std::string word = paragraph.substr(start, end - start);
+            start = end + 1;
+            if (word.empty()) continue;
+
+            auto chars = detail::utf8Split(word);
+            std::size_t pos = 0;
+            while (chars.size() - pos > static_cast<std::size_t>(width)) {  // long word
+                if (lineLen > 0) {
+                    out.push_back(std::move(line));
+                    line.clear();
+                    lineLen = 0;
+                }
+                std::string piece;
+                for (int i = 0; i < width; ++i) piece += chars[pos++];
+                out.push_back(std::move(piece));
+            }
+            std::string rest;
+            for (; pos < chars.size(); ++pos) rest += chars[pos];
+            int restLen = detail::utf8Length(rest);
+            if (restLen == 0) continue;
+            if (lineLen == 0) {
+                line = std::move(rest);
+                lineLen = restLen;
+            } else if (lineLen + 1 + restLen <= width) {
+                line += " " + rest;
+                lineLen += 1 + restLen;
+            } else {
+                out.push_back(std::move(line));
+                line = std::move(rest);
+                lineLen = restLen;
+            }
+        }
+        out.push_back(std::move(line));
+    }
+    return out;
+}
+
 // SGR color code for a color name, or 0 if unknown.
 int colorCode(std::string_view name) {
     static constexpr std::pair<std::string_view, int> base[] = {
@@ -58,7 +111,220 @@ int colorCode(std::string_view name) {
     return 0;
 }
 
+// ---- Yoga style from props ----
+
+struct Value {
+    enum Kind { None, Points, Percent, Auto } kind = None;
+    float number = 0;
+};
+
+Value parseValue(const std::string& s) {
+    if (s.empty()) return {};
+    if (s == "auto") return {Value::Auto, 0};
+    bool percent = s.back() == '%';
+    std::string_view digits(s.data(), s.size() - (percent ? 1 : 0));
+    float v = 0;
+    auto [ptr, ec] = std::from_chars(digits.data(), digits.data() + digits.size(), v);
+    if (ec != std::errc{} || ptr != digits.data() + digits.size()) return {};
+    return {percent ? Value::Percent : Value::Points, v};
+}
+
+using SetPoints = void (*)(YGNodeRef, float);
+using SetEdge = void (*)(YGNodeRef, YGEdge, float);
+
+void setSize(YGNodeRef n, const PropMap& props, std::string_view name, SetPoints points,
+             SetPoints percent, void (*autoFn)(YGNodeRef) = nullptr) {
+    Value v = parseValue(prop(props, name));
+    if (v.kind == Value::Points) points(n, v.number);
+    else if (v.kind == Value::Percent) percent(n, v.number);
+    else if (v.kind == Value::Auto && autoFn) autoFn(n);
+}
+
+// padding / margin / position: name, nameX, nameY, nameLeft, ...
+void setEdges(YGNodeRef n, const PropMap& props, std::string_view name, SetEdge points, SetEdge percent,
+              void (*autoFn)(YGNodeRef, YGEdge) = nullptr, bool withAll = true) {
+    static constexpr std::pair<std::string_view, YGEdge> suffixes[] = {
+        {"", YGEdgeAll},           {"X", YGEdgeHorizontal}, {"Y", YGEdgeVertical},
+        {"Left", YGEdgeLeft},      {"Right", YGEdgeRight},  {"Top", YGEdgeTop},
+        {"Bottom", YGEdgeBottom},
+    };
+    for (auto [suffix, edge] : suffixes) {
+        if (suffix.empty() && !withAll) continue;
+        Value v = parseValue(prop(props, std::string(name) + std::string(suffix)));
+        if (v.kind == Value::Points) points(n, edge, v.number);
+        else if (v.kind == Value::Percent) percent(n, edge, v.number);
+        else if (v.kind == Value::Auto && autoFn) autoFn(n, edge);
+    }
+}
+
+YGAlign parseAlign(const std::string& s, YGAlign fallback) {
+    if (s == "start" || s == "flex-start") return YGAlignFlexStart;
+    if (s == "center") return YGAlignCenter;
+    if (s == "end" || s == "flex-end") return YGAlignFlexEnd;
+    if (s == "stretch") return YGAlignStretch;
+    if (s == "baseline") return YGAlignBaseline;
+    if (s == "space-between") return YGAlignSpaceBetween;
+    if (s == "space-around") return YGAlignSpaceAround;
+    if (s == "auto") return YGAlignAuto;
+    return fallback;
+}
+
+YGJustify parseJustify(const std::string& s) {
+    if (s == "center") return YGJustifyCenter;
+    if (s == "end" || s == "flex-end") return YGJustifyFlexEnd;
+    if (s == "space-between") return YGJustifySpaceBetween;
+    if (s == "space-around") return YGJustifySpaceAround;
+    if (s == "space-evenly") return YGJustifySpaceEvenly;
+    return YGJustifyFlexStart;
+}
+
+bool isRow(const PropMap& props) { return prop(props, "direction").starts_with("row"); }
+
+void applyStyle(YGNodeRef n, const PropMap& props, bool container) {
+    if (container) {
+        std::string dir = prop(props, "direction");
+        YGNodeStyleSetFlexDirection(n, dir == "row"              ? YGFlexDirectionRow
+                                       : dir == "row-reverse"    ? YGFlexDirectionRowReverse
+                                       : dir == "column-reverse" ? YGFlexDirectionColumnReverse
+                                                                 : YGFlexDirectionColumn);
+        if (auto s = prop(props, "justifyContent"); !s.empty()) YGNodeStyleSetJustifyContent(n, parseJustify(s));
+        if (auto s = prop(props, "alignItems"); !s.empty())
+            YGNodeStyleSetAlignItems(n, parseAlign(s, YGAlignStretch));
+        if (auto s = prop(props, "alignContent"); !s.empty())
+            YGNodeStyleSetAlignContent(n, parseAlign(s, YGAlignFlexStart));
+        if (auto s = prop(props, "flexWrap"); !s.empty())
+            YGNodeStyleSetFlexWrap(n, s == "wrap" ? YGWrapWrap : s == "wrap-reverse" ? YGWrapWrapReverse : YGWrapNoWrap);
+        if (flag(props, "border")) YGNodeStyleSetBorder(n, YGEdgeAll, 1);
+        static constexpr std::pair<std::string_view, YGGutter> gaps[] = {
+            {"gap", YGGutterAll}, {"rowGap", YGGutterRow}, {"columnGap", YGGutterColumn}};
+        for (auto [name, gutter] : gaps)
+            if (Value v = parseValue(prop(props, name)); v.kind == Value::Points) YGNodeStyleSetGap(n, gutter, v.number);
+    }
+    if (auto s = prop(props, "alignSelf"); !s.empty()) YGNodeStyleSetAlignSelf(n, parseAlign(s, YGAlignAuto));
+    if (Value v = parseValue(prop(props, "flexGrow")); v.kind == Value::Points) YGNodeStyleSetFlexGrow(n, v.number);
+    if (Value v = parseValue(prop(props, "flexShrink")); v.kind == Value::Points)
+        YGNodeStyleSetFlexShrink(n, v.number);
+    setSize(n, props, "flexBasis", YGNodeStyleSetFlexBasis, YGNodeStyleSetFlexBasisPercent,
+            YGNodeStyleSetFlexBasisAuto);
+    setSize(n, props, "width", YGNodeStyleSetWidth, YGNodeStyleSetWidthPercent, YGNodeStyleSetWidthAuto);
+    setSize(n, props, "height", YGNodeStyleSetHeight, YGNodeStyleSetHeightPercent, YGNodeStyleSetHeightAuto);
+    setSize(n, props, "minWidth", YGNodeStyleSetMinWidth, YGNodeStyleSetMinWidthPercent);
+    setSize(n, props, "maxWidth", YGNodeStyleSetMaxWidth, YGNodeStyleSetMaxWidthPercent);
+    setSize(n, props, "minHeight", YGNodeStyleSetMinHeight, YGNodeStyleSetMinHeightPercent);
+    setSize(n, props, "maxHeight", YGNodeStyleSetMaxHeight, YGNodeStyleSetMaxHeightPercent);
+    setEdges(n, props, "padding", YGNodeStyleSetPadding, YGNodeStyleSetPaddingPercent);
+    setEdges(n, props, "margin", YGNodeStyleSetMargin, YGNodeStyleSetMarginPercent, YGNodeStyleSetMarginAuto);
+    // top / left / right / bottom (no "all" form)
+    static constexpr std::pair<std::string_view, YGEdge> sides[] = {
+        {"top", YGEdgeTop}, {"left", YGEdgeLeft}, {"right", YGEdgeRight}, {"bottom", YGEdgeBottom}};
+    for (auto [name, edge] : sides) {
+        Value v = parseValue(prop(props, name));
+        if (v.kind == Value::Points) YGNodeStyleSetPosition(n, edge, v.number);
+        else if (v.kind == Value::Percent) YGNodeStyleSetPositionPercent(n, edge, v.number);
+    }
+    if (prop(props, "position") == "absolute") YGNodeStyleSetPositionType(n, YGPositionTypeAbsolute);
+    if (prop(props, "display") == "none") YGNodeStyleSetDisplay(n, YGDisplayNone);
+}
+
+// ---- leaves (measured by us, laid out by Yoga) ----
+
+struct Leaf {
+    enum Kind { Text, Button, Input } kind = Text;
+    std::string text;  // text, button label, or input value/placeholder
+    bool wrap = true;
+};
+
+int clampTo(int natural, float available, YGMeasureMode mode) {
+    if (mode == YGMeasureModeExactly) return static_cast<int>(available);
+    if (mode == YGMeasureModeAtMost) return std::min(natural, static_cast<int>(available));
+    return natural;
+}
+
+YGSize measureLeaf(YGNodeConstRef node, float width, YGMeasureMode widthMode, float, YGMeasureMode) {
+    const Leaf& leaf = *static_cast<const Leaf*>(YGNodeGetContext(node));
+    int w = 0, h = 1;
+    switch (leaf.kind) {
+        case Leaf::Button: w = clampTo(detail::utf8Length(leaf.text) + 4, width, widthMode); break;
+        case Leaf::Input: w = clampTo(std::max(detail::utf8Length(leaf.text) + 1, 10), width, widthMode); break;
+        case Leaf::Text: {
+            int natural = textWidth(leaf.text);
+            if (widthMode == YGMeasureModeUndefined || !leaf.wrap) {
+                w = clampTo(natural, width, widthMode);
+                h = static_cast<int>(splitLines(leaf.text).size());
+            } else {
+                auto lines = wrapText(leaf.text, static_cast<int>(width));
+                for (const auto& l : lines) w = std::max(w, detail::utf8Length(l));
+                if (widthMode == YGMeasureModeExactly) w = static_cast<int>(width);
+                h = static_cast<int>(lines.size());
+            }
+            break;
+        }
+    }
+    return YGSize{static_cast<float>(w), static_cast<float>(h)};
+}
+
+int cells(float v) { return static_cast<int>(std::floor(v + 0.5f)); }
+
 }  // namespace
+
+// Yoga tree for one repaint.
+struct TerminalRenderer::Layout {
+    YGConfigRef config = YGConfigNew();
+    YGNodeRef root = nullptr;
+    std::unordered_map<NodeHandle, YGNodeRef> nodes;
+    std::deque<Leaf> leaves;  // stable addresses for YGNodeSetContext
+
+    // No rounding inside Yoga: it rounds text and boxes differently, which can
+    // make neighbours overlap by a cell. draw() rounds every edge the same way.
+    Layout() { YGConfigSetPointScaleFactor(config, 0.0f); }
+    ~Layout() {
+        if (root) YGNodeFreeRecursive(root);
+        YGConfigFree(config);
+    }
+    Layout(const Layout&) = delete;
+    Layout& operator=(const Layout&) = delete;
+
+    YGNodeRef build(const TerminalRenderer& r, NodeHandle h, bool parentRow) {
+        const Node* n = r.findNode(h);
+        if (!n) return nullptr;
+        YGNodeRef y = YGNodeNewWithConfig(config);
+        nodes[h] = y;
+        // Rows squeeze their children (text gets narrower); columns cut off.
+        // Buttons never shrink: a half button is useless.
+        bool button = !n->isText && n->type == "button";
+        YGNodeStyleSetFlexShrink(y, parentRow && !button ? 1.0f : 0.0f);
+
+        if (n->isText || isLeafType(n->type)) {
+            Leaf& leaf = leaves.emplace_back();
+            if (n->isText || n->type == "text") {
+                leaf.text = r.textOf(*n);
+                leaf.wrap = n->isText || prop(n->props, "wrap") != "false";
+            } else if (n->type == "button") {
+                leaf.kind = Leaf::Button;
+                leaf.text = r.textOf(*n);
+            } else {
+                leaf.kind = Leaf::Input;
+                leaf.text = prop(n->props, "value");
+                if (leaf.text.empty()) leaf.text = prop(n->props, "placeholder");
+            }
+            if (!n->isText) applyStyle(y, n->props, false);
+            YGNodeSetContext(y, &leaf);
+            YGNodeSetMeasureFunc(y, measureLeaf);
+            return y;
+        }
+
+        applyStyle(y, n->props, true);
+        bool row = isRow(n->props);
+        std::size_t index = 0;
+        for (NodeHandle c : n->children)
+            if (YGNodeRef child = build(r, c, row)) YGNodeInsertChild(y, child, index++);
+        return y;
+    }
+};
+
+TerminalRenderer::Rect TerminalRenderer::Rect::intersect(const Rect& o) const {
+    return {std::max(left, o.left), std::max(top, o.top), std::min(right, o.right), std::min(bottom, o.bottom)};
+}
 
 TerminalRenderer::TerminalRenderer(Output output) : output_(std::move(output)) {}
 
@@ -83,7 +349,7 @@ void TerminalRenderer::destroyNode(NodeHandle h) {
     TextRenderer::destroyNode(h);
 }
 
-// ---- layout ----
+// ---- drawing ----
 
 TerminalRenderer::Style TerminalRenderer::styleOf(const Node& n, Style s) const {
     if (auto c = prop(n.props, "color"); !c.empty()) s.fg = c;
@@ -102,165 +368,139 @@ std::string TerminalRenderer::textOf(const Node& n) const {
     return out;
 }
 
-int TerminalRenderer::naturalWidth(NodeHandle h) const {
-    const Node* n = findNode(h);
-    if (!n) return 0;
-    if (n->isText || n->type == "text") return textWidth(textOf(*n));
-    if (int w = intProp(n->props, "width"); w > 0) return w;
-    if (n->type == "button") return detail::utf8Length(textOf(*n)) + 4;
-    if (n->type == "input") {
-        auto shown = prop(n->props, "value");
-        if (shown.empty()) shown = prop(n->props, "placeholder");
-        return std::max(detail::utf8Length(shown) + 1, 10);
-    }
-
-    bool row = prop(n->props, "direction") == "row";
-    int gap = intProp(n->props, "gap", row ? 1 : 0);
-    int content = 0;
-    for (std::size_t i = 0; i < n->children.size(); ++i) {
-        int w = naturalWidth(n->children[i]);
-        if (row) content += w + (i ? gap : 0);
-        else content = std::max(content, w);
-    }
-    int frame = 2 * intProp(n->props, "padding");
-    if (flag(n->props, "border")) {
-        frame += 2;
-        content = std::max(content, detail::utf8Length(prop(n->props, "title")) + 4);
-    }
-    return content + frame;
-}
-
-void TerminalRenderer::put(Canvas& canvas, int x, int y, int maxX, std::string_view text,
+void TerminalRenderer::put(Canvas& canvas, int x, int y, const Rect& clip, std::string_view text,
                            const Style& style) {
-    if (y < 0 || x < 0) return;
-    maxX = std::min(maxX, width_);
+    if (y < 0 || y < clip.top || y >= clip.bottom) return;
     if (static_cast<int>(canvas.size()) <= y)
         canvas.resize(static_cast<std::size_t>(y) + 1, std::vector<Cell>(static_cast<std::size_t>(width_)));
     auto& line = canvas[static_cast<std::size_t>(y)];
+    int right = std::min(clip.right, width_);
     for (std::string_view ch : detail::utf8Split(text)) {
-        if (x >= maxX) break;
-        if (static_cast<unsigned char>(ch[0]) < 0x20) continue;  // control characters
-        line[static_cast<std::size_t>(x)] = Cell{std::string(ch), style};
+        if (x >= right) break;
+        if (x >= clip.left && x >= 0 && static_cast<unsigned char>(ch[0]) >= 0x20)
+            line[static_cast<std::size_t>(x)] = Cell{std::string(ch), style};
         ++x;
     }
 }
 
-int TerminalRenderer::draw(NodeHandle h, int x, int y, int width, Style inherited, Canvas& canvas) {
+void TerminalRenderer::draw(const Layout& layout, NodeHandle h, float originX, float originY, Style inherited,
+                            Rect clip, Canvas& canvas) {
     const Node* n = findNode(h);
-    if (!n || width <= 0) return 0;
+    auto it = layout.nodes.find(h);
+    if (!n || it == layout.nodes.end()) return;
+    YGNodeRef y = it->second;
+    if (!n->isText && prop(n->props, "display") == "none") return;
+
+    // Absolute position in fractional cells; each edge is rounded on its own,
+    // so boxes that touch in Yoga also touch on screen.
+    float fx = originX + YGNodeLayoutGetLeft(y);
+    float fy = originY + YGNodeLayoutGetTop(y);
+    int x0 = cells(fx);
+    int y0 = cells(fy);
+    int w = cells(fx + YGNodeLayoutGetWidth(y)) - x0;
+    int hgt = cells(fy + YGNodeLayoutGetHeight(y)) - y0;
+    Rect rect{x0, y0, x0 + w, y0 + hgt};
+    Rect visible = rect.intersect(clip);
+
+    // Content box: inside border and padding.
+    auto inset = [&](YGEdge e) {
+        return cells(YGNodeLayoutGetBorder(y, e)) + cells(YGNodeLayoutGetPadding(y, e));
+    };
+    Rect content{x0 + inset(YGEdgeLeft), y0 + inset(YGEdgeTop), x0 + w - inset(YGEdgeRight),
+                 y0 + hgt - inset(YGEdgeBottom)};
+    int contentW = std::max(content.right - content.left, 0);
+
     Style st = n->isText ? inherited : styleOf(*n, inherited);
     if (h == focused_) st.reverse = true;
-    int right = x + width;
 
     if (n->isText || n->type == "text") {
-        auto lines = splitLines(textOf(*n));
+        bool wrap = n->isText || prop(n->props, "wrap") != "false";
+        auto text = textOf(*n);
+        auto lines = wrap ? wrapText(text, contentW) : splitLines(text);
+        Rect area = content.intersect(clip);
         for (std::size_t i = 0; i < lines.size(); ++i)
-            put(canvas, x, y + static_cast<int>(i), right, lines[i], st);
-        return static_cast<int>(lines.size());
+            put(canvas, content.left, content.top + static_cast<int>(i), area, lines[i], st);
+        return;
     }
     if (n->type == "button") {
-        put(canvas, x, y, right, "[ " + textOf(*n) + " ]", st);
-        return 1;
+        put(canvas, content.left, content.top, content.intersect(clip), "[ " + textOf(*n) + " ]", st);
+        return;
     }
     if (n->type == "input") {
-        int w = intProp(n->props, "width");
-        if (w > 0) right = std::min(right, x + w);
+        Rect area = content.intersect(clip);
         std::string value = prop(n->props, "value");
         Style field = st;
         field.underline = true;
-        put(canvas, x, y, right, std::string(static_cast<std::size_t>(right - x), ' '), field);
+        put(canvas, content.left, content.top, area, std::string(static_cast<std::size_t>(contentW), ' '), field);
         if (value.empty() && h != focused_) {
             Style hint = field;
             hint.dim = true;
-            put(canvas, x, y, right, prop(n->props, "placeholder"), hint);
+            put(canvas, content.left, content.top, area, prop(n->props, "placeholder"), hint);
         } else {
             // Keep the end of the text (and the cursor) visible.
             std::string shown = value + (h == focused_ ? "_" : "");
             auto chars = detail::utf8Split(shown);
-            std::size_t room = static_cast<std::size_t>(right - x);
+            auto room = static_cast<std::size_t>(contentW);
             std::size_t skip = chars.size() > room ? chars.size() - room : 0;
             std::string tail;
             for (std::size_t i = skip; i < chars.size(); ++i) tail += chars[i];
-            put(canvas, x, y, right, tail, field);
+            put(canvas, content.left, content.top, area, tail, field);
         }
-        return 1;
+        return;
     }
 
-    // Box: any other tag.
-    if (int w = intProp(n->props, "width"); w > 0) {
-        width = std::min(width, w);
-        right = x + width;
-    }
-    bool border = flag(n->props, "border");
-    bool row = prop(n->props, "direction") == "row";
-    int pad = intProp(n->props, "padding");
-    int gap = intProp(n->props, "gap", row ? 1 : 0);
-    int inset = (border ? 1 : 0) + pad;
-    int innerX = x + inset;
-    int innerW = width - 2 * inset;
-    int top = y + inset;
-    int content = 0;
-
-    if (innerW > 0) {
-        if (row) {
-            int cx = innerX;
-            for (std::size_t i = 0; i < n->children.size(); ++i) {
-                int room = innerX + innerW - cx;
-                if (room <= 0) break;
-                bool last = i + 1 == n->children.size();
-                int cw = last ? room : std::min(naturalWidth(n->children[i]), room);
-                content = std::max(content, draw(n->children[i], cx, top, cw, st, canvas));
-                cx += cw + gap;
-            }
-        } else {
-            int cy = top;
-            for (std::size_t i = 0; i < n->children.size(); ++i) {
-                if (i) cy += gap;
-                cy += draw(n->children[i], innerX, cy, innerW, st, canvas);
-            }
-            content = cy - top;
-        }
-    }
-    int height = content + 2 * inset;
-    if (height > 0) put(canvas, x, y + height - 1, x, "", st);  // keep trailing padding rows
-
+    // Box.
     if (!st.bg.empty() || st.reverse) {
-        // Fill the box background where children did not set their own.
-        for (int yy = y; yy < y + height; ++yy) {
-            put(canvas, x, yy, x, "", st);  // make sure the row exists
+        for (int yy = visible.top; yy < visible.bottom; ++yy) {
+            put(canvas, visible.left, yy, visible, "", st);  // make sure the row exists
+            if (yy < 0 || yy >= static_cast<int>(canvas.size())) continue;
             auto& line = canvas[static_cast<std::size_t>(yy)];
-            for (int xx = x; xx < std::min(right, width_); ++xx) {
+            for (int xx = std::max(visible.left, 0); xx < std::min(visible.right, width_); ++xx) {
                 auto& cell = line[static_cast<std::size_t>(xx)].style;
-                if (cell.bg.empty() && !st.bg.empty()) cell.bg = st.bg;
+                if (!st.bg.empty()) cell.bg = st.bg;
                 if (st.reverse) cell.reverse = true;
+                if (!st.fg.empty() && cell.fg.empty()) cell.fg = st.fg;
             }
         }
     }
 
-    if (border && width >= 2) {
+    // Like CSS overflow: visible, except that children never draw over a
+    // border; overflow="hidden" clips them to the box.
+    int b = flag(n->props, "border") ? 1 : 0;
+    Rect inner = clip;
+    if (b || prop(n->props, "overflow") == "hidden")
+        inner = Rect{x0 + b, y0 + b, x0 + w - b, y0 + hgt - b}.intersect(clip);
+    for (NodeHandle c : n->children) draw(layout, c, fx, fy, st, inner, canvas);
+
+    if (b && w >= 2 && hgt >= 2) {
         Style bs = st;
         bs.bold = false;
-        int bottom = y + height - 1;
+        int right = x0 + w;
+        int bottom = y0 + hgt - 1;
         std::string title = prop(n->props, "title");
         std::string topLine = "┌";
         int used = 1;
-        if (!title.empty() && width > 6) {
-            topLine += "─ " + title + " ";
-            used += 3 + detail::utf8Length(title);
+        if (!title.empty() && w > 6) {
+            auto chars = detail::utf8Split(title);
+            std::size_t room = static_cast<std::size_t>(w - 6);
+            if (chars.size() > room) chars.resize(room);
+            std::string t;
+            for (auto c : chars) t += c;
+            topLine += "─ " + t + " ";
+            used += 3 + static_cast<int>(chars.size());
         }
-        for (; used < width - 1; ++used) topLine += "─";
-        put(canvas, x, y, right - 1, topLine, bs);
-        put(canvas, right - 1, y, right, "┐", bs);
-        for (int yy = y + 1; yy < bottom; ++yy) {
-            put(canvas, x, yy, right, "│", bs);
-            put(canvas, right - 1, yy, right, "│", bs);
+        for (; used < w - 1; ++used) topLine += "─";
+        topLine += "┐";
+        put(canvas, x0, y0, clip, topLine, bs);
+        for (int yy = y0 + 1; yy < bottom; ++yy) {
+            put(canvas, x0, yy, clip, "│", bs);
+            put(canvas, right - 1, yy, clip, "│", bs);
         }
         std::string bottomLine = "└";
-        for (int i = 1; i < width - 1; ++i) bottomLine += "─";
+        for (int i = 1; i < w - 1; ++i) bottomLine += "─";
         bottomLine += "┘";
-        put(canvas, x, bottom, right, bottomLine, bs);
+        put(canvas, x0, bottom, clip, bottomLine, bs);
     }
-    return height;
 }
 
 // ---- painting ----
@@ -291,8 +531,14 @@ std::string TerminalRenderer::lineToAnsi(const std::vector<Cell>& line) {
 }
 
 void TerminalRenderer::repaint() {
+    Layout layout;
+    layout.root = layout.build(*this, kRoot, false);
+    YGNodeStyleSetWidth(layout.root, static_cast<float>(width_));
+    YGNodeStyleSetHeight(layout.root, static_cast<float>(height_));
+    YGNodeCalculateLayout(layout.root, static_cast<float>(width_), static_cast<float>(height_), YGDirectionLTR);
+
     Canvas canvas;
-    draw(kRoot, 0, 0, width_, Style{}, canvas);
+    draw(layout, kRoot, 0, 0, Style{}, Rect{0, 0, width_, height_}, canvas);
     frame_ = std::move(canvas);
     if (!output_) return;
 
@@ -320,6 +566,7 @@ std::vector<std::string> TerminalRenderer::frameLines() const {
         while (line.ends_with(' ')) line.pop_back();
         lines.push_back(std::move(line));
     }
+    while (!lines.empty() && lines.back().empty()) lines.pop_back();  // screen is mostly empty
     return lines;
 }
 

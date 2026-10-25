@@ -123,7 +123,7 @@ TEST(row_direction_places_children_side_by_side) {
     TerminalRenderer r;
     r.setSize(30, 5);
     Root root(r);
-    root.render(h("box", {{"direction", "row"}}, {
+    root.render(h("box", {{"direction", "row"}, {"gap", 1}}, {
         h("text", {}, {"left"}),
         h("button", {}, {"go"}),
         h("text", {}, {"end"}),
@@ -136,19 +136,20 @@ TEST(padding_and_gap) {
     r.setSize(20, 10);
     Root root(r);
     root.render(h("box", {{"padding", 1}, {"gap", 1}}, {h("text", {}, {"a"}), h("text", {}, {"b"})}));
-    auto lines = r.frameLines();
-    CHECK(lines.size() == 5);
+    auto lines = r.frameLines();  // trailing empty lines are dropped
+    CHECK(lines.size() == 4);
+    CHECK(lines[0].empty());
     CHECK(lines[1] == " a");
     CHECK(lines[2].empty());
     CHECK(lines[3] == " b");
 }
 
-TEST(long_text_is_clipped_to_width) {
+TEST(long_text_is_clipped_with_wrap_false) {
     TerminalRenderer r;
     r.setSize(5, 3);
     Root root(r);
-    root.render(h("text", {}, {"abcdefgh"}));
-    CHECK(r.frameLines().at(0) == "abcde");
+    root.render(h("text", {{"wrap", false}}, {"abcdefgh"}));
+    CHECK(r.frameText() == "abcde\n");
 }
 
 // ---- focus and input ----
@@ -223,6 +224,153 @@ TEST(focused_node_is_reverse_video) {
     Root root(r);
     root.render(h("box", {}, {h("button", {}, {"ok"})}));
     CHECK(contains(out, ";7m[ ok ]"));
+}
+
+// ---- flexbox (Yoga) ----
+
+std::vector<std::string> renderLines(int w, int hgt, Element e) {
+    TerminalRenderer r;
+    r.setSize(w, hgt);
+    Root root(r);
+    root.render(std::move(e));
+    return r.frameLines();
+}
+
+TEST(flex_grow_takes_free_space) {
+    auto lines = renderLines(20, 3, h("box", {{"direction", "row"}}, {
+        h("text", {}, {"a"}),
+        h("box", {{"flexGrow", 1}}),
+        h("text", {}, {"b"}),
+    }));
+    CHECK(lines.at(0) == "a                  b");
+}
+
+TEST(flex_grow_splits_by_ratio) {
+    // Like CSS flex: 1 / flex: 2 -> 4 and 8 columns.
+    auto lines = renderLines(12, 3, h("box", {{"direction", "row"}}, {
+        h("box", {{"flexGrow", 1}, {"flexBasis", 0}}, {h("text", {}, {"a"})}),
+        h("box", {{"flexGrow", 2}, {"flexBasis", 0}}, {h("text", {}, {"b"})}),
+    }));
+    CHECK(lines.at(0) == "a   b");
+}
+
+TEST(free_space_is_shared_after_the_border) {
+    // Each empty bordered box needs 2 columns; the other 8 are split 1:2.
+    auto lines = renderLines(12, 3, h("box", {{"direction", "row"}}, {
+        h("box", {{"flexGrow", 1}, {"border", true}}),
+        h("box", {{"flexGrow", 2}, {"border", true}}),
+    }));
+    CHECK(lines.at(0) == "┌───┐┌─────┐");
+}
+
+TEST(justify_content_in_a_row) {
+    auto center = renderLines(10, 2, h("box", {{"direction", "row"}, {"justifyContent", "center"}}, {h("text", {}, {"hi"})}));
+    CHECK(center.at(0) == "    hi");
+    auto end = renderLines(10, 2, h("box", {{"direction", "row"}, {"justifyContent", "end"}}, {h("text", {}, {"hi"})}));
+    CHECK(end.at(0) == "        hi");
+    auto between = renderLines(7, 2, h("box", {{"direction", "row"}, {"justifyContent", "space-between"}},
+                                       {h("text", {}, {"a"}), h("text", {}, {"b"}), h("text", {}, {"c"})}));
+    CHECK(between.at(0) == "a  b  c");
+}
+
+TEST(align_items_in_a_column) {
+    auto center = renderLines(10, 2, h("box", {{"alignItems", "center"}}, {h("text", {}, {"hi"})}));
+    CHECK(center.at(0) == "    hi");
+    auto end = renderLines(10, 2, h("box", {{"alignItems", "end"}}, {h("text", {}, {"hi"})}));
+    CHECK(end.at(0) == "        hi");
+}
+
+TEST(centers_in_the_whole_screen) {
+    auto lines = renderLines(10, 5, h("box", {{"flexGrow", 1}, {"justifyContent", "center"}, {"alignItems", "center"}},
+                                      {h("text", {}, {"hi"})}));
+    CHECK(lines.size() == 3);
+    CHECK(lines[2] == "    hi");
+}
+
+TEST(centering_with_half_cell_does_not_overlap) {
+    // 7 rows, 4 rows of content: Yoga puts it at 1.5. Text and boxes must
+    // round the same way, or the text lands on the border.
+    auto lines = renderLines(10, 7, h("box", {{"flexGrow", 1}, {"justifyContent", "center"}}, {
+        h("box", {{"border", true}, {"width", 4}, {"height", 3}}),
+        h("text", {}, {"t"}),
+    }));
+    CHECK(lines.size() == 6);
+    CHECK(lines[2] == "┌──┐");
+    CHECK(lines[4] == "└──┘");
+    CHECK(lines[5] == "t");
+}
+
+TEST(buttons_do_not_shrink_in_a_row) {
+    auto lines = renderLines(12, 3, h("box", {{"direction", "row"}, {"flexWrap", "wrap"}}, {
+        h("button", {}, {"one"}), h("button", {}, {"two"}),
+    }));
+    CHECK(lines.size() == 2);
+    CHECK(lines[0] == "[ one ]");
+    CHECK(lines[1] == "[ two ]");
+}
+
+TEST(percent_width) {
+    auto lines = renderLines(20, 3, h("box", {{"width", "50%"}, {"border", true}}));
+    CHECK(lines.at(0) == "┌────────┐");
+}
+
+TEST(text_wraps_at_word_boundaries) {
+    auto lines = renderLines(10, 5, h("text", {}, {"hello big world"}));
+    CHECK(lines.size() == 2);
+    CHECK(lines[0] == "hello big");
+    CHECK(lines[1] == "world");
+}
+
+TEST(text_shrinks_and_wraps_inside_a_row) {
+    auto lines = renderLines(12, 5, h("box", {{"direction", "row"}}, {
+        h("text", {}, {"Name:"}),
+        h("text", {{"flexShrink", 1}}, {"one two three"}),
+    }));
+    CHECK(lines.at(0) == "Name:one two");
+    CHECK(lines.at(1) == "     three");
+}
+
+TEST(absolute_position) {
+    auto lines = renderLines(10, 4, h("box", {}, {
+        h("text", {}, {"base"}),
+        h("box", {{"position", "absolute"}, {"top", 2}, {"left", 3}}, {h("text", {}, {"z"})}),
+    }));
+    CHECK(lines.size() == 3);
+    CHECK(lines[0] == "base");
+    CHECK(lines[2] == "   z");
+}
+
+TEST(display_none_hides_a_node) {
+    auto lines = renderLines(10, 3, h("box", {}, {
+        h("text", {{"display", "none"}}, {"hidden"}),
+        h("text", {}, {"shown"}),
+    }));
+    CHECK(lines.size() == 1);
+    CHECK(lines[0] == "shown");
+}
+
+TEST(padding_x_and_margin) {
+    auto lines = renderLines(10, 3, h("box", {{"paddingX", 2}, {"marginTop", 1}}, {h("text", {}, {"p"})}));
+    CHECK(lines.size() == 2);
+    CHECK(lines[1] == "  p");
+}
+
+TEST(overflow_hidden_clips_children) {
+    auto lines = renderLines(10, 5, h("box", {{"height", 1}, {"overflow", "hidden"}}, {
+        h("text", {}, {"one"}), h("text", {}, {"two"}),
+    }));
+    CHECK(lines.size() == 1);
+    CHECK(lines[0] == "one");
+}
+
+TEST(children_are_clipped_by_the_border) {
+    auto lines = renderLines(10, 6, h("box", {{"border", true}, {"height", 3}, {"width", 6}}, {
+        h("text", {}, {"one"}), h("text", {}, {"two"}), h("text", {}, {"three"}),
+    }));
+    CHECK(lines.size() == 3);
+    CHECK(lines[0] == "┌────┐");
+    CHECK(lines[1] == "│one │");
+    CHECK(lines[2] == "└────┘");
 }
 
 }  // namespace

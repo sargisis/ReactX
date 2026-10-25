@@ -36,8 +36,11 @@ const auto Accent = createContext<std::string>("cyan");
 Element Frame(const Props& p) {
     return h("box", {{"border", true},
                      {"title", p.get<std::string>("title")},
-                     {"padding", 1},
+                     {"paddingX", 2},
+                     {"paddingY", 1},
+                     {"gap", 1},
                      {"width", 58},
+                     {"maxWidth", "100%"},
                      {"color", useContext(Accent)}},
              p.children());
 }
@@ -96,13 +99,18 @@ Element App(const Props& props) {
 
     auto left = std::ranges::count_if(todos, [](const Todo& t) { return !t.done; });
 
-    return Accent.provide(accent, {
+    // Flexbox (Yoga): the frame is centered on the screen.
+    return Accent.provide(accent, {h("box", {{"flexGrow", 1}, {"justifyContent", "center"}, {"alignItems", "center"}}, {
         h(Frame, {{"title", "ReactX todo"}}, {
-            h("text", {{"bold", true}, {"color", left ? "yellow" : "green"}},
-              {left ? std::to_string(left) + " left" : std::string("all done!")}),
-            h("box", {{"direction", "row"}}, {
+            h("box", {{"direction", "row"}, {"justifyContent", "space-between"}}, {
+                h("text", {{"bold", true}, {"color", left ? "yellow" : "green"}},
+                  {left ? std::to_string(left) + " left" : std::string("all done!")}),
+                h("text", {{"dim", true}}, {std::to_string(todos.size()) + " total"}),
+            }),
+            h("box", {{"direction", "row"}, {"gap", 1}}, {
                 h("text", {{"color", "white"}}, {"New:"}),
-                h("input", {{"value", draft},
+                h("input", {{"flexGrow", 1},
+                            {"value", draft},
                             {"placeholder", "type a task, press Enter"},
                             {"color", "white"},
                             {"onInput", [setDraft](const std::string& text) { setDraft(text); }},
@@ -117,10 +125,9 @@ Element App(const Props& props) {
                                  setDraft(std::string{});
                              }}}),
             }),
-            h("text", {}, {""}),
             h("box", {{"color", "white"}}, std::move(items)),
-            h("text", {}, {""}),
-            h("box", {{"direction", "row"}, {"gap", 2}, {"color", "white"}}, {
+            h("box", {{"direction", "row"}, {"justifyContent", "space-between"}, {"flexWrap", "wrap"},
+                      {"columnGap", 2}, {"color", "white"}}, {
                 h("button", {{"onClick", [setTodos] {
                      setTodos([](List list) {
                          std::ranges::reverse(list);
@@ -137,8 +144,8 @@ Element App(const Props& props) {
                 h("button", {{"onClick", props.get<Callback>("onQuit")}}, {"quit"}),
             }),
         }),
-        h("text", {{"dim", true}}, {" Tab/↑↓ move · Enter toggle · Del remove · Ctrl+C quit"}),
-    });
+        h("text", {{"dim", true}}, {"Tab/↑↓ move · Enter toggle · Del remove · Ctrl+C quit"}),
+    })});
 }
 
 int main() {

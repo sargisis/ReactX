@@ -23,6 +23,26 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_FLAGS MATCHES "sanitize=[a
 endif()
 option(REACTX_MODULES "Build the reactx C++20 module (import reactx;)" ${REACTX_MODULES_DEFAULT})
 
+# ---- Yoga (Flexbox layout for the terminal backend) ----
+# Uses an installed Yoga if CMake can find it, otherwise downloads v3.2.1.
+# Offline: -DFETCHCONTENT_SOURCE_DIR_YOGA=/path/to/yoga
+find_package(yoga CONFIG QUIET)
+if(TARGET yoga::yogacore)
+  set(REACTX_YOGA_TARGET yoga::yogacore)
+  message(STATUS "ReactX: using installed Yoga")
+else()
+  include(FetchContent)
+  FetchContent_Declare(yoga
+    URL https://github.com/facebook/yoga/archive/refs/tags/v3.2.1.tar.gz
+    URL_HASH SHA256=86b399ac31fd820d8ffa823c3fae31bb690b6fc45301b2a8a966c09b5a088b55
+    SOURCE_SUBDIR yoga  # only the library, not Yoga's own tests
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+  )
+  FetchContent_MakeAvailable(yoga)
+  set(REACTX_YOGA_TARGET yogacore)
+  message(STATUS "ReactX: using Yoga v3.2.1 (FetchContent)")
+endif()
+
 add_library(reactx
   src/element.cpp
   src/hooks.cpp
@@ -33,6 +53,7 @@ add_library(reactx
   src/terminal.cpp
 )
 target_include_directories(reactx PUBLIC include)
+target_link_libraries(reactx PRIVATE ${REACTX_YOGA_TARGET})
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   target_compile_options(reactx PRIVATE -Wall -Wextra -Wpedantic)
 endif()

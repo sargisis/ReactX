@@ -23,16 +23,32 @@ std::vector<KeyEvent> decodeKeys(std::string_view bytes);
 // ---- rendering ----
 
 // Backend that draws the tree in a terminal with ANSI escape codes.
+// Layout is Flexbox, computed by Yoga (the engine behind React Native).
 //
 // Tags:
-//   box (and any unknown tag)  children stacked vertically, or side by side
-//                              with direction="row"
-//   text                       its text children on one line ("\n" splits lines)
+//   box (and any unknown tag)  flex container, column by default
+//   text                       its text children; wraps at word boundaries
+//                              (wrap=false truncates instead)
 //   input                      one-line text field: value, placeholder
 //   button                     "[ label ]"
-// Props on any tag: border (bool), title, padding, gap, width, color, bg,
-// bold, dim, underline, focusable (bool).
+//
+// Flex props (like CSS, in terminal cells):
+//   direction       row | column | row-reverse | column-reverse
+//   justifyContent  start | center | end | space-between | space-around | space-evenly
+//   alignItems      start | center | end | stretch     (alignSelf: same + auto)
+//   flexGrow, flexShrink, flexBasis, flexWrap (wrap | nowrap)
+//   width, height, minWidth, maxWidth, minHeight, maxHeight  (number or "50%")
+//   padding, paddingX, paddingY, paddingLeft/Right/Top/Bottom
+//   margin,  marginX,  marginY,  marginLeft/Right/Top/Bottom  (or "auto")
+//   gap, rowGap, columnGap
+//   position (absolute | relative), top, left, right, bottom
+//   display (none | flex), overflow (visible | hidden; a border always clips)
+// Look: border (bool), title, color, bg, bold, dim, underline.
 // Colors: black red green yellow blue magenta cyan white gray, bright-<color>.
+//
+// The root fills the terminal. flexShrink defaults to 1 inside rows (text
+// gets narrower) and 0 inside columns (what doesn't fit is cut off);
+// buttons never shrink by default.
 //
 // input, button and nodes with focusable=true can take focus. The focused
 // node is drawn in reverse video.
@@ -85,12 +101,17 @@ private:
         Style style;
     };
     using Canvas = std::vector<std::vector<Cell>>;
+    struct Rect {
+        int left = 0, top = 0, right = 0, bottom = 0;  // right/bottom exclusive
+        Rect intersect(const Rect& o) const;
+    };
+    struct Layout;  // Yoga tree for one repaint (terminal_renderer.cpp)
 
     Style styleOf(const Node& n, Style inherited) const;
     std::string textOf(const Node& n) const;
-    int naturalWidth(NodeHandle h) const;
-    int draw(NodeHandle h, int x, int y, int width, Style style, Canvas& canvas);
-    void put(Canvas& canvas, int x, int y, int maxX, std::string_view text, const Style& style);
+    void draw(const Layout& layout, NodeHandle h, float originX, float originY, Style style, Rect clip,
+              Canvas& canvas);
+    void put(Canvas& canvas, int x, int y, const Rect& clip, std::string_view text, const Style& style);
     bool isFocusable(const Node& n) const;
     void collectFocusable(NodeHandle h, std::vector<NodeHandle>& out) const;
     void fixFocus();

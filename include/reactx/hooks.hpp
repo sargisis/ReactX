@@ -4,10 +4,25 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <optional>
+#include <string>
 #include <stdexcept>
 #include <tuple>
 #include <type_traits>
 #include <utility>
+
+#include "reactx/element.hpp"
+
+// The value returned by useMemo lives in the hook, not in the temporaries
+// passed to it; tell GCC so it doesn't warn about a dangling reference.
+#if defined(__has_cpp_attribute)
+#if __has_cpp_attribute(gnu::no_dangling)
+#define REACTX_NO_DANGLING [[gnu::no_dangling]]
+#endif
+#endif
+#ifndef REACTX_NO_DANGLING
+#define REACTX_NO_DANGLING
+#endif
 
 namespace rx {
 
@@ -77,6 +92,37 @@ struct EffectHook : HookBase {
 
 // deps == nullptr means "run after every render".
 void useEffectImpl(EffectFn effect, std::unique_ptr<DepsBase> deps);
+
+template <class T>
+struct MemoHook : HookBase {
+    std::optional<T> value;
+    std::unique_ptr<DepsBase> deps;
+};
+
+template <class Sig>
+struct CallbackHook : HookBase {
+    std::shared_ptr<std::function<Sig>> fn;
+    std::unique_ptr<DepsBase> deps;
+};
+
+// Handler signature for a callable: void(), void(const KeyEvent&) or
+// void(const std::string&).
+template <class F>
+constexpr auto handlerSignature() {
+    if constexpr (std::is_invocable_v<F&>) return std::type_identity<void()>{};
+    else if constexpr (std::is_invocable_v<F&, const KeyEvent&>)
+        return std::type_identity<void(const KeyEvent&)>{};
+    else if constexpr (std::is_invocable_v<F&, const std::string&>)
+        return std::type_identity<void(const std::string&)>{};
+    else static_assert(sizeof(F) == 0, "useCallback: not a ReactX event handler");
+}
+
+template <class F>
+using HandlerSig = typename decltype(handlerSignature<std::decay_t<F>>())::type;
+
+// Value of the nearest provider of context `id` above the rendering
+// component, or nullptr. Subscribes the component to that provider.
+const ContextValueBase* readContext(const void* id);
 
 template <class F>
 EffectFn wrapEffect(F&& f) {
@@ -164,6 +210,38 @@ void useEffect(F&& effect, std::tuple<D...> dependencies) {
     detail::useEffectImpl(
         detail::wrapEffect(std::forward<F>(effect)),
         std::make_unique<detail::Deps<std::tuple<D...>>>(std::move(dependencies)));
+}
+
+// Computes a value on the first render and again only when a dependency
+// changes: const auto& sorted = useMemo([&] { return sort(items); }, deps(items));
+template <class F, class... D>
+REACTX_NO_DANGLING const std::decay_t<std::invoke_result_t<F&>>& useMemo(F&& compute, std::tuple<D...> dependencies) {
+    using T = std::decay_t<std::invoke_result_t<F&>>;
+    auto slot = detail::nextHook([] { return std::make_unique<detail::MemoHook<T>>(); });
+    auto& hook = detail::checkedHook<detail::MemoHook<T>>(slot.hook);
+    auto next = std::make_unique<detail::Deps<std::tuple<D...>>>(std::move(dependencies));
+    if (!hook.value || !hook.deps || !hook.deps->equals(*next)) {
+        hook.value.emplace(std::invoke(compute));
+        hook.deps = std::move(next);
+    }
+    return *hook.value;
+}
+
+// Event handler that keeps the same identity until a dependency changes, so
+// memo() components that receive it are not re-rendered:
+//   auto onToggle = useCallback([setDone] { setDone(true); }, deps());
+// Returns Callback, KeyHandler or InputHandler depending on the lambda.
+template <class F, class... D>
+std::function<detail::HandlerSig<F>> useCallback(F&& handler, std::tuple<D...> dependencies) {
+    using Sig = detail::HandlerSig<F>;
+    auto slot = detail::nextHook([] { return std::make_unique<detail::CallbackHook<Sig>>(); });
+    auto& hook = detail::checkedHook<detail::CallbackHook<Sig>>(slot.hook);
+    auto next = std::make_unique<detail::Deps<std::tuple<D...>>>(std::move(dependencies));
+    if (!hook.fn || !hook.deps || !hook.deps->equals(*next)) {
+        hook.fn = std::make_shared<std::function<Sig>>(std::forward<F>(handler));
+        hook.deps = std::move(next);
+    }
+    return detail::StableFn<Sig>{hook.fn};
 }
 
 }  // namespace rx

@@ -32,6 +32,9 @@ struct Fiber : std::enable_shared_from_this<Fiber> {
     std::vector<NodeHandle> attached;  // host only: children currently in the backend
 
     std::vector<std::unique_ptr<HookBase>> hooks;
+
+    std::shared_ptr<const ContextValueBase> provided;  // Provider only
+    std::vector<std::weak_ptr<Fiber>> consumers;         // Provider only: who read it
     bool rendered = false;  // component rendered at least once
     bool dirty = false;
     bool alive = true;
@@ -61,6 +64,7 @@ private:
     Fiber& nearestHost(Fiber& fiber);
     void commit();
     void runUpdates();
+    void notifyConsumers(Fiber& provider);
 
     Renderer& renderer_;
     std::shared_ptr<Fiber> root_;

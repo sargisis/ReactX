@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <stdexcept>
 
+#include "reactx/memo.hpp"
 #include "render_context.hpp"
 
 namespace rx::detail {
@@ -21,8 +22,20 @@ bool sameType(const Fiber& fiber, const Element& e) {
     switch (e.kind) {
         case ElementKind::Host: return fiber.type == e.type;
         case ElementKind::Component: return fiber.component == e.component;
+        case ElementKind::Provider: return fiber.provided->id == e.provided->id;
         default: return true;
     }
+}
+
+// Props equal for memo(): same names, equal values, no children.
+bool shallowEqual(const Props& a, const Props& b) {
+    if (!a.children().empty() || !b.children().empty()) return false;
+    if (a.values().size() != b.values().size()) return false;
+    for (const auto& [name, value] : a.values()) {
+        const PropValue* other = b.find(name);
+        if (!other || !propEquals(value, *other)) return false;
+    }
+    return true;
 }
 
 struct BusyGuard {
@@ -150,6 +163,10 @@ std::shared_ptr<Fiber> Reconciler::mount(Element e, Fiber& parent) {
         case ElementKind::Fragment:
             reconcileChildren(*f, e.props.takeChildren());
             break;
+        case ElementKind::Provider:
+            f->provided = std::move(e.provided);
+            reconcileChildren(*f, e.props.takeChildren());
+            break;
         case ElementKind::Component:
             f->props = std::move(e.props);
             renderComponent(*f);
@@ -176,11 +193,31 @@ void Reconciler::update(Fiber& f, Element e) {
         case ElementKind::Fragment:
             reconcileChildren(f, e.props.takeChildren());
             break;
+        case ElementKind::Provider: {
+            bool changed = !f.provided->equals(*e.provided);
+            f.provided = std::move(e.provided);
+            if (changed) notifyConsumers(f);
+            reconcileChildren(f, e.props.takeChildren());
+            break;
+        }
         case ElementKind::Component:
+            // memo: same props and no pending update -> keep the old output.
+            if (!f.dirty && isMemo(f.component) && shallowEqual(f.props, e.props)) break;
             f.props = std::move(e.props);
             renderComponent(f);
             break;
     }
+}
+
+// Re-render every component that read this provider's value. They are
+// scheduled, so a memo() component in between can't block the update.
+void Reconciler::notifyConsumers(Fiber& provider) {
+    std::erase_if(provider.consumers, [](const std::weak_ptr<Fiber>& w) {
+        auto c = w.lock();
+        return !c || !c->alive;
+    });
+    for (auto& weak : provider.consumers)
+        if (auto c = weak.lock()) schedule(*c);
 }
 
 void Reconciler::reconcileChildren(Fiber& f, std::vector<Element> elements) {

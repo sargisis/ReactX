@@ -34,7 +34,9 @@ int main() {
 
 - **Элементы**: `h("tag", props, children)`, `h(Component, props, children)`, строки как текстовые узлы, `fragment(...)`, проп `key`.
 - **Компоненты**: обычные функции `Element(const Props&)`; дети доступны через `props.children()`.
-- **Хуки**: `useState` (значение или функция-updater, пропуск ререндера при равном значении), `useEffect` (без deps / `deps(a, b)` / `deps()` = один раз, cleanup), `useRef`.
+- **Хуки**: `useState` (значение или функция-updater, пропуск ререндера при равном значении), `useEffect` (без deps / `deps(a, b)` / `deps()` = один раз, cleanup), `useRef`, `useMemo` (пересчёт только при смене deps), `useCallback` (обработчик сохраняет «личность», пока не сменились deps).
+- **Контекст**: `createContext<T>(default)`, `ctx.provide(value, {children})`, `useContext(ctx)` — значение передаётся вниз без props; при смене значения перерисовываются все, кто его читает, даже сквозь `memo`.
+- **memo**: `h(memo<Item>, props)` пропускает перерисовку, если props те же. Значения сравниваются через `==`, обработчики — равны, только если пришли из одного `useCallback`; элементы с детьми перерисовываются всегда.
 - **Reconciler**: сравнивает деревья, сопоставляет детей по `key` или позиции, переставляет узлы вместо пересоздания, удаляет лишние пропсы.
 - **Батчинг**: `setState` только помечает компонент; перерисовка в `flush()` (автоматически после `render`/`dispatch`), родители раньше детей.
 - **События**: три вида обработчиков — `Callback` (`void()`, например `onClick`), `KeyHandler` (`void(const KeyEvent&)`, `onKey`) и `InputHandler` (`void(const std::string&)`, `onInput`). Бэкенд передаёт данные через `Root::dispatch(node, "onKey", KeyEvent{"Enter"})` или `dispatch(node, "onInput", std::string("текст"))`; если данные не подходят обработчику, `dispatch` вернёт `false`.
@@ -135,7 +137,8 @@ cmake --preset release && cmake --build --preset release
 - Числа вроде `size_t` в props нужно явно приводить к `int64_t`.
 - После `setState` вне `dispatch` нужно самому вызвать `root.flush()` (в `TerminalApp` это делается автоматически).
 - Терминал: ширина символа считается за 1 колонку (эмодзи и иероглифы шириной 2 могут сдвигать строку); курсор в `input` только в конце текста; нет прокрутки — что не влезло по высоте, обрезается; только POSIX (Linux/macOS).
-- Дети всегда перерисовываются вместе с родителем (нет `memo`).
+- Дети перерисовываются вместе с родителем, если не обёрнуты в `memo<...>`; `memo` не сравнивает детей (`props.children()`).
+- Хуки нельзя вызывать в цикле с разным числом итераций (как и в React), поэтому `useCallback` для каждого элемента списка не сделать — нужен отдельный компонент.
 
 ## План
 
@@ -149,5 +152,7 @@ cmake --preset release && cmake --build --preset release
 - [x] Модуль C++20: `import reactx;`
 - [x] Шаг 2 — бэкенд для терминала: ANSI-отрисовка, рамки, цвета, фокус,
       ввод с клавиатуры; демо — интерактивный todo
-- [ ] **Шаг 3** — `useContext`, `useMemo`/`useCallback`, `memo` (пропуск ререндера при тех же props)
-- [ ] Позже — другие бэкенды: SDL/OpenGL, WebAssembly + DOM
+- [x] Шаг 3 — `useContext`, `useMemo`/`useCallback`, `memo` (пропуск ререндера при тех же props)
+- [ ] **Шаг 4** — раскладка Flexbox на Yoga (`flexGrow`, `justifyContent`, `alignItems`)
+- [ ] Шаг 5 — библиотека компонентов `rx::ui` с темой (Button, Input, Checkbox, Tabs, Modal, List)
+- [ ] Позже — другие бэкенды: SDL3 + Skia/ThorVG (окна), WebAssembly + DOM (браузер и CSS)

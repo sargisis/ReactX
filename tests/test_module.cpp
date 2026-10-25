@@ -14,11 +14,19 @@ using namespace rx;
 
 namespace {
 
+const auto Accent = createContext<std::string>("blue");
+
+Element Badge(const Props& p) {
+    return h("badge", {{"color", useContext(Accent)}}, {p.get<std::string>("label")});
+}
+
 Element Field(const Props& p) {
     auto [value, setValue] = useState(p.get<std::string>("initial"));
     int& renders = useRef(0);
     ++renders;
     useEffect([] {}, deps(value));
+    const auto& upper = useMemo([&] { return value + "!"; }, deps(value));
+    Callback reset = useCallback([setValue] { setValue(std::string{}); }, deps());
     return h("box", {}, {
         h("input", {{"id", "field"},
                     {"value", value},
@@ -27,6 +35,8 @@ Element Field(const Props& p) {
                          if (e.key == "Escape") setValue(std::string{});
                      }}}),
         fragment({text("renders=" + std::to_string(renders))}),
+        h("button", {{"id", "reset"}, {"onClick", reset}}, {upper}),
+        Accent.provide("red", {h(memo<Badge>, {{"label", "new"}})}),
     });
 }
 
@@ -51,6 +61,11 @@ int main() {
     check(root.dispatch(field, "onKey", KeyEvent{"Escape"}), "onKey dispatched");
     check(r.toString().find("value=\"\"") != std::string::npos, "value cleared");
     check(r.toString().find("renders=3") != std::string::npos, "useRef counts renders");
+    check(r.toString().find("<badge color=\"red\">") != std::string::npos, "useContext + memo");
+    root.dispatch(field, "onInput", std::string("x"));
+    check(r.toString().find("\"x!\"") != std::string::npos, "useMemo");
+    check(root.dispatch(*r.findByProp("id", "reset"), "onClick"), "useCallback handler");
+    check(r.toString().find("value=\"\"") != std::string::npos, "useCallback reset value");
 
     std::cout << (failures ? "module test FAILED\n" : "module test OK\n");
     return failures ? 1 : 0;

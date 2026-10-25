@@ -96,6 +96,56 @@ Element Field(const Props&) {
     });
 }
 
+// ---- step 3: memo, useMemo, useCallback, context ----
+
+int memoComputes = 0;
+int itemRenders = 0;
+int consumerRenders = 0;
+
+Element Item(const Props& p) {
+    ++itemRenders;
+    return h("item", {}, {p.get<std::string>("label")});
+}
+
+// Parent with a counter; renders a memo<Item>. `stable` picks useCallback vs
+// a fresh lambda for the item's handler.
+Element MemoParent(const Props& p) {
+    auto [count, setCount] = useState(0);
+    auto [label, setLabel] = useState(std::string("a"));
+    const auto& doubled = useMemo([&] { ++memoComputes; return label + label; }, deps(label));
+    Callback stableClick = useCallback([setCount] { setCount([](int c) { return c + 1; }); }, deps());
+    Callback freshClick = [setCount] { setCount([](int c) { return c + 1; }); };
+    return h("box", {}, {
+        h("button", {{"id", "inc"}, {"onClick", stableClick}}),
+        h("button", {{"id", "relabel"}, {"onClick", [setLabel] { setLabel(std::string("b")); }}}),
+        h("text", {{"id", "info"}}, {"count=" + std::to_string(count) + " doubled=" + doubled}),
+        h(memo<Item>, {{"label", label}, {"onClick", p.get<bool>("stable") ? stableClick : freshClick}}),
+    });
+}
+
+const auto Theme = createContext<std::string>("light");
+
+Element ThemeLabel(const Props&) {
+    ++consumerRenders;
+    return h("text", {{"id", "theme"}}, {"theme=" + useContext(Theme)});
+}
+
+// memo barrier with no props: never re-rendered by its parent.
+Element Barrier(const Props&) { return h("box", {}, {h(ThemeLabel)}); }
+
+Element ThemeApp(const Props&) {
+    auto [theme, setTheme] = useState(std::string("dark"));
+    auto [ticks, setTicks] = useState(0);
+    return h("box", {}, {
+        h("button", {{"id", "toggle"}, {"onClick", [setTheme, theme] {
+             setTheme(std::string(theme == "dark" ? "light" : "dark"));
+         }}}),
+        h("button", {{"id", "tick"}, {"onClick", [setTicks] { setTicks([](int t) { return t + 1; }); }}}),
+        h("text", {}, {"ticks=" + std::to_string(ticks)}),
+        Theme.provide(theme, {h(memo<Barrier>)}),
+    });
+}
+
 // ---- tests ----
 
 TEST(mount_renders_tree) {
@@ -262,6 +312,126 @@ TEST(handlers_are_not_sent_to_renderer) {
     auto tree = r.toString();
     CHECK(tree.find("onKey") == std::string::npos);
     CHECK(tree.find("onInput") == std::string::npos);
+}
+
+TEST(use_memo_recomputes_only_when_deps_change) {
+    TextRenderer r;
+    Root root(r);
+    memoComputes = 0;
+    root.render(h(MemoParent, {{"stable", true}}));
+    CHECK(memoComputes == 1);
+    root.dispatch(byId(r, "inc"), "onClick");
+    CHECK(memoComputes == 1);  // count changed, label did not
+    CHECK(r.toString().find("count=1 doubled=aa") != std::string::npos);
+    root.dispatch(byId(r, "relabel"), "onClick");
+    CHECK(memoComputes == 2);
+    CHECK(r.toString().find("doubled=bb") != std::string::npos);
+}
+
+TEST(use_callback_keeps_identity_until_deps_change) {
+    TextRenderer r;
+    Root root(r);
+    std::vector<PropValue> seen;
+    struct Capture {
+        static Element render(const Props& p) {
+            auto [n, setN] = useState(0);
+            auto [dep, setDep] = useState(0);
+            Callback cb = useCallback([] {}, deps(dep));
+            auto* out = reinterpret_cast<std::vector<PropValue>*>(p.get<std::int64_t>("out"));
+            out->push_back(cb);
+            return h("box", {}, {
+                h("button", {{"id", "n"}, {"onClick", [setN] { setN([](int v) { return v + 1; }); }}}),
+                h("button", {{"id", "dep"}, {"onClick", [setDep] { setDep([](int v) { return v + 1; }); }}}),
+            });
+        }
+    };
+    root.render(h(&Capture::render, {{"out", reinterpret_cast<std::int64_t>(&seen)}}));
+    root.dispatch(byId(r, "n"), "onClick");
+    root.dispatch(byId(r, "dep"), "onClick");
+    CHECK(seen.size() == 3);
+    CHECK(propEquals(seen[0], seen[1]));   // same deps: same handler
+    CHECK(!propEquals(seen[1], seen[2]));  // deps changed: new handler
+    CHECK(!propEquals(PropValue(Callback([] {})), PropValue(Callback([] {}))));
+}
+
+TEST(memo_skips_rerender_with_equal_props) {
+    TextRenderer r;
+    Root root(r);
+    itemRenders = 0;
+    root.render(h(MemoParent, {{"stable", true}}));
+    CHECK(itemRenders == 1);
+    root.dispatch(byId(r, "inc"), "onClick");
+    root.dispatch(byId(r, "inc"), "onClick");
+    CHECK(itemRenders == 1);  // parent re-rendered twice, item skipped
+    root.dispatch(byId(r, "relabel"), "onClick");
+    CHECK(itemRenders == 2);  // label changed
+    CHECK(r.toString().find("\"b\"") != std::string::npos);
+}
+
+TEST(memo_rerenders_when_handler_is_a_fresh_lambda) {
+    TextRenderer r;
+    Root root(r);
+    itemRenders = 0;
+    root.render(h(MemoParent, {{"stable", false}}));
+    root.dispatch(byId(r, "inc"), "onClick");
+    CHECK(itemRenders == 2);
+}
+
+TEST(memo_component_still_updates_on_own_state) {
+    struct Self {
+        static Element render(const Props&) {
+            auto [n, setN] = useState(0);
+            return h("button", {{"id", "self"}, {"onClick", [setN] { setN([](int v) { return v + 1; }); }}},
+                     {"n=" + std::to_string(n)});
+        }
+    };
+    TextRenderer r;
+    Root root(r);
+    root.render(h("box", {}, {h(memo<&Self::render>)}));
+    root.dispatch(byId(r, "self"), "onClick");
+    CHECK(r.toString().find("n=1") != std::string::npos);
+}
+
+TEST(context_default_without_provider) {
+    TextRenderer r;
+    Root root(r);
+    root.render(h(ThemeLabel));
+    CHECK(r.toString().find("theme=light") != std::string::npos);
+}
+
+TEST(nearest_provider_wins) {
+    TextRenderer r;
+    Root root(r);
+    root.render(Theme.provide("outer", {h("box", {}, {h(ThemeLabel), Theme.provide("inner", {h(ThemeLabel)})})}));
+    auto tree = r.toString();
+    CHECK(tree.find("theme=outer") != std::string::npos);
+    CHECK(tree.find("theme=inner") != std::string::npos);
+}
+
+TEST(context_change_passes_through_memo_barrier) {
+    TextRenderer r;
+    Root root(r);
+    consumerRenders = 0;
+    root.render(h(ThemeApp));
+    CHECK(r.toString().find("theme=dark") != std::string::npos);
+    CHECK(consumerRenders == 1);
+
+    root.dispatch(byId(r, "tick"), "onClick");  // same theme: nothing below re-renders
+    CHECK(consumerRenders == 1);
+
+    root.dispatch(byId(r, "toggle"), "onClick");  // Barrier skips, ThemeLabel still updates
+    CHECK(r.toString().find("theme=light") != std::string::npos);
+    CHECK(consumerRenders == 2);
+}
+
+TEST(use_context_outside_component_throws) {
+    bool threw = false;
+    try {
+        (void)useContext(Theme);
+    } catch (const std::logic_error&) {
+        threw = true;
+    }
+    CHECK(threw);
 }
 
 }  // namespace

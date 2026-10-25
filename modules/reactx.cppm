@@ -35,7 +35,15 @@ using rx::Setter;
 using rx::useState;
 using rx::useRef;
 using rx::useEffect;
+using rx::useMemo;
+using rx::useCallback;
 using rx::deps;
+
+// context.hpp, memo.hpp
+using rx::Context;
+using rx::createContext;
+using rx::useContext;
+using rx::memo;
 
 // renderer.hpp, root.hpp, text_renderer.hpp
 using rx::NodeHandle;

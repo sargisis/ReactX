@@ -1,5 +1,11 @@
 #include "reactx/hooks.hpp"
 
+#include <algorithm>
+#include <mutex>
+#include <unordered_set>
+
+#include "reactx/memo.hpp"
+
 #include "render_context.hpp"
 #include "reconciler.hpp"
 
@@ -35,6 +41,47 @@ void useEffectImpl(EffectFn effect, std::unique_ptr<DepsBase> deps) {
     hook.deps = std::move(deps);
     hook.pending = std::move(effect);
     currentContext->fiber->owner->queueEffect(slot.fiber, slot.index);
+}
+
+const ContextValueBase* readContext(const void* id) {
+    if (!currentContext)
+        throw std::logic_error("ReactX: useContext can only be called while rendering a component");
+    Fiber& self = *currentContext->fiber;
+    for (Fiber* p = self.parent; p; p = p->parent) {
+        if (p->kind != ElementKind::Provider || !p->provided || p->provided->id != id) continue;
+        auto me = self.weak_from_this();
+        bool subscribed = std::ranges::any_of(p->consumers, [&](const std::weak_ptr<Fiber>& w) {
+            return !w.owner_before(me) && !me.owner_before(w);  // same fiber
+        });
+        if (!subscribed) p->consumers.push_back(std::move(me));
+        return p->provided.get();
+    }
+    return nullptr;
+}
+
+namespace {
+
+std::unordered_set<Component>& memoSet() {
+    static std::unordered_set<Component> set;
+    return set;
+}
+
+std::mutex& memoMutex() {
+    static std::mutex m;
+    return m;
+}
+
+}  // namespace
+
+Component registerMemo(Component component) {
+    std::scoped_lock lock(memoMutex());
+    memoSet().insert(component);
+    return component;
+}
+
+bool isMemo(Component component) {
+    std::scoped_lock lock(memoMutex());
+    return memoSet().contains(component);
 }
 
 }  // namespace rx::detail

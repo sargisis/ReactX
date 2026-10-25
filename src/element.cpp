@@ -10,13 +10,24 @@ bool isHandler(const PropValue& value) {
            std::holds_alternative<InputHandler>(value);
 }
 
+namespace {
+
+template <class Sig>
+bool sameStable(const std::function<Sig>& a, const std::function<Sig>& b) {
+    auto* x = a.template target<detail::StableFn<Sig>>();
+    auto* y = b.template target<detail::StableFn<Sig>>();
+    return x && y && x->impl == y->impl;
+}
+
+}  // namespace
+
 bool propEquals(const PropValue& a, const PropValue& b) {
-    if (a.index() != b.index() || isHandler(a)) return false;
+    if (a.index() != b.index()) return false;
     return std::visit(
         [&](const auto& x) -> bool {
             using T = std::decay_t<decltype(x)>;
             if constexpr (std::equality_comparable<T>) return x == std::get<T>(b);
-            else return false;  // handlers
+            else return sameStable(x, std::get<T>(b));  // handlers
         },
         a);
 }

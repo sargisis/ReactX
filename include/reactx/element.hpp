@@ -4,6 +4,7 @@
 #include <functional>
 #include <initializer_list>
 #include <map>
+#include <memory>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -14,6 +15,28 @@ namespace rx {
 
 struct Element;
 class Props;
+
+namespace detail {
+
+// Handler with a stable identity, made by useCallback. Two handlers that wrap
+// the same StableFn compare equal, which lets memo() skip re-renders.
+template <class Sig>
+struct StableFn;
+
+template <class R, class... A>
+struct StableFn<R(A...)> {
+    std::shared_ptr<std::function<R(A...)>> impl;
+    R operator()(A... args) const { return (*impl)(std::forward<A>(args)...); }
+};
+
+// Value given by a context provider (see context.hpp).
+struct ContextValueBase {
+    const void* id = nullptr;  // which context
+    virtual ~ContextValueBase() = default;
+    virtual bool equals(const ContextValueBase& other) const = 0;
+};
+
+}  // namespace detail
 
 // A key press reported by a backend. `key` is a printable character ("a")
 // or a name ("Enter", "Backspace", "Up", "Tab", "Escape", ...).
@@ -46,7 +69,8 @@ using Component = Element (*)(const Props&);
 
 using PropList = std::initializer_list<std::pair<std::string, PropValue>>;
 
-// Handlers are never equal to each other (std::function can't be compared).
+// Handlers are equal only if both come from the same useCallback (same
+// identity); other std::functions can't be compared.
 bool propEquals(const PropValue& a, const PropValue& b);
 std::string propToString(const PropValue& value);
 
@@ -77,7 +101,7 @@ private:
     std::vector<Element> children_;
 };
 
-enum class ElementKind { Host, Text, Component, Fragment };
+enum class ElementKind { Host, Text, Component, Fragment, Provider };
 
 // Immutable description of UI, like a React element.
 struct Element {
@@ -86,6 +110,7 @@ struct Element {
     Component component = nullptr;
     Props props;       // children live in props.children()
     std::string key;
+    std::shared_ptr<const detail::ContextValueBase> provided;  // Provider only
 
     Element() = default;
     Element(const char* text);  // implicit: lets you write {"Hello"} as a child

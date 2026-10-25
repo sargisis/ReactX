@@ -29,15 +29,29 @@ struct Todo {
 };
 using List = std::vector<Todo>;
 
+// Accent color for the whole UI, passed down with a context.
+const auto Accent = createContext<std::string>("cyan");
+
+// Bordered frame; reads the accent color from the context.
+Element Frame(const Props& p) {
+    return h("box", {{"border", true},
+                     {"title", p.get<std::string>("title")},
+                     {"padding", 1},
+                     {"width", 58},
+                     {"color", useContext(Accent)}},
+             p.children());
+}
+
 Element TodoItem(const Props& p) {
     bool done = p.get<bool>("done");
+    const std::string& accent = useContext(Accent);
     auto onRemove = p.get<Callback>("onRemove");
     return h("item", {{"focusable", true},
                       {"onClick", p.get<Callback>("onToggle")},
                       {"onKey", [onRemove](const KeyEvent& e) {
                            if (e.key == "Delete" || e.key == "d") onRemove();
                        }}}, {
-        h("text", {{"color", done ? "gray" : "white"}},
+        h("text", {{"color", done ? "gray" : accent}},
           {std::string(done ? "[x] " : "[ ] ") + p.get<std::string>("title")}),
     });
 }
@@ -46,7 +60,16 @@ Element App(const Props& props) {
     auto [todos, setTodos] = useState(List{
         {1, "Write the reconciler", true}, {2, "Add hooks", true}, {3, "Make a terminal backend"}});
     auto [draft, setDraft] = useState(std::string{});
+    auto [accent, setAccent] = useState(std::string("cyan"));
     int& nextId = useRef(4);
+
+    // Same function object on every render: it only uses setTodos.
+    Callback clearDone = useCallback([setTodos] {
+        setTodos([](List list) {
+            std::erase_if(list, [](const Todo& t) { return t.done; });
+            return list;
+        });
+    }, deps());
 
     std::vector<Element> items;
     for (const Todo& t : todos) {
@@ -73,8 +96,8 @@ Element App(const Props& props) {
 
     auto left = std::ranges::count_if(todos, [](const Todo& t) { return !t.done; });
 
-    return h("box", {}, {
-        h("box", {{"border", true}, {"title", "ReactX todo"}, {"padding", 1}, {"color", "cyan"}, {"width", 50}}, {
+    return Accent.provide(accent, {
+        h(Frame, {{"title", "ReactX todo"}}, {
             h("text", {{"bold", true}, {"color", left ? "yellow" : "green"}},
               {left ? std::to_string(left) + " left" : std::string("all done!")}),
             h("box", {{"direction", "row"}}, {
@@ -104,12 +127,13 @@ Element App(const Props& props) {
                          return list;
                      });
                  }}}, {"reverse"}),
-                h("button", {{"onClick", [setTodos] {
-                     setTodos([](List list) {
-                         std::erase_if(list, [](const Todo& t) { return t.done; });
-                         return list;
-                     });
-                 }}}, {"clear done"}),
+                h("button", {{"onClick", clearDone}}, {"clear done"}),
+                h("button", {{"onClick", [setAccent, accent] {
+                     static const std::vector<std::string> colors{"cyan", "magenta", "green", "yellow"};
+                     auto it = std::ranges::find(colors, accent);
+                     auto next = it == colors.end() || it + 1 == colors.end() ? colors.begin() : it + 1;
+                     setAccent(*next);
+                 }}}, {"theme"}),
                 h("button", {{"onClick", props.get<Callback>("onQuit")}}, {"quit"}),
             }),
         }),

@@ -29,7 +29,8 @@ inline const std::vector<Page>& pages() {
                 {"Что это", "ReactX — UI-фреймворк в духе React на C++20. Компоненты — обычные функции, состояние — хуки, "
                             "изменения в дерево вносит reconciler.\n\nОдин и тот же код компонентов работает в терминале "
                             "(бэкенд TerminalRenderer) и в браузере (WebAssembly + DOM).", ""},
-                {"Сборка", "Нужны CMake 3.28+, Ninja и GCC 14+ / Clang 17+. Для браузера — Emscripten (переменная EMSDK).",
+                {"Свой проект", "Проще всего начать с CLI: reactx new my-app && cd my-app && reactx dev. Подробнее — в разделе «CLI reactx».", ""},
+                {"Сборка ReactX", "Нужны CMake 3.28+, Ninja и GCC 14+ / Clang 17+. Для браузера — Emscripten (переменная EMSDK).",
                  "cmake --preset debug && cmake --build --preset debug\n"
                  "ctest --preset debug\n\n"
                  "cmake --preset web && cmake --build --preset web    # WebAssembly\n"
@@ -42,6 +43,36 @@ inline const std::vector<Page>& pages() {
                  "             {\"Нажато: \" + std::to_string(count)});\n"
                  "}\n\nint main() { mountDom(h(Counter)); }"},
                 {"Модуль C++20", "Вместо заголовков можно подключить модуль (в нативной сборке с Ninja).", "import reactx;"},
+            },
+        },
+        {
+            "cli", "CLI reactx", "Новый проект, разработка с автообновлением, сборка, зависимости.",
+            {
+                {"Установка", "CLI собирается вместе с ReactX; cmake --install кладёт reactx и reactx_serve в bin.",
+                 "cmake --preset release && cmake --build --preset release\n"
+                 "cmake --install build/release --prefix ~/.local     # ~/.local/bin/reactx"},
+                {"Новый проект", "reactx new создаёт папку с reactx.json (манифест, как package.json), CMakeLists.txt, "
+                                 "CMakePresets.json и src/main.cpp. ReactX подключается с GitHub; --local — из исходников, "
+                                 "из которых собран сам CLI. --terminal — терминальное приложение вместо веба.",
+                 "reactx new my-app\ncd my-app"},
+                {"reactx dev", "Собирает веб-версию, запускает встроенный сервер на C++ (тот же, что reactx_serve) и следит за "
+                               "src/, public/ и манифестом. После каждой удачной пересборки страница в браузере обновляется "
+                               "сама; если код не собрался — остаётся прошлая версия, а ошибка видна в терминале.",
+                 "reactx dev              # http://127.0.0.1:8090/\nreactx dev --port 3000"},
+                {"reactx build", "Сборка для публикации: build/web/dist — обычные файлы для любого статического хостинга "
+                                 "(404.html уже лежит рядом с index.html для маршрутов). Для терминального проекта — "
+                                 "build/native/<имя>.", "reactx build"},
+                {"Зависимости", "reactx add записывает git-репозиторий в reactx.json; CMake проекта подключает его через "
+                                "FetchContent, а --target сразу связывает библиотеку с приложением.",
+                 "reactx add fmt https://github.com/fmtlib/fmt.git --rev 11.0.2 --target fmt::fmt\nreactx remove fmt"},
+                {"reactx.json", "Всё, что нужно проекту, в одном файле.",
+                 "{\n"
+                 "  \"name\": \"my-app\",\n"
+                 "  \"template\": \"web\",\n"
+                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"main\" },\n"
+                 "  \"dependencies\": { \"fmt\": { \"git\": \"...\", \"rev\": \"11.0.2\", \"target\": \"fmt::fmt\" } },\n"
+                 "  \"web\": { \"base\": \"/\" }\n"
+                 "}"},
             },
         },
         {

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>@REACTX_APP_TITLE@</title>
+  <base href="@REACTX_APP_BASE@">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app"></div>
+  {{{ SCRIPT }}}
+  <script>
+    // `reactx dev`: reload the page when the app is rebuilt. Anywhere else the
+    // request fails and this stops after the first try.
+    (function poll(version) {
+      fetch("__reactx/version", { cache: "no-store" })
+        .then(function (r) { if (!r.ok) throw 0; return r.text(); })
+        .then(function (v) { if (version && v !== version) location.reload(); else setTimeout(function () { poll(v); }, 700); })
+        .catch(function () {});
+    })("");
+  </script>
+</body>
+</html>

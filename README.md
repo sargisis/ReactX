@@ -32,6 +32,23 @@ int main() {
 }
 ```
 
+## Свой проект за минуту: CLI `reactx`
+
+```sh
+cmake --preset release && cmake --build --preset release
+cmake --install build/release --prefix ~/.local      # ~/.local/bin/reactx
+
+reactx new my-app && cd my-app
+reactx dev        # сборка + сервер на C++ + пересборка и автообновление страницы при каждом сохранении
+reactx build      # build/web/dist — файлы для любого хостинга
+reactx add fmt https://github.com/fmtlib/fmt.git --rev 11.0.2 --target fmt::fmt
+```
+
+- `reactx new <имя>` — веб-проект (или `--terminal`): `reactx.json` (манифест, как `package.json`), `CMakeLists.txt`, `CMakePresets.json`, `src/main.cpp`, `public/style.css`. ReactX подключается с GitHub, `--local` — из исходников, из которых собран CLI.
+- `reactx dev` запускает встроенный `rx::net::HttpServer` (тот же, что `reactx_serve`), следит за `src/`, `public/` и манифестом; после удачной пересборки страница перезагружается сама, при ошибке остаётся прошлая версия. Для терминального проекта — собирает и запускает программу.
+- `reactx add` / `reactx remove` — зависимости из git; CMake проекта подключает их через `FetchContent` и связывает с приложением (`--target`).
+- В своём CMake достаточно одной строки: `reactx_add_app(my_app SOURCES src/main.cpp PUBLIC public)` — нативная сборка даёт программу, веб-сборка — `dist/` с `index.html`, `.js`, `.wasm` и `404.html`.
+
 ## Что есть
 
 - **Элементы**: `h("tag", props, children)`, `h(Component, props, children)`, строки как текстовые узлы, `fragment(...)`, проп `key`.
@@ -314,8 +331,10 @@ examples/         counter, todo, todo_tui, ui_demo (терминал); web_count
 web/              shell.html — HTML-шаблон и CSS для веб-примеров; app_shell.html — для web_app
 tests/            тесты ядра, test_terminal.cpp — терминал, test_ui.cpp — rx::ui, test_module.cpp — import reactx;
                   test_dom.cpp, test_ui_web.cpp, test_web_app.cpp, test_web_base.cpp + web/fake_dom.js — браузер под Node;
-                  test_http.cpp, test_todo_api.cpp — сервер; test_json.cpp; test_router.cpp
-tools/            serve.cpp — reactx_serve, сервер для разработки
+                  test_http.cpp, test_todo_api.cpp — сервер; test_json.cpp; test_router.cpp;
+                  test_cli.cpp — CLI (быстрые + медленный полный прогон, ctest -LE slow пропускает его)
+tools/            reactx.cpp — CLI; serve.cpp — reactx_serve, сервер для разработки
+cmake/            ReactXApp.cmake — reactx_add_app() для своих проектов
 .github/workflows pages.yml — тесты, сборка и публикация сайта
 ```
 
@@ -376,6 +395,6 @@ cmake --preset release && cmake --build --preset release
 - [x] Шаг 7 — стили и веб-версия компонентов `rx::ui` (тот же код, что в терминале)
 - [x] Шаг 8 — несколько страниц (роутер), загрузка данных (`useFetch`), свой JSON, REST API на C++
 - [x] Шаг 9 — сайт с документацией на GitHub Pages: автосборка, базовый путь, прямые ссылки на страницы
-- [ ] Свой пакетный менеджер и CLI (аналог `npm`): создание проекта, зависимости, сборка;
-      команда для разработки (как `npm run dev`) собирает веб-версию и сама запускает `reactx_serve`
+- [x] CLI `reactx` (аналог `npm`): `new`, `dev` (сервер на C++ + автообновление), `build`, `add`/`remove` зависимостей
+- [ ] Свои библиотеки для фронтенда и для работы с C++; более короткий синтаксис элементов
 - [ ] Позже — окна на рабочем столе: SDL3 + Skia/ThorVG

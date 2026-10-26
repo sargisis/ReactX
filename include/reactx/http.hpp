@@ -1,6 +1,6 @@
 #pragma once
 
-// Small HTTP/1.1 server (POSIX sockets, C++20) for developing ReactX sites:
+// Small HTTP/1.1 server (POSIX sockets, C++26) for developing ReactX sites:
 // serves the files of a web build and lets you add your own routes (an API
 // for the page to fetch from).
 //
@@ -19,6 +19,7 @@
 #include <cstddef>
 #include <expected>
 #include <filesystem>
+#include <flat_map>
 #include <functional>
 #include <map>
 #include <optional>
@@ -38,11 +39,11 @@ struct Request {
     std::string method;  // "GET", "POST", ...
     std::string path;    // decoded, without the query: "/api/items"
     std::string query;   // raw, after '?': "page=2&q=milk"
-    std::map<std::string, std::string> headers;  // names in lower case
+    std::flat_map<std::string, std::string, std::less<>> headers;  // names in lower case
     std::string body;
     std::map<std::string, std::string> pathParams;  // from a route like "/api/todos/:id"
 
-    std::string header(const std::string& name) const;
+    std::string header(std::string_view name) const;
     // Decoded value of a query parameter: query "q=milk%20tea" -> param("q") == "milk tea".
     std::optional<std::string> param(const std::string& name) const;
     // Value of a path parameter: route "/api/todos/:id", path "/api/todos/7" -> pathParam("id") == "7".
@@ -58,6 +59,13 @@ struct Response {
     static Response text(std::string body, int status = 200);
     static Response html(std::string body, int status = 200);
     static Response json(std::string body, int status = 200);
+};
+
+// Why a request can't be handled: the status to answer with and a message.
+struct HttpError {
+    int status = 400;
+    std::string message;
+    bool operator==(const HttpError&) const = default;
 };
 
 using Handler = std::function<Response(const Request&)>;
@@ -127,8 +135,11 @@ private:
 // Content type for a file extension (".wasm" -> "application/wasm").
 std::string mimeType(std::string_view extension);
 // Parses the head of an HTTP request ("GET /x?a=1 HTTP/1.1\r\nHost: ...\r\n\r\n").
-// Returns nothing for a malformed request.
-std::optional<Request> parseRequestHead(std::string_view head);
+// A malformed request gives HttpError{400, what is wrong}.
+std::expected<Request, HttpError> parseRequestHead(std::string_view head);
+// Length of the body from Content-Length (0 without it): 400 if it isn't a
+// number, 413 if it is over `limit` bytes.
+std::expected<std::size_t, HttpError> bodyLength(const Request& request, std::size_t limit);
 // Serializes a response (headers + body; no body for HEAD requests).
 std::string serializeResponse(const Response& response, bool headOnly = false);
 

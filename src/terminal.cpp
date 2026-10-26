@@ -7,8 +7,10 @@
 #include <cerrno>
 #include <stdexcept>
 #include <string>
+#include <text_encoding>
 #include <utility>
 
+#include "reactx/parse.hpp"
 #include "reactx/terminal.hpp"
 #include "utf8.hpp"
 
@@ -24,11 +26,7 @@ KeyEvent named(std::string key) { return KeyEvent{.key = std::move(key)}; }
 void applyModifiers(std::string_view params, KeyEvent& key) {
     auto semi = params.find(';');
     if (semi == std::string_view::npos) return;
-    int m = 0;
-    for (char c : params.substr(semi + 1)) {
-        if (c < '0' || c > '9') break;
-        m = m * 10 + (c - '0');
-    }
+    int m = parseNumber<int>(params.substr(semi + 1)).value_or(1);  // "1;5" -> 5
     if (m <= 1) return;
     m -= 1;
     key.shift = m & 1;
@@ -185,7 +183,10 @@ std::vector<KeyEvent> Terminal::readKeys(int timeoutMs) {
 TerminalApp::TerminalApp()
     : renderer_(std::make_unique<TerminalRenderer>(
           [this](std::string_view data) { terminal_.write(data); })),
-      root_(std::make_unique<Root>(*renderer_)) {}
+      root_(std::make_unique<Root>(*renderer_)) {
+    // Box-drawing borders only if the terminal's locale is UTF-8 (C++26 <text_encoding>).
+    renderer_->setUnicode(std::text_encoding::environment_is<std::text_encoding::id::UTF8>());
+}
 
 TerminalApp::~TerminalApp() = default;
 

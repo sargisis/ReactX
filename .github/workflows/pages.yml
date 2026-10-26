@@ -1,4 +1,4 @@
-# Builds and tests ReactX (GCC 15 and Emscripten; ASan+UBSan+LSan and TSan),
+# Builds and tests ReactX (GCC 16 and Emscripten; ASan+UBSan+LSan and TSan),
 # then publishes the site to GitHub Pages:
 #   https://sargisis.github.io/ReactX/
 # The site is pushed to the gh-pages branch; in Settings -> Pages choose
@@ -22,12 +22,13 @@ env:
   EMSDK_VERSION: "6.0.13"  # same Emscripten as in development
 
 jobs:
-  # All native jobs run in the official gcc:15 image: ReactX builds in C++26
-  # mode and uses C++26 features that GCC 14 doesn't have.
+  # All native jobs run in the official gcc:16 image: natively ReactX uses the
+  # C++26 standard library of GCC 16 (std::inplace_vector, std::mdspan,
+  # std::text_encoding, <debugging>) and C++26 contracts (-fcontracts).
   native:
-    name: Native build and tests (GCC 15, C++26)
+    name: Native build and tests (GCC 16, C++26)
     runs-on: ubuntu-24.04
-    container: gcc:15
+    container: gcc:16
     steps:
       - uses: actions/checkout@v4
       - name: Install tools
@@ -48,7 +49,7 @@ jobs:
     name: ASan + UBSan + LeakSanitizer
     runs-on: ubuntu-24.04
     container:
-      image: gcc:15
+      image: gcc:16
       options: --cap-add=SYS_PTRACE  # LeakSanitizer needs ptrace in a container
     env:
       ASAN_OPTIONS: detect_leaks=1:halt_on_error=1:abort_on_error=1:detect_stack_use_after_return=1:strict_string_checks=1
@@ -72,7 +73,7 @@ jobs:
     name: ThreadSanitizer
     runs-on: ubuntu-24.04
     container:
-      image: gcc:15
+      image: gcc:16
       options: --security-opt seccomp=unconfined  # lets setarch turn off ASLR (TSan's memory layout)
     env:
       TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1

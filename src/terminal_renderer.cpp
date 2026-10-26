@@ -4,6 +4,9 @@
 #include <charconv>
 #include <cmath>
 #include <deque>
+#include <inplace_vector>
+#include <mdspan>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -15,7 +18,7 @@ namespace rx {
 
 namespace {
 
-using PropMap = std::map<std::string, std::string, std::less<>>;
+using PropMap = std::flat_map<std::string, std::string, std::less<>>;
 
 std::string prop(const PropMap& props, std::string_view name, std::string fallback = {}) {
     auto it = props.find(name);
@@ -322,11 +325,37 @@ struct TerminalRenderer::Layout {
     }
 };
 
+// The cells of one repaint.
+struct TerminalRenderer::Frame {
+    struct Cell {
+        std::inplace_vector<char, 4> ch{' '};  // one UTF-8 code point, no heap (C++26)
+        Style style;
+        std::string_view text() const { return {ch.data(), ch.size()}; }
+    };
+    // rows x columns, screen[row, col] (C++23 std::mdspan over one array).
+    using Screen = std::mdspan<Cell, std::dextents<std::size_t, 2>>;
+    using ConstScreen = std::mdspan<const Cell, std::dextents<std::size_t, 2>>;
+
+    std::vector<Cell> cells;
+    std::size_t rows = 0, cols = 0;
+
+    Frame(std::size_t r, std::size_t c) : cells(r * c), rows(r), cols(c) {}
+    Screen screen() { return Screen(cells.data(), rows, cols); }
+    ConstScreen screen() const { return ConstScreen(cells.data(), rows, cols); }
+    std::span<const Cell> row(std::size_t y) const {
+        ConstScreen s = screen();
+        return std::span(&s[y, 0], cols);  // rows are contiguous (layout_right)
+    }
+
+    static std::string lineToAnsi(std::span<const Cell> line);
+};
+
 TerminalRenderer::Rect TerminalRenderer::Rect::intersect(const Rect& o) const {
     return {std::max(left, o.left), std::max(top, o.top), std::min(right, o.right), std::min(bottom, o.bottom)};
 }
 
 TerminalRenderer::TerminalRenderer(Output output) : output_(std::move(output)) {}
+TerminalRenderer::~TerminalRenderer() = default;
 
 void TerminalRenderer::setSize(int width, int height) {
     width = std::max(width, 1);
@@ -338,6 +367,12 @@ void TerminalRenderer::setSize(int width, int height) {
 }
 
 void TerminalRenderer::invalidate() { fullRedraw_ = true; }
+
+void TerminalRenderer::setUnicode(bool on) {
+    if (on == unicode_) return;
+    unicode_ = on;
+    invalidate();
+}
 
 void TerminalRenderer::commit() {
     fixFocus();
@@ -368,23 +403,25 @@ std::string TerminalRenderer::textOf(const Node& n) const {
     return out;
 }
 
-void TerminalRenderer::put(Canvas& canvas, int x, int y, const Rect& clip, std::string_view text,
+void TerminalRenderer::put(Frame& frame, int x, int y, const Rect& clip, std::string_view text,
                            const Style& style) {
-    if (y < 0 || y < clip.top || y >= clip.bottom) return;
-    if (static_cast<int>(canvas.size()) <= y)
-        canvas.resize(static_cast<std::size_t>(y) + 1, std::vector<Cell>(static_cast<std::size_t>(width_)));
-    auto& line = canvas[static_cast<std::size_t>(y)];
-    int right = std::min(clip.right, width_);
+    Frame::Screen screen = frame.screen();
+    if (y < 0 || y < clip.top || y >= clip.bottom || y >= static_cast<int>(screen.extent(0))) return;
+    int right = std::min(clip.right, static_cast<int>(screen.extent(1)));
     for (std::string_view ch : detail::utf8Split(text)) {
         if (x >= right) break;
-        if (x >= clip.left && x >= 0 && static_cast<unsigned char>(ch[0]) >= 0x20)
-            line[static_cast<std::size_t>(x)] = Cell{std::string(ch), style};
+        if (x >= clip.left && x >= 0 && static_cast<unsigned char>(ch[0]) >= 0x20) {
+            Frame::Cell& cell = screen[static_cast<std::size_t>(y), static_cast<std::size_t>(x)];
+            cell.ch.assign(ch.begin(), ch.end());  // utf8Split: at most 4 bytes
+            cell.style = style;
+        }
         ++x;
     }
 }
 
 void TerminalRenderer::draw(const Layout& layout, NodeHandle h, float originX, float originY, Style inherited,
-                            Rect clip, Canvas& canvas) {
+                            Rect clip, Frame& frame) {
+    Frame::Screen screen = frame.screen();
     const Node* n = findNode(h);
     auto it = layout.nodes.find(h);
     if (!n || it == layout.nodes.end()) return;
@@ -419,11 +456,11 @@ void TerminalRenderer::draw(const Layout& layout, NodeHandle h, float originX, f
         auto lines = wrap ? wrapText(text, contentW) : splitLines(text);
         Rect area = content.intersect(clip);
         for (std::size_t i = 0; i < lines.size(); ++i)
-            put(canvas, content.left, content.top + static_cast<int>(i), area, lines[i], st);
+            put(frame, content.left, content.top + static_cast<int>(i), area, lines[i], st);
         return;
     }
     if (n->type == "button") {
-        put(canvas, content.left, content.top, content.intersect(clip), "[ " + textOf(*n) + " ]", st);
+        put(frame, content.left, content.top, content.intersect(clip), "[ " + textOf(*n) + " ]", st);
         return;
     }
     if (n->type == "input") {
@@ -431,11 +468,11 @@ void TerminalRenderer::draw(const Layout& layout, NodeHandle h, float originX, f
         std::string value = prop(n->props, "value");
         Style field = st;
         field.underline = true;
-        put(canvas, content.left, content.top, area, std::string(static_cast<std::size_t>(contentW), ' '), field);
+        put(frame, content.left, content.top, area, std::string(static_cast<std::size_t>(contentW), ' '), field);
         if (value.empty() && h != focused_) {
             Style hint = field;
             hint.dim = true;
-            put(canvas, content.left, content.top, area, prop(n->props, "placeholder"), hint);
+            put(frame, content.left, content.top, area, prop(n->props, "placeholder"), hint);
         } else {
             // Keep the end of the text (and the cursor) visible.
             std::string shown = value + (h == focused_ ? "_" : "");
@@ -444,7 +481,7 @@ void TerminalRenderer::draw(const Layout& layout, NodeHandle h, float originX, f
             std::size_t skip = chars.size() > room ? chars.size() - room : 0;
             std::string tail;
             for (std::size_t i = skip; i < chars.size(); ++i) tail += chars[i];
-            put(canvas, content.left, content.top, area, tail, field);
+            put(frame, content.left, content.top, area, tail, field);
         }
         return;
     }
@@ -454,17 +491,15 @@ void TerminalRenderer::draw(const Layout& layout, NodeHandle h, float originX, f
         for (int yy = visible.top; yy < visible.bottom; ++yy) {
             Style blank;
             blank.bg = st.bg;
-            put(canvas, visible.left, yy, visible,
+            put(frame, visible.left, yy, visible,
                 std::string(static_cast<std::size_t>(std::max(visible.right - visible.left, 0)), ' '), blank);
         }
     }
     if (!st.bg.empty() || st.reverse) {
         for (int yy = visible.top; yy < visible.bottom; ++yy) {
-            put(canvas, visible.left, yy, visible, "", st);  // make sure the row exists
-            if (yy < 0 || yy >= static_cast<int>(canvas.size())) continue;
-            auto& line = canvas[static_cast<std::size_t>(yy)];
-            for (int xx = std::max(visible.left, 0); xx < std::min(visible.right, width_); ++xx) {
-                auto& cell = line[static_cast<std::size_t>(xx)].style;
+            if (yy < 0 || yy >= static_cast<int>(screen.extent(0))) continue;
+            for (int xx = std::max(visible.left, 0); xx < std::min(visible.right, static_cast<int>(screen.extent(1))); ++xx) {
+                auto& cell = screen[static_cast<std::size_t>(yy), static_cast<std::size_t>(xx)].style;
                 if (!st.bg.empty()) cell.bg = st.bg;
                 if (st.reverse) cell.reverse = true;
                 if (!st.fg.empty() && cell.fg.empty()) cell.fg = st.fg;
@@ -478,7 +513,7 @@ void TerminalRenderer::draw(const Layout& layout, NodeHandle h, float originX, f
     Rect inner = clip;
     if (b || prop(n->props, "overflow") == "hidden")
         inner = Rect{x0 + b, y0 + b, x0 + w - b, y0 + hgt - b}.intersect(clip);
-    for (NodeHandle c : n->children) draw(layout, c, fx, fy, st, inner, canvas);
+    for (NodeHandle c : n->children) draw(layout, c, fx, fy, st, inner, frame);
 
     if (b && w >= 2 && hgt >= 2) {
         Style bs = st;
@@ -486,7 +521,10 @@ void TerminalRenderer::draw(const Layout& layout, NodeHandle h, float originX, f
         int right = x0 + w;
         int bottom = y0 + hgt - 1;
         std::string title = prop(n->props, "title");
-        std::string topLine = "┌";
+        // Box drawing (UTF-8) or ASCII for other locales.
+        std::string_view tl = unicode_ ? "┌" : "+", tr = unicode_ ? "┐" : "+", bl = unicode_ ? "└" : "+",
+                         br = unicode_ ? "┘" : "+", hz = unicode_ ? "─" : "-", vt = unicode_ ? "│" : "|";
+        std::string topLine(tl);
         int used = 1;
         if (!title.empty() && w > 6) {
             auto chars = detail::utf8Split(title);
@@ -494,28 +532,28 @@ void TerminalRenderer::draw(const Layout& layout, NodeHandle h, float originX, f
             if (chars.size() > room) chars.resize(room);
             std::string t;
             for (auto c : chars) t += c;
-            topLine += "─ " + t + " ";
+            topLine += std::string(hz) + " " + t + " ";
             used += 3 + static_cast<int>(chars.size());
         }
-        for (; used < w - 1; ++used) topLine += "─";
-        topLine += "┐";
-        put(canvas, x0, y0, clip, topLine, bs);
+        for (; used < w - 1; ++used) topLine += hz;
+        topLine += tr;
+        put(frame, x0, y0, clip, topLine, bs);
         for (int yy = y0 + 1; yy < bottom; ++yy) {
-            put(canvas, x0, yy, clip, "│", bs);
-            put(canvas, right - 1, yy, clip, "│", bs);
+            put(frame, x0, yy, clip, vt, bs);
+            put(frame, right - 1, yy, clip, vt, bs);
         }
-        std::string bottomLine = "└";
-        for (int i = 1; i < w - 1; ++i) bottomLine += "─";
-        bottomLine += "┘";
-        put(canvas, x0, bottom, clip, bottomLine, bs);
+        std::string bottomLine(bl);
+        for (int i = 1; i < w - 1; ++i) bottomLine += hz;
+        bottomLine += br;
+        put(frame, x0, bottom, clip, bottomLine, bs);
     }
 }
 
 // ---- painting ----
 
-std::string TerminalRenderer::lineToAnsi(const std::vector<Cell>& line) {
+std::string TerminalRenderer::Frame::lineToAnsi(std::span<const Cell> line) {
     std::size_t end = line.size();
-    while (end > 0 && line[end - 1].ch == " " && line[end - 1].style == Style{}) --end;
+    while (end > 0 && line[end - 1].text() == " " && line[end - 1].style == Style{}) --end;
 
     std::string out;
     Style current;
@@ -532,7 +570,7 @@ std::string TerminalRenderer::lineToAnsi(const std::vector<Cell>& line) {
             out += "m";
             current = c.style;
         }
-        out += c.ch;
+        out += c.text();
     }
     if (current != Style{}) out += "\x1b[0m";
     return out;
@@ -545,9 +583,8 @@ void TerminalRenderer::repaint() {
     YGNodeStyleSetHeight(layout.root, static_cast<float>(height_));
     YGNodeCalculateLayout(layout.root, static_cast<float>(width_), static_cast<float>(height_), YGDirectionLTR);
 
-    Canvas canvas;
-    draw(layout, kRoot, 0, 0, Style{}, Rect{0, 0, width_, height_}, canvas);
-    frame_ = std::move(canvas);
+    frame_ = std::make_unique<Frame>(static_cast<std::size_t>(height_), static_cast<std::size_t>(width_));
+    draw(layout, kRoot, 0, 0, Style{}, Rect{0, 0, width_, height_}, *frame_);
     if (!output_) return;
 
     std::string out;
@@ -558,7 +595,7 @@ void TerminalRenderer::repaint() {
     }
     shown_.resize(static_cast<std::size_t>(height_));
     for (std::size_t i = 0; i < shown_.size(); ++i) {
-        std::string line = i < frame_.size() ? lineToAnsi(frame_[i]) : std::string{};
+        std::string line = i < frame_->rows ? Frame::lineToAnsi(frame_->row(i)) : std::string{};
         if (line == shown_[i]) continue;
         out += "\x1b[" + std::to_string(i + 1) + ";1H" + line + "\x1b[K";
         shown_[i] = std::move(line);
@@ -568,9 +605,10 @@ void TerminalRenderer::repaint() {
 
 std::vector<std::string> TerminalRenderer::frameLines() const {
     std::vector<std::string> lines;
-    for (const auto& row : frame_) {
+    if (!frame_) return lines;
+    for (std::size_t y = 0; y < frame_->rows; ++y) {
         std::string line;
-        for (const auto& cell : row) line += cell.ch;
+        for (const Frame::Cell& cell : frame_->row(y)) line += cell.text();
         while (line.ends_with(' ')) line.pop_back();
         lines.push_back(std::move(line));
     }

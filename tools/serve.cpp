@@ -7,11 +7,12 @@
 // --base and --not-found make it behave like GitHub Pages for a project site:
 //   reactx_serve build/pages/site --base /ReactX/ --not-found 404.html
 #include <csignal>
-#include <iostream>
+#include <print>
 #include <string>
 #include <string_view>
 
 #include "reactx/http.hpp"
+#include "reactx/parse.hpp"
 
 namespace {
 
@@ -22,7 +23,7 @@ void onSignal(int) {
 }
 
 int usage() {
-    std::cerr << "usage: reactx_serve [DIR] [--port N] [--host IP] [--spa] [--base PATH] [--not-found FILE] [--quiet]\n";
+    std::println(stderr, "usage: reactx_serve [DIR] [--port N] [--host IP] [--spa] [--base PATH] [--not-found FILE] [--quiet]");
     return 2;
 }
 
@@ -37,7 +38,14 @@ int main(int argc, char** argv) {
 
     for (int i = 1; i < argc; ++i) {
         std::string_view arg = argv[i];
-        if (arg == "--port" && i + 1 < argc) port = std::stoi(argv[++i]);
+        if (arg == "--port" && i + 1 < argc) {
+            auto parsed = rx::parsePort(argv[++i]);
+            if (!parsed) {
+                std::println(stderr, "{}", parsed.error());
+                return 2;
+            }
+            port = *parsed;
+        }
         else if (arg == "--host" && i + 1 < argc) host = argv[++i];
         else if (arg == "--spa") spa = true;
         else if (arg == "--base" && i + 1 < argc) base = argv[++i];
@@ -61,13 +69,13 @@ int main(int argc, char** argv) {
         std::signal(SIGTERM, onSignal);
 
         std::string at = base.empty() ? "/" : (base.back() == '/' ? base : base + "/");
-        std::cout << "ReactX: serving " << dir << " at http://" << host << ':' << server.port() << at << "  (Ctrl+C to stop)"
-                  << std::endl;
+        std::println("ReactX: serving {} at http://{}:{}{}  (Ctrl+C to stop)", dir, host, server.port(), at);
+        std::fflush(stdout);
         server.run();
         running = nullptr;
-        std::cout << "ReactX: stopped" << std::endl;
+        std::println("ReactX: stopped");
     } catch (const std::exception& e) {
-        std::cerr << e.what() << '\n';
+        std::println(stderr, "{}", e.what());
         return 1;
     }
 }

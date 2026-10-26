@@ -132,6 +132,26 @@ TEST(rejects_malformed_heads) {
     CHECK(!parseRequestHead("GET / HTTP/1.1\r\nNoColon\r\n\r\n"));
 }
 
+TEST(malformed_heads_say_why) {  // std::expected carries the reason
+    auto bad = parseRequestHead("GET / SPDY/3\r\n\r\n");
+    CHECK(!bad && bad.error().status == 400 && bad.error().message == "not HTTP/1.x");
+    CHECK(parseRequestHead("GET / HTTP/1.1\r\nNoColon\r\n\r\n").error().message == "bad header line");
+}
+
+TEST(body_length_from_content_length) {
+    auto with = [](std::string_view value) {
+        auto req = parseRequestHead("POST /x HTTP/1.1\r\nContent-Length: " + std::string(value) + "\r\n\r\n");
+        return bodyLength(*req, 1000);
+    };
+    CHECK(bodyLength(*parseRequestHead("GET / HTTP/1.1\r\n\r\n"), 1000) == 0u);
+    CHECK(with("12") == 12u);
+    CHECK(with("1000") == 1000u);
+    CHECK(with("1001").error().status == 413);
+    CHECK(with("12abc").error() == (HttpError{400, "Content-Length: unexpected characters after the number"}));
+    CHECK(with("-5").error().status == 400);  // std::stoull used to read this as a huge number
+    CHECK(with("99999999999999999999999").error().status == 400);
+}
+
 TEST(mime_types) {
     CHECK(mimeType(".wasm") == "application/wasm");
     CHECK(mimeType(".HTML") == "text/html; charset=utf-8");
@@ -290,6 +310,7 @@ TEST(bad_requests) {
     Running r([](HttpServer&) {});
     CHECK(rawRequest(r.port(), "nonsense\r\n\r\n").starts_with("HTTP/1.1 400"));
     CHECK(rawRequest(r.port(), "POST /x HTTP/1.1\r\nContent-Length: 999999999999\r\n\r\n").starts_with("HTTP/1.1 413"));
+    CHECK(rawRequest(r.port(), "POST /x HTTP/1.1\r\nContent-Length: ten\r\n\r\n").starts_with("HTTP/1.1 400"));
     CHECK(request(r.port(), "GET", "/").status == 404);  // nothing to serve
 }
 

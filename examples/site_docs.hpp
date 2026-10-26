@@ -30,8 +30,8 @@ inline const std::vector<Page>& pages() {
                             "изменения в дерево вносит reconciler.\n\nОдин и тот же код компонентов работает в терминале "
                             "(бэкенд TerminalRenderer) и в браузере (WebAssembly + DOM).", ""},
                 {"Свой проект", "Проще всего начать с CLI: reactx new my-app && cd my-app && reactx dev. Подробнее — в разделе «CLI reactx».", ""},
-                {"Сборка ReactX", "Нужны CMake 3.28+, Ninja и GCC 15+ / Clang 19+ (режим C++26). Для браузера — Emscripten 6+ (переменная EMSDK).",
-                 "cmake --preset debug && cmake --build --preset debug\n"
+                {"Сборка ReactX", "Нужны CMake 3.28+, Ninja и GCC 16+ (стандартная библиотека C++26). Для браузера — Emscripten 6+ (переменная EMSDK).",
+                 "cmake --preset debug -DCMAKE_CXX_COMPILER=g++-16 && cmake --build --preset debug\n"
                  "ctest --preset debug\n\n"
                  "cmake --preset web && cmake --build --preset web    # WebAssembly\n"
                  "./build/debug/reactx_serve build/web                 # http://127.0.0.1:8090/"},
@@ -94,19 +94,29 @@ inline const std::vector<Page>& pages() {
         {
             "safety", "Стандарт C++ и безопасность", "C++26, hardening, предусловия, std::expected, санитайзеры.",
             {
-                {"Режим C++26", "Весь C++23 и части C++26, которые уже есть в GCC 15 и Emscripten: = delete(\"причина\"), "
-                                "static_assert с вычисляемым сообщением, T...[0], _ как имя-заглушка, #embed, std::add_sat, "
-                                "std::span::at. Минимум — C++20.", ""},
+                {"Режим C++26", "Берём из стандартной библиотеки всё, что в ней есть, и не пишем замен тому, чего нет. "
+                                "Везде: std::expected, std::flat_map, std::flat_set, std::format, std::print, std::from_chars. "
+                                "В терминале (GCC 16): std::inplace_vector, std::mdspan, std::text_encoding. В CLI: std::generator. "
+                                "Пока нет в компиляторах и не используются: <hive>, <simd>, <linalg>, <rcu>, <hazard_pointer>.", ""},
+                {"Рефлексия: JSON для структур", "C++26 <meta> (GCC 16): поля структуры становятся ключами JSON, типы "
+                                                 "проверяются, ошибка говорит где. Подключается к цели через reactx::reflection. "
+                                                 "В браузере (Emscripten) рефлексии пока нет.",
+                 "struct Todo { int id; std::string title; bool done; };\n\n"
+                 "rx::json::Value v = rx::json::to(Todo{1, \"Read\", false});\n"
+                 "auto todo = rx::json::from<Todo>(v);   // std::expected<Todo, json::Error>\n"
+                 "// {\"id\": \"7\"} -> field \"id\": expected a number\n\n"
+                 "target_link_libraries(app PRIVATE reactx::reflection)   # CMake"},
                 {"Hardening", "REACTX_HARDENING (по умолчанию включено): выход за границы в v[i], s[i] и front() пустого "
                               "контейнера останавливает программу, а не портит память. Действует и на ваше приложение.",
                  "cmake -B build -DREACTX_HARDENING=OFF   # выключить, если очень нужно"},
-                {"Предусловия", "REACTX_PRE — для ошибок программиста. При нарушении программа печатает условие, файл, строку "
-                                "и функцию и останавливается. Когда компиляторы получат контракты C++26, макрос станет "
-                                "contract_assert без изменений в коде.",
+                {"Предусловия", "REACTX_PRE — для ошибок программиста. На GCC 16 это контракт C++26 (contract_assert, -fcontracts): "
+                                "нарушение печатает функцию, файл, строку и условие и останавливает программу. В браузере, "
+                                "где контрактов нет, макрос делает то же сам.",
                  "#include \"reactx/contract.hpp\"\n\nvoid resize(int w) {\n    REACTX_PRE(w > 0);\n    ...\n}"},
                 {"std::expected", "Там, где сбой — обычное дело (ввод, сеть, файлы), ошибка возвращается значением.",
                  "if (auto v = json::tryParse(body)) use(*v);\nelse std::println(\"bad JSON at {}: {}\", v.error().offset(), v.error().what());\n\n"
-                 "if (auto started = server.tryStart(); !started) std::println(\"{}\", started.error());   // порт занят"},
+                 "if (auto started = server.tryStart(); !started) std::println(\"{}\", started.error());   // порт занят\n\n"
+                 "auto port = rx::parsePort(arg);   // std::expected<int, std::string>: \"80x\" -> ошибка, а не 80"},
                 {"Санитайзеры", "В CI все тесты идут под ASan + UBSan + LeakSanitizer (первая ошибка или утечка роняет сборку) "
                                 "и под ThreadSanitizer. Локально:",
                  "cmake -B build -G Ninja -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=all\"\n"

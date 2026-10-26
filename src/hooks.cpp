@@ -3,8 +3,8 @@
 #include "reactx/contract.hpp"
 
 #include <algorithm>
+#include <flat_set>
 #include <mutex>
-#include <unordered_set>
 
 #include "reactx/memo.hpp"
 
@@ -66,8 +66,8 @@ const ContextValueBase* readContext(const void* id) {
 
 namespace {
 
-std::unordered_set<Component>& memoSet() {
-    static std::unordered_set<Component> set;
+std::flat_set<Component>& memoSet() {  // a handful of components: a sorted array (C++23)
+    static std::flat_set<Component> set;
     return set;
 }
 

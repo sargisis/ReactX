@@ -2,6 +2,7 @@
 // text input (onInput) and keys (onKey).
 #include <algorithm>
 #include <iostream>
+#include <print>
 #include <ranges>
 #include <string>
 #include <vector>
@@ -95,22 +96,22 @@ int main() {
     Root root(renderer);
 
     auto click = [&](const std::string& id) {
-        std::cout << "\n>>> click #" << id << '\n';
+        std::println("\n>>> click #{}", id);
         root.dispatch(*renderer.findByProp("id", id), "onClick");
-        std::cout << renderer.toString();
+        std::print("{}", renderer.toString());
     };
 
-    std::cout << ">>> mount\n";
+    std::println(">>> mount");
     root.render(h(App));
-    std::cout << renderer.toString();
+    std::print("{}", renderer.toString());
 
     click("todo-2");         // toggle
     click("reverse");        // only moves nodes, nothing is recreated
 
-    std::cout << "\n>>> type \"Buy milk\" + Enter\n";
+    std::println("\n>>> type \"Buy milk\" + Enter");
     NodeHandle input = *renderer.findByProp("id", "new");
     root.dispatch(input, "onInput", std::string("Buy milk"));
     root.dispatch(input, "onKey", KeyEvent{"Enter"});
-    std::cout << renderer.toString();
+    std::print("{}", renderer.toString());
     click("todo-1-remove");
 }

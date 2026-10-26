@@ -5,11 +5,12 @@
 //
 // Without --data the todos live in memory until the server stops.
 #include <csignal>
-#include <iostream>
+#include <print>
 #include <string>
 #include <string_view>
 
 #include "reactx/http.hpp"
+#include "reactx/parse.hpp"
 #include "todo_api.hpp"
 
 namespace {
@@ -27,11 +28,18 @@ int main(int argc, char** argv) {
     int port = 8090;
     for (int i = 1; i < argc; ++i) {
         std::string_view arg = argv[i];
-        if (arg == "--port" && i + 1 < argc) port = std::stoi(argv[++i]);
+        if (arg == "--port" && i + 1 < argc) {
+            auto parsed = rx::parsePort(argv[++i]);
+            if (!parsed) {
+                std::println(stderr, "{}", parsed.error());
+                return 2;
+            }
+            port = *parsed;
+        }
         else if (arg == "--data" && i + 1 < argc) data = argv[++i];
         else if (!arg.starts_with("--")) site = arg;
         else {
-            std::cerr << "usage: api_server [SITE_DIR] [--port N] [--data FILE.json]\n";
+            std::println(stderr, "usage: api_server [SITE_DIR] [--port N] [--data FILE.json]");
             return 2;
         }
     }
@@ -47,12 +55,13 @@ int main(int argc, char** argv) {
         running = &server;
         std::signal(SIGINT, onSignal);
         std::signal(SIGTERM, onSignal);
-        std::cout << "ReactX app: http://127.0.0.1:" << server.port() << "/  (site: " << site
-                  << (data.empty() ? ", todos in memory" : ", todos in " + data) << ")" << std::endl;
+        std::println("ReactX app: http://127.0.0.1:{}/  (site: {}, todos {})", server.port(), site,
+                     data.empty() ? "in memory" : "in " + data);
+        std::fflush(stdout);
         server.run();
         running = nullptr;
     } catch (const std::exception& e) {
-        std::cerr << e.what() << '\n';
+        std::println(stderr, "{}", e.what());
         return 1;
     }
 }

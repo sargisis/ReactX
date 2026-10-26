@@ -1,7 +1,8 @@
 #include "reactx/text_renderer.hpp"
 
 #include <algorithm>
-#include <sstream>
+#include <format>
+#include <iterator>
 #include <stdexcept>
 
 namespace rx {
@@ -84,28 +85,29 @@ void TextRenderer::commit() {
     if (log_) *log_ << "  [commit]\n";
 }
 
-void TextRenderer::print(std::ostream& out, NodeHandle h, int depth) const {
+void TextRenderer::print(std::string& out, NodeHandle h, int depth) const {
     const Node& n = nodes_.at(h);
-    std::string indent(static_cast<std::size_t>(depth) * 2, ' ');
+    auto to = std::back_inserter(out);
+    std::string indent = std::format("{:{}}", "", depth * 2);  // depth * 2 spaces
     if (n.isText) {
-        out << indent << '"' << n.text << "\"\n";
+        std::format_to(to, "{}\"{}\"\n", indent, n.text);
         return;
     }
-    out << indent << '<' << n.type;
-    for (const auto& [name, value] : n.props) out << ' ' << name << "=\"" << value << '"';
+    std::format_to(to, "{}<{}", indent, n.type);
+    for (const auto& [name, value] : n.props) std::format_to(to, " {}=\"{}\"", name, value);
     if (n.children.empty()) {
-        out << "/>\n";
+        out += "/>\n";
         return;
     }
-    out << ">\n";
+    out += ">\n";
     for (NodeHandle c : n.children) print(out, c, depth + 1);
-    out << indent << "</" << n.type << ">\n";
+    std::format_to(to, "{}</{}>\n", indent, n.type);
 }
 
 std::string TextRenderer::toString() const {
-    std::ostringstream out;
+    std::string out;
     print(out, kRoot, 0);
-    return out.str();
+    return out;
 }
 
 std::optional<NodeHandle> TextRenderer::findByProp(const std::string& name,

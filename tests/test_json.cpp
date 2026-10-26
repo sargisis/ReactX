@@ -7,6 +7,9 @@
 
 #include "reactx/json.hpp"
 
+#include <map>
+#include <optional>
+
 using namespace rx;
 
 namespace {
@@ -170,6 +173,64 @@ TEST(numbers_print_cleanly) {
     CHECK(json::Value(1e20).dump() == "1e+20");  // beyond 2^53: shortest exact form
     CHECK(json::parse("9007199254740993").dump() == "9007199254740992");  // beyond 2^53: nearest double
 }
+
+// ---- structs with C++26 reflection (native GCC 16; not in the web build) ----
+#if defined(__cpp_lib_reflection)
+
+struct Point {
+    int x = 0;
+    int y = 0;
+    bool operator==(const Point&) const = default;
+};
+
+struct Shape {
+    std::string name;
+    std::vector<Point> points;
+    std::optional<std::string> color;  // may be missing
+    std::map<std::string, double> tags;
+    bool closed = false;
+    std::string default_;  // key "default" (trailing '_' dropped)
+    bool operator==(const Shape&) const = default;
+};
+
+TEST(reflection_struct_to_json) {
+    Shape s{"tri", {{0, 0}, {4, 0}, {0, 3}}, std::nullopt, {{"area", 6}}, true, "yes"};
+    CHECK(json::to(s).dump() ==
+          R"({"closed":true,"color":null,"default":"yes","name":"tri","points":[{"x":0,"y":0},{"x":4,"y":0},{"x":0,"y":3}],"tags":{"area":6}})");
+    CHECK(json::to(Point{1, 2}) == json::object({{"x", 1}, {"y", 2}}));
+    CHECK(json::to(std::vector<int>{1, 2}).dump() == "[1,2]");
+}
+
+TEST(reflection_round_trip) {
+    Shape s{"sq", {{0, 0}, {1, 1}}, "red", {{"w", 1.5}}, false, ""};
+    auto back = json::from<Shape>(json::to(s));
+    CHECK(back && *back == s);
+}
+
+TEST(reflection_reads_and_checks_types) {
+    auto p = json::from<Point>(json::parse(R"({"x": 3, "y": -4, "extra": "ignored"})"));
+    CHECK(p && *p == (Point{3, -4}));
+
+    auto missing = json::from<Point>(json::parse(R"({"x": 3})"));
+    CHECK(!missing && std::string(missing.error().what()) == "missing field \"y\"");
+
+    auto wrongType = json::from<Point>(json::parse(R"({"x": "3", "y": 0})"));
+    CHECK(!wrongType && std::string(wrongType.error().what()) == "field \"x\": expected a number");
+
+    auto fraction = json::from<Point>(json::parse(R"({"x": 1.5, "y": 0})"));
+    CHECK(!fraction && std::string(fraction.error().what()) == "field \"x\": expected an integer that fits");
+
+    // The error says where, even deep inside.
+    auto deep = json::from<Shape>(json::parse(R"({"name": "t", "points": [{"x": 0, "y": 0}, {"x": 1}], "tags": {}, "closed": false, "default": ""})"));
+    CHECK(!deep && std::string(deep.error().what()) == "field \"points\": [1]: missing field \"y\"");
+
+    // std::optional: missing or null -> empty.
+    auto noColor = json::from<Shape>(json::parse(R"({"name": "t", "points": [], "tags": {}, "closed": true, "default": ""})"));
+    CHECK(noColor && !noColor->color);
+    CHECK(!json::from<Point>(json::parse("[1, 2]")));  // not an object
+}
+
+#endif  // __cpp_lib_reflection
 
 }  // namespace
 

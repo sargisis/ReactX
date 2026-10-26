@@ -55,14 +55,21 @@ std::vector<KeyEvent> decodeKeys(std::string_view bytes);
 //
 // input, button and nodes with focusable=true can take focus. The focused
 // node is drawn in reverse video.
+//
+// Borders use box-drawing characters (┌─┐); setUnicode(false) switches to
+// ASCII (+-|) for terminals whose locale isn't UTF-8 — TerminalApp decides
+// with std::text_encoding (C++26).
 class TerminalRenderer : public TextRenderer {
 public:
     using Output = std::function<void(std::string_view)>;
 
     // Without an output the frame is only kept in memory (see frameText()).
     explicit TerminalRenderer(Output output = {});
+    ~TerminalRenderer() override;
 
     void setSize(int width, int height);
+    void setUnicode(bool on);
+    bool unicode() const { return unicode_; }
     int width() const { return width_; }
     int height() const { return height_; }
 
@@ -100,11 +107,9 @@ private:
         bool bold = false, dim = false, underline = false, reverse = false;
         bool operator==(const Style&) const = default;
     };
-    struct Cell {
-        std::string ch = " ";
-        Style style;
-    };
-    using Canvas = std::vector<std::vector<Cell>>;
+    // The cells of one repaint: std::inplace_vector per cell, std::mdspan over
+    // all of them (terminal_renderer.cpp — kept out of this header and the module).
+    struct Frame;
     struct Rect {
         int left = 0, top = 0, right = 0, bottom = 0;  // right/bottom exclusive
         Rect intersect(const Rect& o) const;
@@ -114,19 +119,20 @@ private:
     Style styleOf(const Node& n, Style inherited) const;
     std::string textOf(const Node& n) const;
     void draw(const Layout& layout, NodeHandle h, float originX, float originY, Style style, Rect clip,
-              Canvas& canvas);
-    void put(Canvas& canvas, int x, int y, const Rect& clip, std::string_view text, const Style& style);
+              Frame& frame);
+    void put(Frame& frame, int x, int y, const Rect& clip, std::string_view text, const Style& style);
     bool isFocusable(const Node& n) const;
     void collectFocusable(NodeHandle h, std::vector<NodeHandle>& out) const;
     void fixFocus();
     NodeHandle focusTrap(NodeHandle h) const;
     bool bubbleKey(Root& root, const KeyEvent& key);
-    static std::string lineToAnsi(const std::vector<Cell>& line);
+
 
     Output output_;
     int width_ = 80;
     int height_ = 24;
-    Canvas frame_;
+    bool unicode_ = true;
+    std::unique_ptr<Frame> frame_;  // last repaint
     std::vector<std::string> shown_;  // ANSI lines currently on screen
     bool fullRedraw_ = true;
     NodeHandle focused_ = 0;

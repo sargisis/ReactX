@@ -163,6 +163,60 @@ void quick(const fs::path& tmp) {
     CHECK(contains(reactx({"--version"}, tmp).out, std::string("reactx ") + REACTX_VERSION));
 }
 
+// `reactx update` against a local git repository with release tags (no network).
+void update(const fs::path& tmp) {
+    std::cout << "update picks the newest release (SemVer, not text order)\n";
+    fs::path repo = tmp / "fake-reactx";
+    fs::create_directories(repo);
+    std::string git = "git -C " + repo.string() + " -c user.name=t -c user.email=t@t -c init.defaultBranch=main ";
+    bool ok = std::system((git + "init -q && " + git + "commit -q --allow-empty -m x").c_str()) == 0;
+    for (const char* tag : {"v0.1.0", "v0.2.0", "v0.9.0", "v0.10.0", "v0.11.0-rc.1", "latest", "v1.2"})
+        ok = ok && std::system((git + "tag " + tag).c_str()) == 0;
+    CHECK(ok);
+    if (!ok) return;  // no git here
+
+    fs::path app = tmp / "upd-app";
+    fs::create_directories(app);
+    auto manifest = [&](const std::string& rev) {
+        std::ofstream(app / "reactx.json") << R"({"name": "upd-app", "reactx": {"git": "file://)" + repo.string() +
+                                                  R"(", "rev": ")" + rev + R"("}, "dependencies": {}})";
+    };
+    auto rev = [&] { return rx::json::parse(read(app / "reactx.json"))["reactx"]["rev"].asString(); };
+
+    manifest("v0.2.0");
+    auto check = reactx({"update", "--check"}, app);
+    CHECK(check.code == 0 && contains(check.out, "v0.2.0 → v0.10.0 is available"));
+    CHECK(rev() == "v0.2.0");  // --check changes nothing
+
+    auto up = reactx({"update"}, app);
+    CHECK(up.code == 0 && contains(up.out, "ReactX v0.2.0 → v0.10.0"));
+    CHECK(contains(up.out, "may need changes in your code"));  // a new MINOR while MAJOR is 0
+    CHECK(rev() == "v0.10.0");                                  // not v0.9.0, not the -rc.1
+    CHECK(contains(reactx({"update"}, app).out, "the newest version, nothing to do"));
+
+    auto pre = reactx({"update", "--to", "v0.11.0-rc.1"}, app);  // a pre-release only when asked
+    CHECK(pre.code == 0 && rev() == "v0.11.0-rc.1");
+    auto ahead = reactx({"update"}, app);  // v0.11.0-rc.1 > v0.10.0: never downgrade without --to
+    CHECK(ahead.code == 0 && contains(ahead.out, "newer than the newest release v0.10.0") && rev() == "v0.11.0-rc.1");
+    CHECK(reactx({"update", "--to", "v0.10.0"}, app).code == 0 && rev() == "v0.10.0");
+    auto missing = reactx({"update", "--to", "v3.0.0"}, app);
+    CHECK(missing.code == 1 && contains(missing.out, "there is no release v3.0.0"));
+    CHECK(reactx({"update", "--to", "latest"}, app).code == 1);  // not a version
+    CHECK(reactx({"update", "--sideways"}, app).code == 1);
+
+    manifest("main");  // a branch, not a release: update pins the newest release
+    CHECK(contains(reactx({"update"}, app).out, "\"main\" (not a release) → v0.10.0") && rev() == "v0.10.0");
+
+    std::ofstream(app / "reactx.json") << R"({"name": "upd-app", "reactx": {"path": "/src/reactx"}})";
+    auto local = reactx({"update"}, app);
+    CHECK(local.code == 0 && contains(local.out, "local ReactX sources"));
+
+    manifest("v0.1.0");
+    std::ofstream(app / "reactx.json") << R"({"name": "upd-app", "reactx": {"git": "file:///nowhere/at/all", "rev": "v0.1.0"}})";
+    auto offline = reactx({"update"}, app);
+    CHECK(offline.code == 1 && contains(offline.out, "can't list the releases"));
+}
+
 // ---- slow end-to-end tests ----
 
 std::string httpGet(int port, const std::string& path) {
@@ -202,6 +256,14 @@ void endToEnd(const fs::path& tmp) {
     CHECK(built.code == 0);
     CHECK(fs::exists(tmp / "term-app/build/native/term_app"));
     if (built.code != 0) std::cerr << built.out.substr(built.out.size() > 3000 ? built.out.size() - 3000 : 0) << '\n';
+
+    std::cout << "e2e: a changed reactx.json is picked up (reactx update / add)\n";
+    CHECK(!contains(reactx({"build"}, tmp / "term-app").out, "Configuring done"));  // nothing changed
+    std::this_thread::sleep_for(1100ms);  // a newer modification time than CMakeCache.txt
+    auto text = read(tmp / "term-app/reactx.json");
+    std::ofstream(tmp / "term-app/reactx.json") << text;
+    auto again = reactx({"build"}, tmp / "term-app");
+    CHECK(again.code == 0 && contains(again.out, "Configuring done"));
 
     if (!std::getenv("EMSDK")) {
         std::cout << "e2e: web part SKIPPED (EMSDK is not set)\n";
@@ -257,7 +319,10 @@ int main(int argc, char** argv) {
     TempDir tmp;
     try {
         if (e2e) endToEnd(tmp.path);
-        else quick(tmp.path);
+        else {
+            quick(tmp.path);
+            update(tmp.path);
+        }
     } catch (const std::exception& e) {
         ++failures;
         std::cerr << "  EXCEPTION: " << e.what() << '\n';

@@ -48,11 +48,13 @@ reactx new my-app && cd my-app
 reactx dev        # сборка + сервер на C++ + пересборка и автообновление страницы при каждом сохранении
 reactx build      # build/web/dist — файлы для любого хостинга
 reactx add fmt https://github.com/fmtlib/fmt.git --rev 11.0.2 --target fmt::fmt
+reactx update     # перейти на новейший релиз ReactX
 ```
 
 - `reactx new <имя>` — веб-проект (или `--terminal`): `reactx.json` (манифест, как `package.json`), `CMakeLists.txt`, `CMakePresets.json`, `src/main.cpp`, `public/style.css`. ReactX подключается с GitHub **по тегу релиза** (`"rev": "v0.4.0"`), поэтому проект не сломается от новых изменений в `main`; `--local` — из исходников, из которых собран CLI.
 - `reactx dev` запускает встроенный `rx::net::HttpServer` (тот же, что `reactx_serve`), следит за `src/`, `public/` и манифестом; после удачной пересборки страница перезагружается сама, при ошибке остаётся прошлая версия. Для терминального проекта — собирает и запускает программу.
 - `reactx add` / `reactx remove` — зависимости из git; CMake проекта подключает их через `FetchContent` и связывает с приложением (`--target`).
+- `reactx update` — переводит проект на новейший релиз ReactX: спрашивает у репозитория из `reactx.json` теги (`git ls-remote`), выбирает самый новый по SemVer (без `-rc`), записывает его в `"rev"` и показывает ссылку на CHANGELOG. `--check` только сообщает, есть ли новая версия; `--to v0.2.0` — конкретная (в том числе более старая или `-rc`). Без `--to` версия никогда не понижается. Следующий `reactx build` / `reactx dev` сам перенастроит CMake и скачает новую версию.
 - В своём CMake достаточно одной строки: `reactx_add_app(my_app SOURCES src/main.cpp PUBLIC public)` — нативная сборка даёт программу, веб-сборка — `dist/` с `index.html`, `.js`, `.wasm` и `404.html`.
 
 ## Что есть

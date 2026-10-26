@@ -5,6 +5,7 @@
 //   reactx build [--native]                    build (web: build/web/dist)
 //   reactx add <name> <git-url> [--rev R] [--target T]
 //   reactx remove <name>
+//   reactx update [--check] [--to vX.Y.Z]
 //   reactx help | --version
 //
 // A project is a folder with reactx.json (the manifest), CMakeLists.txt that
@@ -28,11 +29,15 @@
 #include <iterator>
 #include <map>
 #include <optional>
+#include <compare>
+#include <format>
 #include <print>
+#include <ranges>
 #include <stop_token>
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <tuple>
 #include <thread>
 #include <vector>
 #include <version>
@@ -125,6 +130,96 @@ int run(const std::vector<std::string>& args, const fs::path& cwd) {
     return WIFEXITED(status) ? WEXITSTATUS(status) : 128;
 }
 
+// Runs a program (no shell) and returns what it printed to stdout, or why it
+// failed. Its stderr goes to ours, so the user sees git's own messages.
+std::expected<std::string, std::string> capture(const std::vector<std::string>& args) {
+    int fds[2];
+    if (::pipe(fds) != 0) return std::unexpected(std::string("pipe failed"));
+    pid_t pid = ::fork();
+    if (pid < 0) return std::unexpected(std::string("fork failed"));
+    if (pid == 0) {
+        ::dup2(fds[1], STDOUT_FILENO);
+        ::close(fds[0]);
+        ::close(fds[1]);
+        std::vector<char*> argv;
+        for (const auto& a : args) argv.push_back(const_cast<char*>(a.c_str()));
+        argv.push_back(nullptr);
+        ::execvp(argv[0], argv.data());
+        ::_exit(127);
+    }
+    ::close(fds[1]);
+    std::string out;
+    char buf[4096];
+    for (ssize_t n; (n = ::read(fds[0], buf, sizeof buf)) != 0;) {
+        if (n < 0) {
+            if (errno == EINTR) continue;
+            break;
+        }
+        out.append(buf, static_cast<std::size_t>(n));
+    }
+    ::close(fds[0]);
+    int status = 0;
+    while (::waitpid(pid, &status, 0) < 0)
+        if (errno != EINTR) return std::unexpected(std::string("waitpid failed"));
+    if (!WIFEXITED(status)) return std::unexpected(args[0] + " was stopped");
+    if (int code = WEXITSTATUS(status); code != 0)
+        return std::unexpected(code == 127 ? "can't run " + args[0] + " (is it installed?)"
+                                           : args[0] + " failed (exit code " + std::to_string(code) + ")");
+    return out;
+}
+
+// ---- versions (Semantic Versioning: vMAJOR.MINOR.PATCH[-pre]) ----
+
+struct SemVer {
+    int major = 0, minor = 0, patch = 0;
+    std::string pre;  // "rc.1" in v1.0.0-rc.1; empty for a release
+
+    std::string tag() const { return std::format("v{}.{}.{}{}{}", major, minor, patch, pre.empty() ? "" : "-", pre); }
+    bool operator==(const SemVer&) const = default;
+    // A pre-release comes before its release: v1.0.0-rc.1 < v1.0.0.
+    std::strong_ordering operator<=>(const SemVer& o) const {
+        if (auto c = std::tie(major, minor, patch) <=> std::tie(o.major, o.minor, o.patch); c != 0) return c;
+        if (pre.empty() || o.pre.empty()) return pre.empty() <=> o.pre.empty();  // release > pre-release
+        return pre <=> o.pre;
+    }
+};
+
+// "v0.4.0" / "0.4.0" / "v1.0.0-rc.1"; nothing for "main" or a commit hash.
+std::optional<SemVer> parseVersion(std::string_view text) {
+    if (text.starts_with('v')) text.remove_prefix(1);
+    SemVer v;
+    if (auto dash = text.find('-'); dash != std::string_view::npos) {
+        v.pre = std::string(text.substr(dash + 1));
+        text = text.substr(0, dash);
+        if (v.pre.empty()) return std::nullopt;
+    }
+    int* parts[] = {&v.major, &v.minor, &v.patch};
+    for (std::size_t i = 0; i < 3; ++i) {
+        auto dot = text.find('.');
+        if ((i < 2) == (dot == std::string_view::npos)) return std::nullopt;  // exactly two dots
+        auto n = rx::parseNumber<int>(text.substr(0, dot));
+        if (!n || *n < 0) return std::nullopt;
+        *parts[i] = *n;
+        text = i < 2 ? text.substr(dot + 1) : std::string_view{};
+    }
+    return v;
+}
+
+// Release tags of a git repository, newest first (asks the remote; no clone).
+std::expected<std::vector<SemVer>, std::string> remoteVersions(const std::string& url) {
+    return capture({"git", "ls-remote", "--tags", "--refs", url}).transform([](const std::string& out) {
+        std::vector<SemVer> versions;
+        for (auto line : std::views::split(out, '\n')) {  // "<sha>\trefs/tags/v0.4.0"
+            std::string_view l(line.begin(), line.end());
+            auto at = l.find("refs/tags/");
+            if (at == std::string_view::npos) continue;
+            if (auto v = parseVersion(l.substr(at + 10))) versions.push_back(std::move(*v));
+        }
+        std::ranges::sort(versions, std::greater{});
+        return versions;
+    });
+}
+
 // The folder with reactx.json, from the current one upwards.
 fs::path projectRoot() {
     for (fs::path dir = fs::current_path(); ; dir = dir.parent_path()) {
@@ -208,7 +303,7 @@ std::string cmakeName(std::string name) {  // my-app -> my_app (a valid CMake ta
 constexpr std::string_view kCMakeLists = R"cmake(cmake_minimum_required(VERSION 3.24)
 project({{target}} LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 26)   # ReactX needs C++26 mode (GCC 15+, Clang 19+)
+set(CMAKE_CXX_STANDARD 26)   # ReactX needs C++26 (GCC 16+; Emscripten 6+ for the web)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -216,6 +311,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Everything comes from reactx.json: edit it with `reactx add` / `reactx remove`.
 include(FetchContent)
 file(READ ${CMAKE_CURRENT_SOURCE_DIR}/reactx.json REACTX_MANIFEST)
+# Configure again when the manifest changes (reactx update / add / remove).
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/reactx.json)
 
 # ReactX: a local folder ("path") or a git repository ("git" + "rev").
 string(JSON rx_path ERROR_VARIABLE no_path GET "${REACTX_MANIFEST}" reactx path)
@@ -444,10 +541,16 @@ bool isTerminal(const Manifest& manifest) { return manifest.template_ == "termin
 bool build(const fs::path& root, const std::string& preset) {
     if (preset == "web" && !std::getenv("EMSDK"))
         fail("the web build needs Emscripten: install emsdk and `source emsdk_env.sh` (EMSDK is not set)");
-    if (!fs::exists(root / "build" / preset / "CMakeCache.txt")) {
+    fs::path cache = root / "build" / preset / "CMakeCache.txt";
+    std::error_code ec;
+    bool fresh = !fs::exists(cache, ec);
+    // CMake reads reactx.json while configuring: after `reactx update` / `add` /
+    // `remove` configure again, so the new ReactX version and dependencies are fetched.
+    bool manifestChanged = !fresh && fs::last_write_time(root / "reactx.json", ec) > fs::last_write_time(cache, ec);
+    if (fresh || manifestChanged) {
         std::vector<std::string> configure{"cmake", "--preset", preset};
         // ReactX needs GCC 16+ natively; the default `c++` may be older.
-        if (preset == "native" && !std::getenv("CXX") && !std::string_view(REACTX_CXX_COMPILER).empty())
+        if (fresh && preset == "native" && !std::getenv("CXX") && !std::string_view(REACTX_CXX_COMPILER).empty())
             configure.push_back(std::string("-DCMAKE_CXX_COMPILER=") + REACTX_CXX_COMPILER);
         if (run(configure, root) != 0) return false;
     }
@@ -608,6 +711,81 @@ int cmdRemove(const std::vector<std::string>& args) {
     return 0;
 }
 
+// Moves the project to the newest ReactX release (or to --to vX.Y.Z).
+int cmdUpdate(const std::vector<std::string>& args) {
+    bool check = false;
+    std::optional<SemVer> wanted;
+    for (std::size_t i = 0; i < args.size(); ++i) {
+        if (args[i] == "--check") {
+            check = true;
+        } else if (args[i] == "--to" && i + 1 < args.size()) {
+            wanted = parseVersion(args[++i]);
+            if (!wanted) fail("update: --to needs a version like v0.4.0, not " + args[i]);
+        } else {
+            fail("update: unknown option " + args[i] + " (reactx update [--check] [--to vX.Y.Z])");
+        }
+    }
+
+    fs::path root = projectRoot();
+    auto [json, manifest] = readManifest(root);
+    const Source source = manifest.reactx.value_or(Source{});
+    if (source.path) {
+        std::println("This project uses local ReactX sources ({}): update them there (git pull).", *source.path);
+        return 0;
+    }
+    std::string url = source.git.value_or(std::string(kReactXGit));
+    std::string currentRev = source.rev.value_or("main");
+    std::optional<SemVer> current = parseVersion(currentRev);
+
+    std::println("reactx: looking for ReactX releases at {}", url);
+    std::fflush(stdout);
+    auto versions = remoteVersions(url);
+    if (!versions) fail("update: can't list the releases: " + versions.error());
+
+    SemVer target;
+    if (wanted) {
+        if (std::ranges::find(*versions, *wanted) == versions->end()) fail("update: there is no release " + wanted->tag());
+        target = *wanted;
+    } else {
+        auto stable = std::ranges::find_if(*versions, [](const SemVer& v) { return v.pre.empty(); });
+        if (stable == versions->end()) fail("update: " + url + " has no releases (tags vX.Y.Z)");
+        target = *stable;
+    }
+
+    if (!wanted && current && target < *current) {  // e.g. on v0.11.0-rc.1 while the newest release is v0.10.0
+        std::println("ReactX {} is newer than the newest release {}: nothing to do (--to {} goes back)", current->tag(),
+                     target.tag(), target.tag());
+        return 0;
+    }
+    if (current && *current == target) {
+        std::println("ReactX {} — {}", target.tag(), wanted ? "already this version" : "the newest version, nothing to do");
+        return 0;
+    }
+    std::string from = current ? current->tag() : "\"" + currentRev + "\" (not a release)";
+    if (check) {
+        std::println("ReactX {} → {} is available. Run: reactx update", from, target.tag());
+        return 0;
+    }
+
+    json["reactx"]["rev"] = target.tag();
+    if (!json["reactx"].contains("git")) json["reactx"]["git"] = url;
+    writeManifest(root, json);
+
+    std::println("ReactX {} → {}", from, target.tag());
+    if (url.starts_with("https://github.com/")) {
+        std::string repo = url.ends_with(".git") ? url.substr(0, url.size() - 4) : url;
+        std::println("  what changed: {}/blob/{}/CHANGELOG.md", repo, target.tag());
+    }
+    // While MAJOR is 0 a new MINOR may change the API; so does a new MAJOR.
+    if (current && *current < target && (target.major != current->major || (target.major == 0 && target.minor != current->minor)))
+        std::println("  {} may need changes in your code: read the CHANGELOG before building", target.tag());
+    if (current && target < *current) std::println("  note: {} is older than {}", target.tag(), current->tag());
+    if (auto cli = parseVersion(kVersion); cli && *cli < target)
+        std::println("  this reactx tool is {}; rebuild it from {} for the newest templates", cli->tag(), target.tag());
+    std::println("  next: reactx build (or reactx dev) — it fetches {}", target.tag());
+    return 0;
+}
+
 int usage(std::FILE* out, int code) {
     std::print(out, "reactx {} - the ReactX tool\n\n"
            "  reactx new <name> [--terminal] [--local]   create a project (web by default)\n"
@@ -615,6 +793,7 @@ int usage(std::FILE* out, int code) {
            "  reactx build [--native]                    build (web: build/web/dist)\n"
            "  reactx add <name> <git-url> [--rev R] [--target T]   add a dependency\n"
            "  reactx remove <name>                       remove a dependency\n"
+           "  reactx update [--check] [--to vX.Y.Z]      move to the newest ReactX release\n"
            "  reactx help | --version\n", kVersion);
     return code;
 }
@@ -632,6 +811,7 @@ int main(int argc, char** argv) {
         if (command == "build") return cmdBuild(args);
         if (command == "add") return cmdAdd(args);
         if (command == "remove") return cmdRemove(args);
+        if (command == "update") return cmdUpdate(args);
         if (command == "help" || command == "--help" || command == "-h") return usage(stdout, 0);
         if (command == "--version") {
             std::println("reactx {}", kVersion);

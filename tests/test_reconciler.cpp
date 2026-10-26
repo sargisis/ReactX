@@ -621,6 +621,71 @@ TEST(typed_and_props_components_mix) {
     CHECK(has(r, "old y") && has(r, "new=0"));
 }
 
+struct DebounceProps {
+    std::string text;
+};
+
+Element DebounceBox(const DebounceProps& p) {
+    std::string debounced = useDebounce(p.text, std::chrono::milliseconds(50));
+    return h("text", {}, {"debounced=" + debounced});
+}
+
+TEST(use_debounce_hook) {
+    TextRenderer r;
+    Root root(r);
+    root.render(h(DebounceBox, {.text = "initial"}));
+    CHECK(has(r, "debounced=initial"));
+
+    root.render(h(DebounceBox, {.text = "updated"}));
+    // Immediately after update, debounce has not expired yet
+    CHECK(has(r, "debounced=initial"));
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(70));
+    root.flush();
+    CHECK(has(r, "debounced=updated"));
+}
+
+struct StorageProps {
+    std::string key;
+};
+
+std::function<void(std::string)> setStoredOutside;
+
+Element StorageBox(const StorageProps& p) {
+    auto [val, setVal] = useLocalStorage(p.key, std::string("default_val"));
+    setStoredOutside = setVal;
+    return h("text", {}, {"stored=" + val});
+}
+
+TEST(use_local_storage_hook) {
+    TextRenderer r;
+    Root root(r);
+    root.render(h(StorageBox, {.key = "test_key_1"}));
+    CHECK(has(r, "stored=default_val"));
+
+    setStoredOutside("custom_val");
+    root.flush();
+    CHECK(has(r, "stored=custom_val"));
+
+    // Mounting a fresh instance with the same key reads the persisted value
+    TextRenderer r2;
+    Root root2(r2);
+    root2.render(h(StorageBox, {.key = "test_key_1"}));
+    CHECK(has(r2, "stored=custom_val"));
+}
+
+Element WindowSizeBox(const Props&) {
+    WindowSize ws = useWindowSize();
+    return h("text", {}, {std::to_string(ws.width) + "x" + std::to_string(ws.height)});
+}
+
+TEST(use_window_size_hook) {
+    TextRenderer r;
+    Root root(r);
+    root.render(h(WindowSizeBox));
+    CHECK(has(r, "x"));
+}
+
 }  // namespace
 
 int main() {

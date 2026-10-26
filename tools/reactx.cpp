@@ -291,7 +291,9 @@ constexpr std::string_view kWebMain = R"cpp(// {{name}}: a ReactX web app. `reac
 
 using namespace rx;
 
-Element Home(const Props&) {
+struct HomeProps {};
+
+Element Home(const HomeProps&) {
     auto [count, setCount] = useState(0);
     return h("section", {{"className", "page"}}, {
         h("h1", {}, {"Hello, {{name}}!"}),
@@ -302,18 +304,24 @@ Element Home(const Props&) {
     });
 }
 
-Element About(const Props&) {
+struct AboutProps {};
+
+Element About(const AboutProps&) {
     return h("section", {{"className", "page"}}, {
         h("h1", {}, {"About"}),
         h("p", {}, {"Made with ReactX: React-like UI in C++26, compiled to WebAssembly."}),
     });
 }
 
-Element NotFound(const Props&) {
+struct NotFoundProps {};
+
+Element NotFound(const NotFoundProps&) {
     return h("section", {{"className", "page"}}, {h("h1", {}, {"404"}), h("p", {}, {"No page at " + router::useLocation()})});
 }
 
-Element App(const Props&) {
+struct AppProps {};
+
+Element App(const AppProps&) {
     return h("div", {}, {
         h("nav", {{"className", "nav"}}, {
             router::link({.to = "/", .label = "Home"}),
@@ -335,7 +343,11 @@ constexpr std::string_view kTerminalMain = R"cpp(// {{name}}: a ReactX terminal 
 
 using namespace rx;
 
-Element App(const Props& props) {
+struct AppProps {
+    Callback onQuit{};
+};
+
+Element App(const AppProps& props) {
     auto [count, setCount] = useState(0);
     return h("box", {{"flexGrow", 1}, {"justifyContent", "center"}, {"alignItems", "center"}}, {
         h("box", {{"border", true}, {"title", "{{name}}"}, {"padding", 1}, {"gap", 1}, {"color", "cyan"}}, {
@@ -343,7 +355,7 @@ Element App(const Props& props) {
             h("box", {{"direction", "row"}, {"gap", 2}}, {
                 ui::button({.label = "+1", .onClick = [setCount] { setCount([](int c) { return c + 1; }); },
                             .variant = ui::Variant::Primary}),
-                ui::button({.label = "quit", .onClick = props.get<Callback>("onQuit")}),
+                ui::button({.label = "quit", .onClick = props.onQuit}),
             }),
         }),
     });
@@ -352,7 +364,7 @@ Element App(const Props& props) {
 int main() {
     if (!Terminal::isInteractive()) return 1;
     TerminalApp app;
-    app.run(h(App, {{"onQuit", Callback([&app] { app.quit(); })}}));
+    app.run(h(App, {.onQuit = Callback([&app] { app.quit(); })}));
 }
 )cpp";
 

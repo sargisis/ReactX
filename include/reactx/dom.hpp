@@ -22,6 +22,12 @@
 //   onKey     KeyHandler(KeyEvent)       keydown; arrows are "Up", "Down",
 //                                        "Left", "Right" like the terminal
 //   onSubmit  Callback                   form submit (the page does not reload)
+//   onFocus,
+//   onBlur    Callback                   focusin / focusout (they bubble, like React)
+//   onScroll  ScrollHandler(ScrollEvent) the element itself scrolled (doesn't bubble)
+// App-wide keyboard shortcuts: useKeyboard (hooks.hpp).
+// SVG: svg, rect, circle, path, g, ... are created in the SVG namespace;
+// "svg:text", "svg:a", "svg:title", "svg:style" for the tags HTML also has.
 // Events bubble like in React: the target's handler runs, then the handlers of
 // all its ancestors. Elements with the data-rx-self attribute only get clicks
 // on themselves, not on their children (dialog backdrops).

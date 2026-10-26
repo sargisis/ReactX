@@ -719,7 +719,23 @@ bool TerminalRenderer::bubbleKey(Root& root, const KeyEvent& key) {
     return handled;
 }
 
+bool TerminalRenderer::editingText() const {
+    const Node* n = findNode(focused_);
+    return n && !n->isText && n->type == "input";
+}
+
 bool TerminalRenderer::handleKey(Root& root, const KeyEvent& key) {
+    NodeHandle before = focused_;
+    bool handled = handleKeyNow(root, key);
+    if (focused_ != before) {  // Tab / arrows / a handler moved the focus
+        NodeHandle now = focused_;
+        if (before && findNode(before)) root.dispatch(before, "onBlur");
+        if (now && findNode(now)) root.dispatch(now, "onFocus");
+    }
+    return handled;
+}
+
+bool TerminalRenderer::handleKeyNow(Root& root, const KeyEvent& key) {
     if (key.ctrl || key.alt) return bubbleKey(root, key);  // no default action
     if ((key.key == "Tab" && !key.shift) || key.key == "Down") {
         focusNext();

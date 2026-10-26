@@ -119,6 +119,30 @@ TEST(box_with_border_and_title) {
     CHECK(lines[3] == "└──────────┘");
 }
 
+std::vector<std::string> focusLog;
+Element FocusForm(const Props&) {
+    auto log = [](std::string what) { return Callback([what] { focusLog.push_back(what); }); };
+    return h("box", {}, {
+        h("input", {{"id", "name"}, {"value", ""}, {"onFocus", log("name+")}, {"onBlur", log("name-")}}),
+        h("button", {{"id", "ok"}, {"onFocus", log("ok+")}, {"onBlur", log("ok-")}}, {"OK"}),
+    });
+}
+
+TEST(tab_moves_focus_with_focus_and_blur_events) {
+    focusLog.clear();
+    TerminalRenderer r;
+    r.setSize(40, 10);
+    Root root(r);
+    root.render(h(FocusForm));
+    CHECK(r.editingText());  // the input has focus first
+    r.handleKey(root, KeyEvent{.key = "Tab"});
+    CHECK(!r.editingText());  // now the button
+    r.handleKey(root, KeyEvent{.key = "Tab"});
+    CHECK(focusLog == (std::vector<std::string>{"name-", "ok+", "ok-", "name+"}));
+    r.handleKey(root, KeyEvent{.key = "a"});  // typing doesn't move focus: no events
+    CHECK(focusLog.size() == 4);
+}
+
 TEST(ascii_borders_for_non_utf8_locales) {
     TerminalRenderer r;
     r.setSize(20, 10);

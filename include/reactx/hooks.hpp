@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <cstdint>
 #include <format>
 #include <concepts>
 #include <cstddef>
@@ -117,6 +118,8 @@ constexpr auto handlerSignature() {
         return std::type_identity<void(const KeyEvent&)>{};
     else if constexpr (std::is_invocable_v<F&, const std::string&>)
         return std::type_identity<void(const std::string&)>{};
+    else if constexpr (std::is_invocable_v<F&, const ScrollEvent&>)
+        return std::type_identity<void(const ScrollEvent&)>{};
     else static_assert(sizeof(F) == 0, "useCallback: not a ReactX event handler");
 }
 
@@ -330,6 +333,144 @@ std::pair<T, Setter<T>> useLocalStorage(std::string key, T initialValue) {
 
 inline std::pair<std::string, Setter<std::string>> useLocalStorage(std::string key, const char* initial) {
     return useLocalStorage<std::string>(std::move(key), std::string(initial));
+}
+
+// ---- useReducer ----
+
+namespace detail {
+// The action type of a reducer: the second parameter of State(const State&, Action).
+template <class F>
+struct ReducerTraits : ReducerTraits<decltype(&F::operator())> {};
+template <class C, class R, class S, class A>
+struct ReducerTraits<R (C::*)(S, A) const> {
+    using Action = std::decay_t<A>;
+};
+template <class C, class R, class S, class A>
+struct ReducerTraits<R (C::*)(S, A)> {
+    using Action = std::decay_t<A>;
+};
+template <class R, class S, class A>
+struct ReducerTraits<R (*)(S, A)> {
+    using Action = std::decay_t<A>;
+};
+}  // namespace detail
+
+// Sends an action to a reducer (from useReducer). Calls after unmounting
+// are ignored, like setters.
+template <class State, class Action>
+class Dispatch {
+public:
+    Dispatch(Setter<State> set, std::shared_ptr<std::function<State(const State&, const Action&)>> reducer)
+        : set_(std::move(set)), reducer_(std::move(reducer)) {}
+    void operator()(Action action) const {
+        set_([reducer = reducer_, action = std::move(action)](const State& s) { return (*reducer)(s, action); });
+    }
+
+private:
+    Setter<State> set_;
+    std::shared_ptr<std::function<State(const State&, const Action&)>> reducer_;
+};
+
+// State changed by actions, for state with several related fields:
+//   enum class Op { Add, Undo };
+//   auto [s, dispatch] = useReducer([](const Doc& d, Op op) { ...; return next; }, Doc{});
+//   dispatch(Op::Undo);
+// The reducer is a function (State, Action) -> State without side effects; the
+// newest one is used, so it may capture props.
+template <class Reducer, class State>
+auto useReducer(Reducer reducer, State initial) {
+    using Action = typename detail::ReducerTraits<std::decay_t<Reducer>>::Action;
+    using Fn = std::function<State(const State&, const Action&)>;
+    auto [state, set] = useState(std::move(initial));
+    // One shared reducer per component, replaced on every render: the dispatch
+    // function stays valid and always uses the newest reducer.
+    auto& holder = useRef(std::shared_ptr<Fn>{});
+    if (!holder) holder = std::make_shared<Fn>();
+    *holder = Fn(std::move(reducer));
+    return std::pair<State, Dispatch<State, Action>>{state, Dispatch<State, Action>(set, holder)};
+}
+
+// ---- timers ----
+
+// Calls `callback` once, `delay` after the component mounts (or after `delay`
+// changes). std::nullopt switches it off; unmounting cancels it. The newest
+// callback runs, so it may use current state:
+//   useTimeout([setToast] { setToast(std::nullopt); }, toast ? std::optional(5s) : std::nullopt);
+template <class F>
+    requires std::invocable<F&>
+void useTimeout(F callback, std::optional<std::chrono::milliseconds> delay) {
+    auto& latest = useRef(std::shared_ptr<std::function<void()>>{});
+    if (!latest) latest = std::make_shared<std::function<void()>>();
+    *latest = std::function<void()>(std::move(callback));
+    std::int64_t ms = delay ? delay->count() : -1;
+    useEffect(
+        [ms, latest = latest]() -> Cleanup {
+            if (ms < 0) return {};
+            return detail::setTimer(std::chrono::milliseconds(ms), [latest] { (*latest)(); });
+        },
+        deps(ms));
+}
+
+// Calls `callback` every `period` while mounted (std::nullopt pauses it).
+// Natively the period is at least TerminalApp's 100 ms flush.
+template <class F>
+    requires std::invocable<F&>
+void useInterval(F callback, std::optional<std::chrono::milliseconds> period) {
+    auto& latest = useRef(std::shared_ptr<std::function<void()>>{});
+    if (!latest) latest = std::make_shared<std::function<void()>>();
+    *latest = std::function<void()>(std::move(callback));
+    std::int64_t ms = period ? period->count() : -1;
+    useEffect(
+        [ms, latest = latest]() -> Cleanup {
+            if (ms < 0) return {};
+            // Each tick schedules the next one; `cancel` always holds the pending one.
+            auto cancel = std::make_shared<Cleanup>();
+            auto tick = std::make_shared<std::function<void()>>();
+            std::weak_ptr<std::function<void()>> weakTick = tick;
+            *tick = [latest, cancel, weakTick, ms] {
+                if (auto self = weakTick.lock()) *cancel = detail::setTimer(std::chrono::milliseconds(ms), *self);
+                (*latest)();
+            };
+            *cancel = detail::setTimer(std::chrono::milliseconds(ms), *tick);
+            return [cancel, tick] { (*cancel)(); };  // keeps `tick` alive while mounted
+        },
+        deps(ms));
+}
+
+// ---- keyboard shortcuts for the whole app ----
+
+namespace detail {
+// Every key press, wherever the focus is (see useKeyboard). Returns the
+// unsubscribe function.
+Cleanup onGlobalKey(std::function<bool(const KeyEvent&)> handler);
+// Called by the backends for each key press, before the focused element gets
+// it. `editing`: the focus is in a text field — then keys that edit text are
+// not reported. Returns true if a handler consumed the key.
+bool dispatchGlobalKey(const KeyEvent& key, bool editing);
+}  // namespace detail
+
+// Keyboard shortcuts for the whole app (Ctrl+Z, "/", Escape), wherever the
+// focus is — even on no element at all. The handler runs before the focused
+// element's onKey; return true to consume the key (the browser's default
+// action and the element's handlers are skipped), or nothing / false to let it
+// through. While the user types in a text field, keys that edit text
+// (letters, digits, Backspace, Delete, Left/Right, Home/End without Ctrl/Alt)
+// don't reach it, so "/" or "n" shortcuts never steal typing.
+//   useKeyboard([&](const KeyEvent& k) { if (k.ctrl && k.key == "z") { undo(); return true; } return false; });
+template <class F>
+    requires std::invocable<F&, const KeyEvent&>
+void useKeyboard(F handler) {
+    auto& latest = useRef(std::shared_ptr<std::function<bool(const KeyEvent&)>>{});
+    if (!latest) latest = std::make_shared<std::function<bool(const KeyEvent&)>>();
+    *latest = [h = std::move(handler)](const KeyEvent& k) mutable -> bool {
+        if constexpr (std::is_void_v<std::invoke_result_t<F&, const KeyEvent&>>) {
+            h(k);
+            return false;
+        } else {
+            return static_cast<bool>(h(k));
+        }
+    };
+    useEffect([latest = latest] { return detail::onGlobalKey([latest](const KeyEvent& k) { return (*latest)(k); }); }, deps());
 }
 
 }  // namespace rx

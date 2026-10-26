@@ -69,19 +69,31 @@ struct KeyEvent {
     bool operator==(const KeyEvent&) const = default;
 };
 
+// Where a scrolled element is (onScroll), in CSS pixels.
+struct ScrollEvent {
+    int top = 0, left = 0;                 // scrolled so far
+    int scrollHeight = 0, scrollWidth = 0;  // the whole content
+    int clientHeight = 0, clientWidth = 0;  // the visible part
+
+    // Within `margin` pixels of the bottom: time to load more.
+    bool nearBottom(int margin = 100) const { return top + clientHeight >= scrollHeight - margin; }
+    bool operator==(const ScrollEvent&) const = default;
+};
+
 // Event handlers stored in props. They stay in the core and are never sent
 // to the renderer.
-using Callback = std::function<void()>;                         // onClick, onFocus, ...
+using Callback = std::function<void()>;                         // onClick, onFocus, onBlur, ...
 using KeyHandler = std::function<void(const KeyEvent&)>;        // onKey
 using InputHandler = std::function<void(const std::string&)>;   // onInput, onChange
+using ScrollHandler = std::function<void(const ScrollEvent&)>;  // onScroll
 
-// Data a backend sends with an event: nothing, a key press, or text.
-using EventData = std::variant<std::monostate, KeyEvent, std::string>;
+// Data a backend sends with an event: nothing, a key press, text, or a scroll position.
+using EventData = std::variant<std::monostate, KeyEvent, std::string, ScrollEvent>;
 
 using PropValue = std::variant<std::monostate, bool, std::int64_t, double, std::string,
-                               Callback, KeyHandler, InputHandler>;
+                               Callback, KeyHandler, InputHandler, ScrollHandler>;
 
-// True for any event handler type (Callback, KeyHandler, InputHandler).
+// True for any event handler type (Callback, KeyHandler, InputHandler, ScrollHandler).
 bool isHandler(const PropValue& value);
 
 // A component is a plain function: props in, element tree out.
@@ -237,7 +249,7 @@ T Props::get(std::string_view name, T fallback) const {
     } else if constexpr (std::is_same_v<T, std::string>) {
         if (auto p = std::get_if<std::string>(v)) return *p;
     } else if constexpr (std::is_same_v<T, Callback> || std::is_same_v<T, KeyHandler> ||
-                         std::is_same_v<T, InputHandler>) {
+                         std::is_same_v<T, InputHandler> || std::is_same_v<T, ScrollHandler>) {
         if (auto p = std::get_if<T>(v)) return *p;
     } else {
         static_assert(sizeof(T) == 0, "Props::get: unsupported type");

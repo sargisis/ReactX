@@ -3,10 +3,13 @@
 #include "reactx/dom.hpp"
 
 #include "reactx/contract.hpp"
+#include "reactx/parse.hpp"
 
 #include <emscripten.h>
 
 #include <memory>
+#include <ranges>
+#include <string_view>
 #include <string>
 #include <variant>
 #include <vector>
@@ -45,8 +48,18 @@ EM_JS(void, rx_js_root, (double id, const char* selector), {
     Module.rxNodes.set(id, el);
 });
 
+// SVG elements need the SVG namespace. These tags are SVG-only; "svg:text",
+// "svg:a", "svg:title", "svg:style" spell the ones HTML also has.
 EM_JS(void, rx_js_create_element, (double id, const char* tag), {
-    const el = document.createElement(UTF8ToString(tag));
+    if (!Module.rxSvgTags) Module.rxSvgTags = new Set(["svg", "g", "path", "circle", "ellipse", "line", "polyline",
+        "polygon", "rect", "defs", "use", "symbol", "marker", "pattern", "mask", "clipPath", "linearGradient",
+        "radialGradient", "stop", "tspan", "textPath", "foreignObject", "filter", "feGaussianBlur", "feOffset",
+        "feBlend", "feColorMatrix", "feDropShadow", "animate", "animateTransform"]);
+    const t = UTF8ToString(tag);
+    const ns = "http://www.w3.org/2000/svg";
+    const el = t.startsWith("svg:") ? document.createElementNS(ns, t.slice(4))
+             : Module.rxSvgTags.has(t) ? document.createElementNS(ns, t)
+             : document.createElement(t);
     el.__rxId = id;
     Module.rxNodes.set(id, el);
 });
@@ -175,6 +188,19 @@ EM_JS(void, rx_js_listen, (int app, double rootId), {
         send(e, "onKey", keyName(e.key));
     });
     root.addEventListener("submit", function(e) { e.preventDefault(); send(e, "onSubmit", ""); });
+    // Focus: focusin / focusout bubble (like React's onFocus / onBlur).
+    root.addEventListener("focusin", function(e) { send(e, "onFocus", ""); });
+    root.addEventListener("focusout", function(e) { send(e, "onBlur", ""); });
+    // Scroll doesn't bubble: only the scrolled element's onScroll runs (like React).
+    // Captured on the root, so scrolling inside any element of the app is seen.
+    root.addEventListener("scroll", function(e) {
+        const t = e.target;
+        if (!t || t.__rxId === undefined || !Module.rxNodes.has(t.__rxId)) return;
+        const pos = [t.scrollTop, t.scrollLeft, t.scrollHeight, t.scrollWidth, t.clientHeight, t.clientWidth]
+            .map(function(v) { return Math.round(v || 0); }).join(",");
+        Module.ccall("rx_dom_event", "number", ["number", "number", "string", "string", "number", "number", "number"],
+                     [app, t.__rxId, "onScroll", pos, 0, 0, 0]);
+    }, {capture: true, passive: true});
 });
 
 // ---- C++ side ----
@@ -196,6 +222,22 @@ struct DomApp {
 
 }  // namespace
 
+namespace {
+
+// "top,left,scrollHeight,scrollWidth,clientHeight,clientWidth" from the page.
+rx::ScrollEvent scrollEvent(std::string_view text) {
+    int values[6] = {};
+    std::size_t i = 0;
+    for (auto part : std::views::split(text, ',')) {
+        if (i == 6) break;
+        values[i++] = rx::parseNumber<int>(std::string_view(part.begin(), part.end())).value_or(0);
+    }
+    return {.top = values[0], .left = values[1], .scrollHeight = values[2], .scrollWidth = values[3],
+            .clientHeight = values[4], .clientWidth = values[5]};
+}
+
+}  // namespace
+
 // Called from JavaScript for every DOM event. Returns 1 if a handler ran.
 extern "C" EMSCRIPTEN_KEEPALIVE int rx_dom_event(int app, double node, const char* event, const char* text, int ctrl,
                                                   int alt, int shift) {
@@ -208,6 +250,8 @@ extern "C" EMSCRIPTEN_KEEPALIVE int rx_dom_event(int app, double node, const cha
         data = rx::KeyEvent{.key = text, .ctrl = ctrl != 0, .alt = alt != 0, .shift = shift != 0};
     else if (name == "onInput" || name == "onChange")
         data = std::string(text);
+    else if (name == "onScroll")
+        data = scrollEvent(text);
     return root.dispatch(handle, name, data) ? 1 : 0;
 }
 

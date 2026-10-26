@@ -25,6 +25,8 @@ using rx::KeyEvent;
 using rx::Callback;
 using rx::KeyHandler;
 using rx::InputHandler;
+using rx::ScrollHandler;
+using rx::ScrollEvent;
 using rx::EventData;
 using rx::PropValue;
 using rx::Component;

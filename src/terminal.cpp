@@ -207,7 +207,8 @@ void TerminalApp::run(Element element) {
                 running_ = false;
                 break;
             }
-            renderer_->handleKey(*root_, key);
+            // App-wide shortcuts (useKeyboard) first; a consumed key stops there.
+            if (!detail::dispatchGlobalKey(key, renderer_->editingText())) renderer_->handleKey(*root_, key);
             if (!running_) break;
         }
         root_->flush();  // pick up setState calls made outside of events

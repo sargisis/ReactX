@@ -102,8 +102,11 @@ void quick(const fs::path& tmp) {
     CHECK(contains(made.out, "Created my-app (web app)"));
     fs::path app = tmp / "my-app";
     for (const char* f : {"reactx.json", "CMakeLists.txt", "CMakePresets.json", "src/main.cpp", "public/style.css", ".gitignore",
-                          "README.md"})
+                          "README.md", "AGENTS.md"})
         CHECK(fs::exists(app / f));
+    auto agents = read(app / "AGENTS.md");  // notes for AI agents: filled in, web rules, the API link
+    CHECK(contains(agents, "# my-app — notes for coding agents") && contains(agents, "reactx/dom.hpp"));
+    CHECK(contains(agents, "llms.txt") && contains(agents, "keydown") && !contains(agents, "{{"));
     auto manifest = rx::json::parse(read(app / "reactx.json"));
     CHECK(manifest["name"].asString() == "my-app");
     CHECK(manifest["template"].asString() == "web");
@@ -120,6 +123,8 @@ void quick(const fs::path& tmp) {
     CHECK(tui["reactx"]["rev"].asString() == std::string("v") + REACTX_VERSION);  // the release tag, not a branch
     CHECK(!tui.contains("web"));
     CHECK(contains(read(tmp / "tui/src/main.cpp"), "TerminalApp app;"));
+    auto tuiAgents = read(tmp / "tui/AGENTS.md");  // terminal flavour: no browser rules
+    CHECK(contains(tuiAgents, "reactx/terminal.hpp") && !contains(tuiAgents, "keydown") && !contains(tuiAgents, "{{"));
 
     std::cout << "new: bad names and existing folders\n";
     CHECK(reactx({"new", "1abc"}, tmp).code != 0);

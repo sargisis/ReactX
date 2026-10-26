@@ -1,0 +1,144 @@
+# ReactX
+
+> ReactX is a React-like UI framework in C++26: function components, hooks, a reconciler and keyed lists. The same component code renders in a terminal (ANSI + Flexbox on Yoga) and in the browser (WebAssembly + DOM, via Emscripten). It also has a router, `useFetch`, its own JSON library and an HTTP server, all in C++. Projects are created and built with the `reactx` CLI.
+
+Native builds need GCC 16+ (the C++26 standard library); browser builds need Emscripten 6+. Code that also builds for the browser may only use what Emscripten's libc++ has (no reflection, `std::generator`, `<stacktrace>`). Docs: https://sargisis.github.io/ReactX/docs. Source: https://github.com/sargisis/ReactX.
+
+## A complete program
+
+Every file needs the includes, `using namespace rx;` and a `main`. A component alone does not build.
+
+```cpp
+// Browser app (reactx new my-app)
+#include <string>
+#include "reactx/dom.hpp"     // mountDom
+#include "reactx/reactx.hpp"  // Element, h, hooks, context, memo
+using namespace rx;
+
+struct CounterProps {
+    int start = 0;                                      // give every field a default
+    bool operator==(const CounterProps&) const = default;  // only needed for memo<Counter>
+};
+
+Element Counter(const CounterProps& p) {
+    auto [count, setCount] = useState(p.start);
+    return h("div", {{"className", "counter"}}, {
+        h("p", {}, {"Count: " + std::to_string(count)}),
+        h("button", {{"onClick", [setCount] { setCount([](int c) { return c + 1; }); }}}, {"+1"}),
+    });
+}
+
+int main() { mountDom(h(Counter, {.start = 5})); }
+```
+
+```cpp
+// Terminal app (reactx new my-tui --terminal)
+#include "reactx/reactx.hpp"
+#include "reactx/terminal.hpp"  // TerminalApp
+using namespace rx;
+
+struct AppProps { Callback onQuit{}; };
+Element App(const AppProps& p) { return h("box", {{"border", true}}, {h("button", {{"onClick", p.onQuit}}, {"quit"})}); }
+
+int main() {
+    if (!Terminal::isInteractive()) return 1;
+    TerminalApp app;
+    app.run(h(App, {.onQuit = [&app] { app.quit(); }}));
+}
+```
+
+## Elements and components
+
+- `h("tag", {{"prop", value}, ...}, {children...})` — a host element. Prop values: `bool`, numbers, `std::string`, handlers. A string child is a text node. `"key"` in props is the list key.
+- Components are plain functions. Preferred: a props struct — `Element Card(const CardProps&)`, called as `h(Card, {.title = "Hi"})` (C++20 designated initializers; a typo is a compile error). A `key` field becomes the element key; a `children` field (`std::vector<Element>`) receives children: `h(Card, {.title = "Hi"}, {h("p", {}, {"body"})})`. `h(Card)` uses default props. Give every field a default (`{}`), or `-Wextra` warns about omitted fields.
+- Older style, still supported: `Element Card(const Props& p)` with `p.get<std::string>("title", "fallback")`, `p.children()`, called as `h(Card, {{"title", "Hi"}})`.
+- `fragment({children...})`, `text("...")`. DSL (optional, `using namespace rx::dsl;`): `tag::div.cls("card").id("x")("text", tag::button.onClick(f)("OK"))`, custom tags `"my-tag"_tag`.
+- `memo<Card>` skips re-rendering when props are equal (props struct: its `operator==`; `Props`: values with `==`, handlers equal only if from the same `useCallback`).
+
+## Hooks (call at the top level of a component, in the same order every render)
+
+- `auto [v, setV] = useState(initial);` — `setV(x)` or `setV([](const T& old) { return ...; })`; an equal value doesn't re-render. Capture setters by value in lambdas.
+- `useEffect(fn)`, `useEffect(fn, deps(a, b))`, `useEffect(fn, deps())` (once). `fn` may return a cleanup lambda.
+- `T& r = useRef(initial);` — mutable, no re-render. `const auto& x = useMemo([&] { ... }, deps(a));` `useCallback(handler, deps(...))`.
+- Context: `const auto Theme = createContext<std::string>("dark");` → `Theme.provide(value, {children})`, `useContext(Theme)`.
+- `useDebounce(value, 300ms)` — the value after it stopped changing (timers run on the UI thread).
+- `auto [v, setV] = useLocalStorage("key", default);` — `std::string`, `bool` or numbers; localStorage in the browser, memory natively.
+- `WindowSize s = useWindowSize();` — browser window (px) or terminal (cells); re-renders on resize.
+
+## Events
+
+Handler props: `onClick` (`Callback = std::function<void()>`), `onInput` / `onChange` (`InputHandler`, gets the text; a checkbox's onChange gets "true"/"false"), `onKey` (`KeyHandler`, gets `KeyEvent{.key, .ctrl, .alt, .shift}`; keys like "Enter", "Escape", "Up", "a"), `onSubmit` (forms). Events bubble to ancestors. The browser backend listens to click, input, change, keydown and submit only — no focus/blur, mouse move or drag events.
+
+Controlled input: `h("input", {{"value", text}, {"onInput", [setText](const std::string& t) { setText(t); }}})`.
+
+## Browser specifics
+
+Any HTML tag; `className`, `style` (a CSS string), `id`, any attribute. `data-rx-self` on an element: its onClick only fires for clicks on itself (dialog backdrops). `data-rx-trap`: keeps Tab focus inside (dialogs). Styles go in `public/style.css` of the project.
+
+## Terminal specifics
+
+Tags: `box` (flex container, column by default), `text` (wraps; `wrap=false` truncates), `input` (`value`, `placeholder`), `button`. Flexbox props like CSS in cells: `direction`, `justifyContent`, `alignItems`, `flexGrow`, `width`/`height` (number or "50%"), `padding`, `margin`, `gap`, `position`, `overflow`. Look: `border`, `title`, `color`, `bg`, `bold`, `dim`, `underline`. Colors: black red green yellow blue magenta cyan white gray, `bright-<color>`. `input`, `button` and `focusable=true` take focus; Tab/arrows move it, Enter clicks. `trapFocus=true` keeps Tab inside (modals).
+
+## Ready components (`reactx/ui.hpp`, same code in terminal and browser)
+
+`ui::button({.label, .onClick, .variant = ui::Variant::Primary|Danger|Success, .disabled})`, `ui::input({.value, .onChange, .onSubmit, .placeholder, .label})`, `ui::checkbox({.label, .checked, .onToggle})`, `ui::tabs({.tabs = {{.label, .content}}})`, `ui::modal({.title, .open, .onClose, .children})`, `ui::list({.title, .items})` with `ui::listItem({.label, .detail, .selected, .onSelect})`. Theme: `ui::themeProvider(ui::Theme{.accent = "blue"}, {children})`.
+
+## Router (`reactx/router.hpp`, namespace `rx::router`)
+
+`routes({{"/", h(Home)}, {"/todos/:id", h(TodoPage)}, {"*", h(NotFound)}})`, `link({.to = "/todos/7", .label = "Open"})`, `navigate("/x")`, `back()`, hooks `useLocation()`, `useParam("id")`, `useQuery("q")`. Paths never include the `<base href>` (e.g. /ReactX/ on GitHub Pages); the router adds it.
+
+## Data (`reactx/fetch.hpp`, `reactx/json.hpp`)
+
+- `FetchState f = useFetch("/api/todos");` → `f.loading`, `f.ok()`, `f.tryJson()` (`std::expected`), `f.errorText()`, `f.reload()`. `fetch({.method = "POST", .url = "/api/todos", .body = json.dump()}, [](const FetchResponse& r) { ... })`. `setLocalFetch(handler)` answers requests inside the app (no server).
+- JSON: `auto v = json::tryParse(text);` (`std::expected<Value, Error>`), `v["title"].asString()`, `v.get<int>("count", 0)`, `json::object({{"id", 1}})`, `json::array({...})`, `v.dump(2)`.
+- Natively with reflection (link `reactx::reflection` in CMake): `json::to(myStruct)`, `json::from<MyStruct>(value)` → `std::expected<MyStruct, json::Error>` with a path in the error.
+
+## Server (native, `reactx/http.hpp`)
+
+```cpp
+rx::net::HttpServer server("127.0.0.1", 8090);
+server.get("/api/todos/:id", [](const rx::net::Request& r) { return rx::net::Response::json(...); });  // r.pathParam("id"), r.param("q"), r.body
+server.serveDirectory("build/web/dist", /*spaFallback=*/true);
+if (auto ok = server.tryStart(); !ok) std::println("{}", ok.error());
+server.run();
+```
+
+## Rules that keep code correct
+
+- Errors that happen at run time (input, network, files) are values: `std::expected`. `REACTX_PRE(cond)` is only for programmer errors.
+- Numbers from text: `rx::parseNumber<int>(s)` / `rx::parsePort(s)` (`reactx/parse.hpp`), not `std::stoi`.
+- Never change state from another thread. Timers: `useDebounce`, or an effect; the UI thread runs them.
+- Prefer the standard library (`std::format`, `std::print`, `std::ranges`, `std::flat_map`, `std::expected`) over hand-written helpers or extra libraries.
+- Code built for the browser must not use reflection, `std::generator`, `<stacktrace>`, threads, sockets or the file system.
+
+## Testing components (no terminal, no browser)
+
+```cpp
+#include "reactx/reactx.hpp"
+#include "reactx/text_renderer.hpp"
+rx::TextRenderer r;
+rx::Root root(r);
+root.render(h(Counter, {.start = 1}));
+root.dispatch(*r.findByProp("id", "inc"), "onClick");   // or "onInput", std::string("text")
+assert(r.toString().find("Count: 2") != std::string::npos);
+```
+
+## CLI
+
+`reactx new <name> [--terminal]`, `reactx dev [--port N]` (C++ dev server, rebuild + page reload on save), `reactx build` (web: `build/web/dist`), `reactx add <name> <git-url> --rev <tag> --target <cmake-target>`, `reactx remove <name>`, `reactx update [--check] [--to vX.Y.Z]`. Everything about a project is in `reactx.json`.
+
+## Docs
+
+- [Quick start](https://sargisis.github.io/ReactX/docs/start)
+- [Elements and props](https://sargisis.github.io/ReactX/docs/elements)
+- [Hooks](https://sargisis.github.io/ReactX/docs/hooks)
+- [Router](https://sargisis.github.io/ReactX/docs/router)
+- [Data: fetch and JSON](https://sargisis.github.io/ReactX/docs/data)
+- [Server in C++](https://sargisis.github.io/ReactX/docs/server)
+- [C++ standard and safety](https://sargisis.github.io/ReactX/docs/safety)
+
+## Optional
+
+- [README](https://github.com/sargisis/ReactX/blob/main/README.md)
+- [CHANGELOG](https://github.com/sargisis/ReactX/blob/main/CHANGELOG.md)
+- [Examples](https://github.com/sargisis/ReactX/tree/main/examples)

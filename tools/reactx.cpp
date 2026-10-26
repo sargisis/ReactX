@@ -487,6 +487,45 @@ reactx build    # {{output}}
 ```
 )md";
 
+// For AI coding agents working in the project (and for people).
+constexpr std::string_view kAgents = R"md(# {{name}} — notes for coding agents
+
+A [ReactX](https://sargisis.github.io/ReactX/) {{kind}} app in C++26. ReactX is React for C++: function
+components, hooks, a reconciler. The full API and the usual mistakes are in
+https://sargisis.github.io/ReactX/llms.txt — read it before writing code.
+
+## Commands
+
+```sh
+reactx dev      # build, serve at http://127.0.0.1:8090/, rebuild and reload on save
+reactx build    # {{output}}
+reactx add <name> <git-url> --rev <tag> --target <cmake-target>   # a library
+reactx update   # move to the newest ReactX release
+```
+
+Native builds need GCC 16+; web builds need Emscripten (`EMSDK` set).
+
+## Files
+
+- `src/main.cpp` — the app. Every source file includes `reactx/reactx.hpp`
+  ({{backend}}), says `using namespace rx;` and the app has a `main`.
+- `reactx.json` — name, the ReactX version (`"rev"`), dependencies. Change it with
+  `reactx add` / `remove` / `update`, not by editing CMakeLists.txt.
+- `CMakeLists.txt` reads `reactx.json`; it rarely needs changes.
+
+## Rules
+
+- Components take a props struct: `Element Card(const CardProps&)`, `h(Card, {.title = "x"})`.
+  Give every field a default (`{}`); a `key` field is the list key, a `children` field gets children.
+- Hooks only at the top level of a component, in the same order on every render.
+- Runtime errors (input, network, files) are `std::expected` values; numbers from text with
+  `rx::parseNumber` (`reactx/parse.hpp`), not `std::stoi`.
+- Never change component state from another thread; use `useDebounce` / effects for timers.
+- Prefer the C++ standard library to extra dependencies.{{web_rules}}
+- Test components without a browser or terminal: `rx::TextRenderer` + `rx::Root`, then
+  `root.dispatch(node, "onClick")` and check `renderer.toString()`.
+)md";
+
 // ---- commands ----
 
 int cmdNew(const std::vector<std::string>& args) {
@@ -521,7 +560,13 @@ int cmdNew(const std::vector<std::string>& args) {
 
     std::map<std::string, std::string> vars{
         {"name", name}, {"target", cmakeName(name)},
-        {"output", terminal ? "build/native/" + cmakeName(name) : "build/web/dist/ (static files for any host)"}};
+        {"output", terminal ? "build/native/" + cmakeName(name) : "build/web/dist/ (static files for any host)"},
+        {"kind", terminal ? "terminal" : "web"},
+        {"backend", terminal ? "plus `reactx/terminal.hpp` for `TerminalApp`" : "plus `reactx/dom.hpp` for `mountDom`"},
+        {"web_rules", terminal ? ""
+                               : "\n- The browser build has no threads, sockets or files, and no C++26 reflection or"
+                                 "\n  `std::generator`. Only click, input, change, keydown and submit events exist."
+                                 "\n- Styles live in `public/style.css`."}};
     writeManifest(dir, manifest);
     writeOrFail(dir / "CMakeLists.txt", fill(std::string(kCMakeLists), vars));
     writeOrFail(dir / "CMakePresets.json", kPresets);
@@ -530,6 +575,7 @@ int cmdNew(const std::vector<std::string>& args) {
     else fs::create_directories(dir / "public");
     writeOrFail(dir / ".gitignore", kGitignore);
     writeOrFail(dir / "README.md", fill(std::string(kReadme), vars));
+    writeOrFail(dir / "AGENTS.md", fill(std::string(kAgents), vars));
 
     std::println("Created {} ({} app)\n\n  cd {}\n  reactx dev", name, terminal ? "terminal" : "web", name);
     return 0;

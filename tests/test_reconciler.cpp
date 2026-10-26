@@ -493,6 +493,134 @@ TEST(memo_of_different_components_are_different_types) {
     CHECK(has(r, "A0"));  // switched type: a fresh A
 }
 
+// =====================================================================
+// typed components: h(Counter, {.start = 5})
+// =====================================================================
+
+struct CounterProps {
+    int start = 0;
+    std::string label = "count";
+    bool operator==(const CounterProps&) const = default;
+};
+
+int typedRenders = 0;
+Element TypedCounter(const CounterProps& p) {
+    ++typedRenders;
+    auto [n, setN] = useState(p.start);
+    return h("box", {}, {
+        h("text", {{"id", "t"}}, {p.label + "=" + std::to_string(n)}),
+        h("button", {{"id", "inc"}, {"onClick", [setN] { setN([](int v) { return v + 1; }); }}}),
+    });
+}
+
+struct OtherProps {
+    int start = 0;
+};
+Element OtherCounter(const OtherProps& p) {  // same struct shape, different component
+    auto [n, setN] = useState(p.start * 100);
+    (void)setN;
+    return h("text", {{"id", "t"}}, {"other=" + std::to_string(n)});
+}
+
+TEST(typed_component_renders_its_struct) {
+    TextRenderer r;
+    Root root(r);
+    root.render(h(TypedCounter, {.start = 5, .label = "clicks"}));
+    CHECK(has(r, "clicks=5"));
+    root.render(h(TypedCounter, {.start = 2}));  // defaults for the rest
+    CHECK(has(r, "count=5"));                   // state kept: same component
+}
+
+TEST(typed_component_keeps_state_and_sees_new_props) {
+    TextRenderer r;
+    Root root(r);
+    root.render(h(TypedCounter, {.label = "a"}));
+    root.dispatch(byId(r, "inc"), "onClick");
+    CHECK(has(r, "a=1"));
+    root.render(h(TypedCounter, {.label = "b"}));
+    CHECK(has(r, "b=1"));
+}
+
+TEST(different_typed_components_are_different_types) {
+    TextRenderer r;
+    Root root(r);
+    root.render(h(TypedCounter, {.start = 1}));
+    root.dispatch(byId(r, "inc"), "onClick");
+    CHECK(has(r, "count=2"));
+    root.render(h(OtherCounter, {.start = 1}));  // new component: new state
+    CHECK(has(r, "other=100"));
+    root.render(h(TypedCounter, {.start = 7}));
+    CHECK(has(r, "count=7"));
+}
+
+struct CardProps {
+    std::string title{};
+    std::vector<Element> children{};
+};
+Element Card(const CardProps& p) {
+    std::vector<Element> body{h("text", {}, {p.title})};
+    for (const auto& c : p.children) body.push_back(c);
+    return h("box", {{"id", "card"}}, std::move(body));
+}
+
+TEST(typed_component_gets_children_through_its_struct) {
+    TextRenderer r;
+    Root root(r);
+    root.render(h(Card, {.title = "Hi"}, {h("text", {}, {"first"}), h("text", {}, {"second"})}));
+    CHECK(has(r, "\"Hi\"") && has(r, "\"first\"") && has(r, "\"second\""));
+}
+
+struct ItemProps {
+    std::string key{};  // becomes the element key
+    std::string text{};
+};
+Element Item(const ItemProps& p) {
+    auto [clicks, setClicks] = useState(0);
+    return h("button", {{"id", p.key}, {"onClick", [setClicks] { setClicks([](int c) { return c + 1; }); }}},
+             {p.text + ":" + std::to_string(clicks)});
+}
+
+TEST(typed_key_field_keeps_state_when_items_move) {
+    TextRenderer r;
+    Root root(r);
+    root.render(h("box", {}, {h(Item, {.key = "a", .text = "A"}), h(Item, {.key = "b", .text = "B"})}));
+    root.dispatch(byId(r, "b"), "onClick");
+    CHECK(has(r, "B:1"));
+    root.render(h("box", {}, {h(Item, {.key = "b", .text = "B"}), h(Item, {.key = "a", .text = "A"})}));
+    CHECK(has(r, "B:1") && has(r, "A:0"));  // state moved with the key
+}
+
+TEST(memo_of_a_typed_component_compares_structs) {
+    TextRenderer r;
+    Root root(r);
+    typedRenders = 0;
+    root.render(h("box", {}, {h(memo<TypedCounter>, {.start = 1})}));
+    CHECK(typedRenders == 1);
+    root.render(h("box", {}, {h(memo<TypedCounter>, {.start = 1})}));  // equal struct: skipped
+    CHECK(typedRenders == 1);
+    root.render(h("box", {}, {h(memo<TypedCounter>, {.start = 1, .label = "x"})}));
+    CHECK(typedRenders == 2 && has(r, "x=1"));
+    root.dispatch(byId(r, "inc"), "onClick");  // own state still renders it
+    CHECK(typedRenders == 3 && has(r, "x=2"));
+
+    // Without memo the same parent render calls it every time.
+    root.render(h("box", {}, {h(TypedCounter, {.start = 1})}));
+    int before = typedRenders;
+    root.render(h("box", {}, {h(TypedCounter, {.start = 1})}));
+    CHECK(typedRenders == before + 1);
+}
+
+Element OldStyle(const Props& p) { return h("text", {}, {"old " + p.get<std::string>("name")}); }
+
+TEST(typed_and_props_components_mix) {
+    TextRenderer r;
+    Root root(r);
+    root.render(h("box", {}, {h(OldStyle, {{"name", "x"}}), h(TypedCounter, {.label = "new"})}));
+    CHECK(has(r, "old x") && has(r, "new=0"));
+    root.render(h("box", {}, {h(TypedCounter, {.label = "new"}), h(OldStyle, {{"name", "y"}})}));
+    CHECK(has(r, "old y") && has(r, "new=0"));
+}
+
 }  // namespace
 
 int main() {

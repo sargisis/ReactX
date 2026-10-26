@@ -89,4 +89,21 @@ bool isMemo(Component component) {
     return memoSet().contains(component);
 }
 
+namespace {
+std::flat_set<std::uintptr_t>& typedMemoSet() {
+    static std::flat_set<std::uintptr_t> set;
+    return set;
+}
+}  // namespace
+
+void registerTypedMemo(std::uintptr_t component) {
+    std::scoped_lock lock(memoMutex());
+    typedMemoSet().insert(component);
+}
+
+bool isTypedMemo(std::uintptr_t component) {
+    std::scoped_lock lock(memoMutex());
+    return typedMemoSet().contains(component);
+}
+
 }  // namespace rx::detail

@@ -66,6 +66,13 @@ inline const std::vector<Page>& pages() {
                 {"Зависимости", "reactx add записывает git-репозиторий в reactx.json; CMake проекта подключает его через "
                                 "FetchContent, а --target сразу связывает библиотеку с приложением.",
                  "reactx add fmt https://github.com/fmtlib/fmt.git --rev 11.0.2 --target fmt::fmt\nreactx remove fmt"},
+                {"reactx update", "Переводит проект на новейший релиз ReactX: находит теги в репозитории из reactx.json, "
+                                  "выбирает самый новый по SemVer (без -rc) и записывает его в rev. --check только проверяет, "
+                                  "--to — конкретная версия. Следующий reactx build скачает её сам.",
+                 "reactx update --check   # ReactX v0.3.0 → v0.4.0 is available\n"
+                 "reactx update           # записывает v0.4.0 в reactx.json\n"
+                 "reactx update --to v0.3.0\n"
+                 "reactx build"},
                 {"reactx.json", "Всё, что нужно проекту, в одном файле.",
                  "{\n"
                  "  \"name\": \"my-app\",\n"
@@ -87,8 +94,9 @@ inline const std::vector<Page>& pages() {
                                   "из него генерируется reactx/version.hpp.",
                  "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"0.4.0\"\n"
                  "static_assert(REACTX_VERSION_MAJOR == 0);"},
-                {"Обновиться", "Поменяйте rev в reactx.json на новый тег и пересоберите проект.",
-                 "\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.4.0\" }"},
+                {"Обновиться", "reactx update находит новейший релиз и записывает его в reactx.json; reactx build скачивает его. "
+                               "Вручную — поменяйте rev на новый тег.",
+                 "reactx update\n# или в reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.4.0\" }"},
             },
         },
         {

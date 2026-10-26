@@ -153,3 +153,11 @@ using rx::ui::listItem;
 using rx::ui::list;
 
 }  // namespace rx::ui
+
+export namespace rx::dsl {
+using rx::dsl::TagBuilder;
+using rx::dsl::operator""_tag;
+namespace tag {
+using namespace rx::dsl::tag;
+}
+}  // namespace rx::dsl

@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "reactx/dsl.hpp"
 #include "reactx/reactx.hpp"
 #include "reactx/text_renderer.hpp"
 #include "reactx/contract.hpp"
@@ -482,6 +483,35 @@ TEST(use_context_outside_component_throws) {
         threw = true;
     }
     CHECK(threw);
+}
+// TEST: DSL tag builder and literals
+TEST(dsl_tag_builder_and_literals) {
+    using namespace rx::dsl;
+    // Short DSL syntax with chaining and variadic children
+    Element el = tag::div.cls("card").id("box1")(
+        tag::h1("Title"),
+        tag::p.cls("lead")("Some text"),
+        "custom_tag"_tag.cls("fancy")("inner text")
+    );
+
+    CHECK(el.type == "div");
+    CHECK(el.props.get<std::string>("className") == "card");
+    CHECK(el.props.get<std::string>("id") == "box1");
+    CHECK(el.props.children().size() == 3);
+
+    const auto& children = el.props.children();
+    CHECK(children[0].type == "h1");
+    CHECK(children[1].type == "p");
+    CHECK(children[1].props.get<std::string>("className") == "lead");
+    CHECK(children[2].type == "custom_tag");
+    CHECK(children[2].props.get<std::string>("className") == "fancy");
+
+    // Rendering via TextRenderer
+    TextRenderer r;
+    Root root(r);
+    root.render(el);
+    CHECK(r.toString().find("Title") != std::string::npos);
+    CHECK(r.toString().find("Some text") != std::string::npos);
 }
 
 }  // namespace

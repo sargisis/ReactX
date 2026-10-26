@@ -4,6 +4,10 @@
 
 ## [Не выпущено]
 
+## [0.2.0] — 2026-10-26
+
+Безопасность и современный C++.
+
 ### Изменено
 
 - **Режим C++26** (было C++20): нужен GCC 15+ или Clang 19+ (Emscripten 6+); шаблон `reactx new` тоже переходит на C++26. Используем весь C++23 и реализованные части C++26.
@@ -38,5 +42,6 @@
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.1.0...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/sargisis/ReactX/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/sargisis/ReactX/releases/tag/v0.1.0

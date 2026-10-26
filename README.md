@@ -2,7 +2,7 @@
 
 **Сайт с документацией и демо: https://sargisis.github.io/ReactX/** — сам сайт тоже написан на ReactX (C++26 → WebAssembly).
 
-Текущая версия — **0.1.0** ([CHANGELOG.md](CHANGELOG.md)). Версии по [SemVer](https://semver.org/lang/ru/): `MAJOR.MINOR.PATCH`, теги `vX.Y.Z`; номер записан только в `project(ReactX VERSION ...)` и доступен в коде как `rx::version()` (`reactx/version.hpp`).
+Текущая версия — **0.2.0** ([CHANGELOG.md](CHANGELOG.md)). Версии по [SemVer](https://semver.org/lang/ru/): `MAJOR.MINOR.PATCH`, теги `vX.Y.Z`; номер записан только в `project(ReactX VERSION ...)` и доступен в коде как `rx::version()` (`reactx/version.hpp`).
 
 React-подобный UI-фреймворк на современном C++ (режим C++26: весь C++23 и реализованные части C++26; минимум — C++20) с подключаемым бэкендом отрисовки.
 
@@ -46,7 +46,7 @@ reactx build      # build/web/dist — файлы для любого хости
 reactx add fmt https://github.com/fmtlib/fmt.git --rev 11.0.2 --target fmt::fmt
 ```
 
-- `reactx new <имя>` — веб-проект (или `--terminal`): `reactx.json` (манифест, как `package.json`), `CMakeLists.txt`, `CMakePresets.json`, `src/main.cpp`, `public/style.css`. ReactX подключается с GitHub **по тегу релиза** (`"rev": "v0.1.0"`), поэтому проект не сломается от новых изменений в `main`; `--local` — из исходников, из которых собран CLI.
+- `reactx new <имя>` — веб-проект (или `--terminal`): `reactx.json` (манифест, как `package.json`), `CMakeLists.txt`, `CMakePresets.json`, `src/main.cpp`, `public/style.css`. ReactX подключается с GitHub **по тегу релиза** (`"rev": "v0.2.0"`), поэтому проект не сломается от новых изменений в `main`; `--local` — из исходников, из которых собран CLI.
 - `reactx dev` запускает встроенный `rx::net::HttpServer` (тот же, что `reactx_serve`), следит за `src/`, `public/` и манифестом; после удачной пересборки страница перезагружается сама, при ошибке остаётся прошлая версия. Для терминального проекта — собирает и запускает программу.
 - `reactx add` / `reactx remove` — зависимости из git; CMake проекта подключает их через `FetchContent` и связывает с приложением (`--target`).
 - В своём CMake достаточно одной строки: `reactx_add_app(my_app SOURCES src/main.cpp PUBLIC public)` — нативная сборка даёт программу, веб-сборка — `dist/` с `index.html`, `.js`, `.wasm` и `404.html`.

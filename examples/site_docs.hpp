@@ -53,7 +53,7 @@ inline const std::vector<Page>& pages() {
                  "cmake --install build/release --prefix ~/.local     # ~/.local/bin/reactx"},
                 {"Новый проект", "reactx new создаёт папку с reactx.json (манифест, как package.json), CMakeLists.txt, "
                                  "CMakePresets.json и src/main.cpp. ReactX подключается с GitHub по тегу релиза "
-                                 "(например, v0.1.0), а не по ветке, поэтому проект не сломается от новых изменений; --local — из исходников, "
+                                 "(например, v0.2.0), а не по ветке, поэтому проект не сломается от новых изменений; --local — из исходников, "
                                  "из которых собран сам CLI. --terminal — терминальное приложение вместо веба.",
                  "reactx new my-app\ncd my-app"},
                 {"reactx dev", "Собирает веб-версию, запускает встроенный сервер на C++ (тот же, что reactx_serve) и следит за "
@@ -70,7 +70,7 @@ inline const std::vector<Page>& pages() {
                  "{\n"
                  "  \"name\": \"my-app\",\n"
                  "  \"template\": \"web\",\n"
-                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.1.0\" },\n"
+                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.2.0\" },\n"
                  "  \"dependencies\": { \"fmt\": { \"git\": \"...\", \"rev\": \"11.0.2\", \"target\": \"fmt::fmt\" } },\n"
                  "  \"web\": { \"base\": \"/\" }\n"
                  "}"},
@@ -85,10 +85,10 @@ inline const std::vector<Page>& pages() {
                            "Что изменилось в каждой версии — в CHANGELOG.md.", ""},
                 {"Версия в коде", "Номер версии записан в одном месте — project(ReactX VERSION ...) в CMakeLists.txt; "
                                   "из него генерируется reactx/version.hpp.",
-                 "#include \"reactx/version.hpp\"\n\nstd::cout << rx::version();   // \"0.1.0\"\n"
+                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"0.2.0\"\n"
                  "static_assert(REACTX_VERSION_MAJOR == 0);"},
                 {"Обновиться", "Поменяйте rev в reactx.json на новый тег и пересоберите проект.",
-                 "\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.2.0\" }"},
+                 "\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.3.0\" }"},
             },
         },
         {

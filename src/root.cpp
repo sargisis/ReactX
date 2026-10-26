@@ -8,7 +8,10 @@ Root::Root(Renderer& renderer) : impl_(std::make_unique<detail::Reconciler>(rend
 Root::~Root() = default;
 
 void Root::render(Element element) { impl_->render(std::move(element)); }
-void Root::flush() { impl_->flush(); }
+void Root::flush() {
+    detail::runDueTimers();  // native useDebounce & co. (the browser runs them itself)
+    impl_->flush();
+}
 bool Root::dispatch(NodeHandle node, const std::string& event, const EventData& data) {
     return impl_->dispatch(node, event, data);
 }

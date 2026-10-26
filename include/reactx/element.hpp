@@ -159,6 +159,10 @@ Element h(Component component, PropList props = {}, std::vector<Element> childre
 template <class P>
     requires(!std::same_as<P, Props>)
 Element h(TypedComponent<P> component, P props);
+// h(Home) — a typed component with default props (P{}), e.g. a route page.
+template <class P>
+    requires(!std::same_as<P, Props>) && std::default_initializable<P>
+Element h(TypedComponent<P> component);
 template <class P>
     requires(!std::same_as<P, Props>) && requires(P p) { p.children = std::vector<Element>{}; }
 Element h(TypedComponent<P> component, P props, std::vector<Element> children);
@@ -206,6 +210,12 @@ template <class P>
     requires(!std::same_as<P, Props>)
 Element h(TypedComponent<P> component, P props) {
     return detail::makeTyped(component, std::move(props));
+}
+
+template <class P>
+    requires(!std::same_as<P, Props>) && std::default_initializable<P>
+Element h(TypedComponent<P> component) {
+    return detail::makeTyped(component, P{});
 }
 
 template <class P>

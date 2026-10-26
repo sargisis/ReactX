@@ -116,6 +116,7 @@ if(EMSCRIPTEN)
   add_library(reactx
     src/element.cpp
     src/hooks.cpp
+    src/utility_hooks.cpp
     src/reconciler.cpp
     src/root.cpp
     src/text_renderer.cpp
@@ -265,6 +266,7 @@ endif()
 add_library(reactx
   src/element.cpp
   src/hooks.cpp
+  src/utility_hooks.cpp
   src/reconciler.cpp
   src/root.cpp
   src/text_renderer.cpp

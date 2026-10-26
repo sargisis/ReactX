@@ -2,6 +2,20 @@
 
 Все заметные изменения ReactX. Версии — [Semantic Versioning](https://semver.org/lang/ru/): `MAJOR.MINOR.PATCH`, теги в git — `vMAJOR.MINOR.PATCH`. Пока `MAJOR = 0`, API может меняться: несовместимые изменения поднимают `MINOR`, исправления — `PATCH`.
 
+## [Не выпущено]
+
+### Исправлено
+
+- **Браузерная сборка снова собирается**: в `v0.3.0` `useDebounce` вызывал `detail::setTimeoutJs` до его объявления, и ни одна веб-программа (в том числе проекты из `reactx new`, которые подключают тег `v0.3.0`) не компилировалась.
+- **`useDebounce` без потоков**: нативно он запускал отсоединённый `std::jthread`, который менял состояние параллельно с отрисовкой (гонка данных, ThreadSanitizer в CI). Теперь таймер срабатывает в потоке интерфейса: в браузере — `setTimeout`, нативно — на ближайшем `Root::flush()` (`TerminalApp` вызывает его каждые 100 мс). Новое значение или размонтирование отменяет таймер.
+- **`useWindowSize` обновляется**: в браузере — по событию `resize`, в терминале — когда `TerminalApp` замечает новый размер. Раньше размер читался один раз.
+- **`useLocalStorage`**: числа читаются через `rx::parseNumber` (без `std::stoll` и исключений), сохранённое значение читается один раз при монтировании, неподдерживаемый тип — ошибка компиляции с объяснением, а не молча несохраняемое значение.
+- **Шаблон `reactx new` (веб) компилируется**: `h(Home)` для компонента со структурой props берёт props по умолчанию (`P{}`), как маршруты `router::routes({{"/", h(Home)}})`.
+
+### Добавлено
+
+- **Fluent DSL** (`reactx/dsl.hpp`): `tag::div.cls("card")("текст", tag::button.onClick(f)("OK"))`, свои теги — `"my-tag"_tag`.
+
 ## [0.3.0] — 2026-10-26
 
 Типизированные props, C++26 рефлексия и контракты, новые хуки (`useDebounce`, `useLocalStorage`, `useWindowSize`).
@@ -66,6 +80,7 @@
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.2.0...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/sargisis/ReactX/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/sargisis/ReactX/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/sargisis/ReactX/releases/tag/v0.1.0

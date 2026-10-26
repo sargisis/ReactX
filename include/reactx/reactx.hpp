@@ -2,6 +2,7 @@
 
 // Single include for the whole framework.
 #include "reactx/context.hpp"
+#include "reactx/dsl.hpp"
 #include "reactx/element.hpp"
 #include "reactx/hooks.hpp"
 #include "reactx/memo.hpp"

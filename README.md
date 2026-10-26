@@ -6,6 +6,8 @@
 
 **React на C++26. Один и тот же код компонентов — в терминале и в браузере.**
 
+**Русский** · [English](README.en.md)
+
 [![CI](https://github.com/sargisis/ReactX/actions/workflows/pages.yml/badge.svg)](https://github.com/sargisis/ReactX/actions/workflows/pages.yml)
 [![Версия](https://img.shields.io/github/v/tag/sargisis/ReactX?sort=semver&label=%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F&color=f5a524)](CHANGELOG.md)
 [![C++26](https://img.shields.io/badge/C%2B%2B-26-0d0f12?logo=cplusplus)](https://sargisis.github.io/ReactX/docs/safety)

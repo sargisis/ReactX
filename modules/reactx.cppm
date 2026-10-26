@@ -47,6 +47,10 @@ using rx::useRef;
 using rx::useEffect;
 using rx::useMemo;
 using rx::useCallback;
+using rx::useDebounce;
+using rx::useLocalStorage;
+using rx::useWindowSize;
+using rx::WindowSize;
 using rx::deps;
 
 // context.hpp, memo.hpp

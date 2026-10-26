@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <concepts>
 #include <cstddef>
 #include <functional>
@@ -7,6 +8,7 @@
 #include <optional>
 #include <string>
 #include <stdexcept>
+#include <thread>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -242,6 +244,89 @@ std::function<detail::HandlerSig<F>> useCallback(F&& handler, std::tuple<D...> d
         hook.deps = std::move(next);
     }
     return detail::StableFn<Sig>{hook.fn};
+}
+
+// ---- Practical C++20 / C++26 utility hooks ----
+
+// Delays updating the returned value until `delayMs` milliseconds have passed
+// without new changes. Safe against unmounting and race conditions.
+template <class T>
+    requires std::copy_constructible<T>
+T useDebounce(const T& value, std::chrono::milliseconds delay) {
+    auto [debounced, setDebounced] = useState(value);
+    useEffect([value, delay, setDebounced] {
+        auto alive = std::make_shared<bool>(true);
+#if defined(__EMSCRIPTEN__)
+        // Web: set a browser timeout
+        detail::setTimeoutJs(static_cast<int>(delay.count()), [alive, value, setDebounced] {
+            if (*alive) setDebounced(value);
+        });
+#else
+        // Native/terminal: use std::jthread with cancel/stop_token
+        std::jthread worker([alive, value, delay, setDebounced](std::stop_token st) {
+            std::this_thread::sleep_for(delay);
+            if (!st.stop_requested() && *alive) setDebounced(value);
+        });
+        worker.detach();
+#endif
+        return [alive] { *alive = false; };
+    }, deps(value, delay.count()));
+    return debounced;
+}
+
+struct WindowSize {
+    int width = 0;
+    int height = 0;
+    bool operator==(const WindowSize&) const = default;
+};
+
+// Returns current viewport/terminal dimensions and updates when resized.
+WindowSize useWindowSize();
+
+namespace detail {
+#if defined(__EMSCRIPTEN__)
+void setTimeoutJs(int delayMs, std::function<void()> cb);
+#endif
+std::string storageGet(std::string_view key);
+void storageSet(std::string_view key, std::string_view value);
+}  // namespace detail
+
+// Persistent state hook: synchronizes value with localStorage (in the browser)
+// or an in-memory/process-level store (in terminal/CLI).
+// Works with std::string, primitives, or any type convertible to/from string.
+template <class T>
+std::pair<T, Setter<T>> useLocalStorage(std::string key, T initialValue) {
+    T initial = initialValue;
+    std::string saved = detail::storageGet(key);
+    if (!saved.empty()) {
+        if constexpr (std::same_as<T, std::string>) {
+            initial = saved;
+        } else if constexpr (std::integral<T> || std::floating_point<T>) {
+            try {
+                if constexpr (std::same_as<T, bool>) initial = (saved == "true" || saved == "1");
+                else if constexpr (std::integral<T>) initial = static_cast<T>(std::stoll(saved));
+                else initial = static_cast<T>(std::stod(saved));
+            } catch (...) {}
+        }
+    }
+
+    auto [state, setState] = useState(std::move(initial));
+
+    useEffect([key, state] {
+        if constexpr (std::same_as<T, std::string>) {
+            detail::storageSet(key, state);
+        } else if constexpr (std::same_as<T, bool>) {
+            detail::storageSet(key, state ? "true" : "false");
+        } else if constexpr (std::integral<T> || std::floating_point<T>) {
+            detail::storageSet(key, std::to_string(state));
+        }
+    }, deps(key, state));
+
+    return {state, setState};
+}
+
+inline std::pair<std::string, Setter<std::string>> useLocalStorage(std::string key, const char* initial) {
+    return useLocalStorage<std::string>(std::move(key), std::string(initial));
 }
 
 }  // namespace rx

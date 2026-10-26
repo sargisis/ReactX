@@ -172,6 +172,14 @@ inline const std::vector<Page>& pages() {
                                           "«личность» обработчика, чтобы memo-компоненты не перерисовывались.",
                  "const auto& sorted = useMemo([&] { return sortItems(items); }, deps(items));\n"
                  "Callback onSave = useCallback([setSaved] { setSaved(true); }, deps());"},
+                {"useDebounce", "Задерживает обновление значения на указанное время (std::chrono). Идеально для поиска и ввода текста.",
+                 "auto [query, setQuery] = useState(std::string{});\n"
+                 "std::string debounced = useDebounce(query, 300ms);"},
+                {"useLocalStorage", "Синхронизирует состояние с браузерным localStorage (или постоянной памятью в CLI). "
+                                    "Поддерживает строки, числа, bool.",
+                 "auto [theme, setTheme] = useLocalStorage(\"rx-theme\", std::string(\"dark\"));"},
+                {"useWindowSize", "Возвращает текущие размеры окна браузера или терминала (WindowSize{.width, .height}).",
+                 "WindowSize size = useWindowSize();"},
                 {"Правило хуков", "Как в React: хуки вызываются в одном и том же порядке при каждой отрисовке, "
                                   "не в условиях и не в циклах с переменным числом шагов.", ""},
             },

@@ -4,7 +4,10 @@
 
 #include <algorithm>
 #include <flat_set>
+#include <map>
 #include <mutex>
+#include <unistd.h>
+#include <sys/ioctl.h>
 
 #include "reactx/memo.hpp"
 
@@ -106,4 +109,117 @@ bool isTypedMemo(std::uintptr_t component) {
     return typedMemoSet().contains(component);
 }
 
+#if defined(__EMSCRIPTEN__)
+// Global callback map for JS setTimeout
+static std::map<int, std::function<void()>>& jsTimeouts() {
+    static std::map<int, std::function<void()>> m;
+    return m;
+}
+
+EM_JS(void, rx_js_set_timeout, (int id, int ms), {
+    setTimeout(function() {
+        Module.ccall("rx_timeout_done", null, ["number"], [id]);
+    }, ms);
+});
+
+void setTimeoutJs(int delayMs, std::function<void()> cb) {
+    static int nextId = 1;
+    int id = nextId++;
+    jsTimeouts()[id] = std::move(cb);
+    rx_js_set_timeout(id, delayMs);
+}
+
+EM_JS(char*, rx_js_storage_get, (const char* key), {
+    try {
+        const v = localStorage.getItem(UTF8ToString(key));
+        if (v === null) return stringToNewUTF8("");
+        return stringToNewUTF8(v);
+    } catch (e) {
+        return stringToNewUTF8("");
+    }
+});
+
+EM_JS(void, rx_js_storage_set, (const char* key, const char* val), {
+    try {
+        localStorage.setItem(UTF8ToString(key), UTF8ToString(val));
+    } catch (e) {}
+});
+
+std::string storageGet(std::string_view key) {
+    char* s = rx_js_storage_get(std::string(key).c_str());
+    std::string out(s);
+    std::free(s);
+    return out;
+}
+
+void storageSet(std::string_view key, std::string_view value) {
+    rx_js_storage_set(std::string(key).c_str(), std::string(value).c_str());
+}
+
+EM_JS(int, rx_js_win_w, (), { return window.innerWidth || (document.documentElement && document.documentElement.clientWidth) || 800; });
+EM_JS(int, rx_js_win_h, (), { return window.innerHeight || (document.documentElement && document.documentElement.clientHeight) || 600; });
+
+#else
+
+// Process-level memory storage for native/terminal builds
+static std::map<std::string, std::string, std::less<>>& nativeStorage() {
+    static std::map<std::string, std::string, std::less<>> s;
+    return s;
+}
+
+static std::mutex& storageMutex() {
+    static std::mutex m;
+    return m;
+}
+
+std::string storageGet(std::string_view key) {
+    std::scoped_lock lock(storageMutex());
+    auto& s = nativeStorage();
+    auto it = s.find(key);
+    return it == s.end() ? std::string{} : it->second;
+}
+
+void storageSet(std::string_view key, std::string_view value) {
+    std::scoped_lock lock(storageMutex());
+    nativeStorage()[std::string(key)] = std::string(value);
+}
+
+#endif
+
 }  // namespace rx::detail
+
+#if defined(__EMSCRIPTEN__)
+extern "C" EMSCRIPTEN_KEEPALIVE void rx_timeout_done(int id) {
+    auto& m = rx::detail::jsTimeouts();
+    auto it = m.find(id);
+    if (it == m.end()) return;
+    auto cb = std::move(it->second);
+    m.erase(it);
+    cb();
+    rx::flushDom();
+}
+#endif
+
+namespace rx {
+
+WindowSize useWindowSize() {
+#if defined(__EMSCRIPTEN__)
+    auto [size, setSize] = useState(WindowSize{detail::rx_js_win_w(), detail::rx_js_win_h()});
+    useEffect([setSize] {
+        // Updated through DomRenderer or window resize
+        return [] {};
+    }, deps());
+    return size;
+#else
+    // Native terminal dimensions
+    winsize ws{};
+    int w = 80, h = 24;
+    if (::ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0 && ws.ws_col && ws.ws_row) {
+        w = ws.ws_col;
+        h = ws.ws_row;
+    }
+    return WindowSize{.width = w, .height = h};
+#endif
+}
+
+}  // namespace rx

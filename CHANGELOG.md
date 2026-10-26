@@ -2,27 +2,31 @@
 
 Все заметные изменения ReactX. Версии — [Semantic Versioning](https://semver.org/lang/ru/): `MAJOR.MINOR.PATCH`, теги в git — `vMAJOR.MINOR.PATCH`. Пока `MAJOR = 0`, API может меняться: несовместимые изменения поднимают `MINOR`, исправления — `PATCH`.
 
-## [Не выпущено]
+## [0.3.0] — 2026-10-26
 
-Стандартная библиотека C++23/C++26 — всё, что в ней есть, и ничего самописного вместо того, чего нет.
-
-### Изменено
-
-- **Нативная сборка требует GCC 16** (стандартная библиотека C++26); CI — образ `gcc:16`. CMake сразу говорит, если компилятор старше. `reactx` собирает нативные проекты тем же компилятором, которым собран сам (или `CXX`).
-- **Контракты C++26**: на GCC 16 ReactX включает `-fcontracts`, и `REACTX_PRE` становится `contract_assert`. Без контрактов нарушение печатает ещё и стек вызовов (`<stacktrace>`) и останавливается в отладчике (`<debugging>`) — где они есть.
-- `net::parseRequestHead` возвращает `std::expected<Request, HttpError>` с причиной; новый `net::bodyLength` проверяет `Content-Length` (400 — не число, 413 — слишком большое; раньше `-5` читалось как огромное число).
-- `Props::values()`, `Request::headers` и props в `TextRenderer` — `std::flat_map` вместо `std::map`; `Props::has` / `find` / `get` принимают `std::string_view`.
-- Терминал: ячейка экрана — `std::inplace_vector<char, 4>` (без кучи), экран — `std::mdspan` над одним массивом вместо `vector<vector<Cell>>`.
-- Вывод CLI, `reactx_serve`, `api_server` и примеров — `std::print`; `std::format` вместо `ostringstream` (числа в props печатаются в кратчайшей точной форме: `3.14159265`, а не `3.14159`).
+Типизированные props, C++26 рефлексия и контракты, новые хуки (`useDebounce`, `useLocalStorage`, `useWindowSize`).
 
 ### Добавлено
 
-- **Props-структуры**: компонент принимает свою структуру — `Element Counter(const CounterProps&)`, `h(Counter, {.start = 5})`. Опечатки в именах полей и неверные типы ловит компилятор; работает везде, включая браузер. Поле `key` — ключ элемента, поле `children` получает детей (`h(Card, {.title = "Hi"}, {...})`), `memo<Counter>` сравнивает структуры их `operator==`. Старые компоненты с `Props` работают как раньше; примеры переведены на структуры.
-- **Рефлексия C++26** (`<meta>`, GCC 16): `rx::json::to(значение)` и `rx::json::from<T>(json)` для обычных структур — поля становятся ключами, типы проверяются, ошибка показывает путь (`field "dependencies": "fmt": missing field "rev"`). Поддерживаются числа, строки, `bool`, `std::optional`, последовательности, словари со строковыми ключами, вложенные структуры. Подключается к цели через `reactx::reflection` (в браузере рефлексии пока нет).
+- **Новые хуки**:
+  - `useDebounce(value, delay)` — задержка обновления состояния с безопасной отменой при unmount (WASM setTimeout / C++20 `std::jthread` + `std::stop_token`).
+  - `useLocalStorage(key, defaultVal)` — сохранение состояния в `localStorage` (браузер) и в памяти (натив/CLI).
+  - `useWindowSize()` — получение актуальных размеров окна браузера или геометрии терминала (`WindowSize`).
+- **Props-структуры**: компонент принимает свою структуру — `Element Counter(const CounterProps&)`, `h(Counter, {.start = 5})`. Опечатки в именах полей и неверные типы ловит компилятор; работает везде, включая браузер. Поле `key` — ключ элемента, поле `children` получает детей (`h(Card, {.title = "Hi"}, {...})`), `memo<Counter>` сравнивает структуры их `operator==`. Шаблоны `reactx new` переведены на типизированные props.
+- **Рефлексия C++26** (`<meta>`, GCC 16): `rx::json::to(значение)` и `rx::json::from<T>(json)` для обычных структур — поля становятся ключами, типы проверяются, ошибка показывает путь (`field "dependencies": "fmt": missing field "rev"`). Поддерживаются числа, строки, `bool`, `std::optional`, последовательности, словари со строковыми ключами, вложенные структуры. Подключается к цели через `reactx::reflection`.
 - CLI читает `reactx.json` как структуру `Manifest` через `json::from`: забытый `rev` у зависимости теперь виден сразу, а не ошибкой CMake при сборке.
-- `reactx/parse.hpp`: `rx::parseNumber<T>` (`std::from_chars` + `std::expected`, без исключений и локалей) и `rx::parsePort`. `--port abc` в `reactx dev`, `reactx_serve` и `api_server` теперь даёт понятную ошибку, а не падение в `std::stoi`.
+- `reactx/parse.hpp`: `rx::parseNumber<T>` (`std::from_chars` + `std::expected`, без исключений и локалей) и `rx::parsePort`.
 - `TerminalRenderer::setUnicode`: рамки ASCII (`+-|`) для терминалов не в UTF-8; `TerminalApp` выбирает по `std::text_encoding`.
 - CLI: чтение и запись файлов через `std::expected`, `reactx.json` — цепочка `and_then` (прочитать → разобрать → проверить), обход исходников в `reactx dev` — `std::generator`.
+
+### Изменено
+
+- **Нативная сборка требует GCC 16** (стандартная библиотека C++26); CI — образ `gcc:16`. CMake сразу говорит, если компилятор старше.
+- **Контракты C++26**: на GCC 16 ReactX включает `-fcontracts`, и `REACTX_PRE` становится `contract_assert`. Без контрактов нарушение печатает стек вызовов (`<stacktrace>`) и останавливается в отладчике (`<debugging>`).
+- `net::parseRequestHead` возвращает `std::expected<Request, HttpError>` с причиной; новый `net::bodyLength` проверяет `Content-Length`.
+- `Props::values()`, `Request::headers` и props в `TextRenderer` — `std::flat_map` вместо `std::map`; `Props::has` / `find` / `get` принимают `std::string_view`.
+- Терминал: ячейка экрана — `std::inplace_vector<char, 4>` (без кучи), экран — `std::mdspan` над одним массивом вместо `vector<vector<Cell>>`.
+- Вывод CLI, `reactx_serve`, `api_server` и примеров — `std::print`; `std::format` вместо `ostringstream`.
 
 ## [0.2.0] — 2026-10-26
 

@@ -1,4 +1,6 @@
 cmake_minimum_required(VERSION 3.20...3.31)
+# The ReactX version — the only place it is written (Semantic Versioning:
+# MAJOR.MINOR.PATCH; release tags are vMAJOR.MINOR.PATCH, see CHANGELOG.md).
 project(ReactX VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -15,6 +17,9 @@ option(REACTX_BUILD_EXAMPLES "Build the ReactX examples and the website" ${PROJE
 option(REACTX_BUILD_TESTS "Build the ReactX tests" ${PROJECT_IS_TOP_LEVEL})
 option(REACTX_BUILD_TOOLS "Build reactx_serve, api_server and the reactx CLI" ${PROJECT_IS_TOP_LEVEL})
 set(REACTX_DIR ${PROJECT_SOURCE_DIR} CACHE INTERNAL "ReactX source directory")
+
+# reactx/version.hpp (REACTX_VERSION, rx::version()) for the CLI and for apps.
+configure_file(${PROJECT_SOURCE_DIR}/cmake/version.hpp.in ${PROJECT_BINARY_DIR}/generated/reactx/version.hpp @ONLY)
 
 # C++20 modules (`import reactx;`) need CMake 3.28+, the Ninja or Visual Studio
 # generator (not Makefiles) and GCC 14+ / Clang 17+ / MSVC 17.4+.
@@ -53,7 +58,7 @@ if(EMSCRIPTEN)
     src/ui_web.cpp
     src/ui_helpers.cpp
   )
-  target_include_directories(reactx PUBLIC include)
+  target_include_directories(reactx PUBLIC include ${PROJECT_BINARY_DIR}/generated)
   target_compile_options(reactx PRIVATE -Wall -Wextra -Wpedantic)
   # Native WebAssembly exceptions (all current browsers and Node support them);
   # PUBLIC, so every program that links reactx uses the same model.
@@ -195,7 +200,7 @@ add_library(reactx
   src/ui_terminal.cpp
   src/ui_helpers.cpp
 )
-target_include_directories(reactx PUBLIC include)
+target_include_directories(reactx PUBLIC include ${PROJECT_BINARY_DIR}/generated)
 target_link_libraries(reactx PRIVATE ${REACTX_YOGA_TARGET})
 add_library(reactx::reactx ALIAS reactx)
 include(${PROJECT_SOURCE_DIR}/cmake/ReactXApp.cmake)
@@ -214,7 +219,7 @@ endif()
 # ---- HTTP server (development server for the web build, API routes) ----
 find_package(Threads REQUIRED)
 add_library(reactx_net src/http.cpp)
-target_include_directories(reactx_net PUBLIC include)
+target_include_directories(reactx_net PUBLIC include ${PROJECT_BINARY_DIR}/generated)
 target_link_libraries(reactx_net PUBLIC Threads::Threads)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   target_compile_options(reactx_net PRIVATE -Wall -Wextra -Wpedantic)

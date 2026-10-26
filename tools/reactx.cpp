@@ -36,13 +36,16 @@
 
 #include "reactx/http.hpp"
 #include "reactx/json.hpp"
+#include "reactx/version.hpp"
 
 namespace fs = std::filesystem;
 using rx::json::Value;
 
 namespace {
 
-constexpr std::string_view kVersion = "0.1.0";
+constexpr std::string_view kVersion = REACTX_VERSION;  // from project(ReactX VERSION ...)
+// New projects pin ReactX to the release tag of this CLI, not to a branch.
+const std::string kReactXRev = std::string("v") + REACTX_VERSION;
 constexpr std::string_view kReactXGit = "https://github.com/sargisis/ReactX.git";
 
 #ifndef REACTX_SOURCE_DIR
@@ -323,7 +326,7 @@ int cmdNew(const std::vector<std::string>& args) {
             fail("new: --local needs the ReactX sources this tool was built from");
         reactx = rx::json::object({{"path", std::string(REACTX_SOURCE_DIR)}});
     } else {
-        reactx = rx::json::object({{"git", std::string(kReactXGit)}, {"rev", "main"}});
+        reactx = rx::json::object({{"git", std::string(kReactXGit)}, {"rev", kReactXRev}});
     }
     Value manifest = rx::json::object({
         {"name", name},

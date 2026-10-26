@@ -52,7 +52,8 @@ inline const std::vector<Page>& pages() {
                  "cmake --preset release && cmake --build --preset release\n"
                  "cmake --install build/release --prefix ~/.local     # ~/.local/bin/reactx"},
                 {"Новый проект", "reactx new создаёт папку с reactx.json (манифест, как package.json), CMakeLists.txt, "
-                                 "CMakePresets.json и src/main.cpp. ReactX подключается с GitHub; --local — из исходников, "
+                                 "CMakePresets.json и src/main.cpp. ReactX подключается с GitHub по тегу релиза "
+                                 "(например, v0.1.0), а не по ветке, поэтому проект не сломается от новых изменений; --local — из исходников, "
                                  "из которых собран сам CLI. --terminal — терминальное приложение вместо веба.",
                  "reactx new my-app\ncd my-app"},
                 {"reactx dev", "Собирает веб-версию, запускает встроенный сервер на C++ (тот же, что reactx_serve) и следит за "
@@ -69,10 +70,25 @@ inline const std::vector<Page>& pages() {
                  "{\n"
                  "  \"name\": \"my-app\",\n"
                  "  \"template\": \"web\",\n"
-                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"main\" },\n"
+                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.1.0\" },\n"
                  "  \"dependencies\": { \"fmt\": { \"git\": \"...\", \"rev\": \"11.0.2\", \"target\": \"fmt::fmt\" } },\n"
                  "  \"web\": { \"base\": \"/\" }\n"
                  "}"},
+            },
+        },
+        {
+            "versions", "Версии и релизы", "Как нумеруются версии ReactX и как обновиться.",
+            {
+                {"SemVer", "Версии — MAJOR.MINOR.PATCH (Semantic Versioning), теги в git — vMAJOR.MINOR.PATCH. "
+                           "PATCH — исправления, MINOR — новые возможности, MAJOR — несовместимые изменения. "
+                           "Пока MAJOR = 0, API ещё может меняться: несовместимые изменения поднимают MINOR. "
+                           "Что изменилось в каждой версии — в CHANGELOG.md.", ""},
+                {"Версия в коде", "Номер версии записан в одном месте — project(ReactX VERSION ...) в CMakeLists.txt; "
+                                  "из него генерируется reactx/version.hpp.",
+                 "#include \"reactx/version.hpp\"\n\nstd::cout << rx::version();   // \"0.1.0\"\n"
+                 "static_assert(REACTX_VERSION_MAJOR == 0);"},
+                {"Обновиться", "Поменяйте rev в reactx.json на новый тег и пересоберите проект.",
+                 "\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.2.0\" }"},
             },
         },
         {

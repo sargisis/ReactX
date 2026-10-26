@@ -23,6 +23,7 @@
 #include <sys/socket.h>
 
 #include "reactx/json.hpp"
+#include "reactx/version.hpp"
 
 namespace fs = std::filesystem;
 using namespace std::chrono_literals;
@@ -116,6 +117,7 @@ void quick(const fs::path& tmp) {
     auto tui = rx::json::parse(read(tmp / "tui/reactx.json"));
     CHECK(tui["template"].asString() == "terminal");
     CHECK(tui["reactx"]["git"].asString() == "https://github.com/sargisis/ReactX.git");
+    CHECK(tui["reactx"]["rev"].asString() == std::string("v") + REACTX_VERSION);  // the release tag, not a branch
     CHECK(!tui.contains("web"));
     CHECK(contains(read(tmp / "tui/src/main.cpp"), "TerminalApp app;"));
 
@@ -146,7 +148,7 @@ void quick(const fs::path& tmp) {
     auto unknown = reactx({"frobnicate"}, tmp);
     CHECK(unknown.code == 2 && contains(unknown.out, "unknown command"));
     CHECK(reactx({"help"}, tmp).code == 0);
-    CHECK(contains(reactx({"--version"}, tmp).out, "reactx 0.1.0"));
+    CHECK(contains(reactx({"--version"}, tmp).out, std::string("reactx ") + REACTX_VERSION));
 }
 
 // ---- slow end-to-end tests ----

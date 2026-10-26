@@ -1,4 +1,5 @@
 // Minimal tests without a framework: each TEST is a function, CHECK records failures.
+#include <algorithm>
 #include <functional>
 #include <iostream>
 #include <string>
@@ -6,6 +7,7 @@
 
 #include "reactx/reactx.hpp"
 #include "reactx/text_renderer.hpp"
+#include "reactx/version.hpp"
 
 using namespace rx;
 
@@ -147,6 +149,13 @@ Element ThemeApp(const Props&) {
 }
 
 // ---- tests ----
+
+TEST(version_is_semver) {
+    std::string v = rx::version();
+    CHECK(v == std::to_string(REACTX_VERSION_MAJOR) + "." + std::to_string(REACTX_VERSION_MINOR) + "." +
+                   std::to_string(REACTX_VERSION_PATCH));
+    CHECK(std::count(v.begin(), v.end(), '.') == 2);  // three numbers, never four
+}
 
 TEST(mount_renders_tree) {
     TextRenderer r;

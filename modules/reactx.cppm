@@ -10,10 +10,14 @@ module;
 #include "reactx/terminal.hpp"
 #include "reactx/text_renderer.hpp"
 #include "reactx/ui.hpp"
+#include "reactx/version.hpp"
 
 export module reactx;
 
 export namespace rx {
+
+// version.hpp (the REACTX_VERSION macro needs the header; modules don't export macros)
+using rx::version;
 
 // element.hpp
 using rx::KeyEvent;

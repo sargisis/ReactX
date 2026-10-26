@@ -38,6 +38,8 @@ int main() {
 }
 ```
 
+**Для AI-помощников:** [llms.txt](llms.txt) — API и частые ошибки для тех, кто пишет приложения на ReactX (опубликован на сайте: https://sargisis.github.io/ReactX/llms.txt); [AGENTS.md](AGENTS.md) — правила и проверки для тех, кто меняет сам ReactX. `reactx new` кладёт в каждый проект свой `AGENTS.md`.
+
 ## Свой проект за минуту: CLI `reactx`
 
 ```sh
@@ -441,6 +443,6 @@ cmake --preset release && cmake --build --preset release
 - [x] v0.2.0 — режим C++26, hardening, `std::expected`, `REACTX_PRE`, санитайзеры в CI, тесты граничных случаев reconciler
 - [x] v0.3.0 — GCC 16 и стандартная библиотека C++26, контракты, рефлексия (`json::to` / `from`), props-структуры, новые хуки
 - [x] v0.4.0 — DSL `tag::div`, исправления хуков и браузерной сборки
-- [ ] `llms.txt` и `AGENTS.md` для AI-помощников (в том числе в шаблоне `reactx new`)
+- [x] `llms.txt` и `AGENTS.md` для AI-помощников (в том числе в шаблоне `reactx new`)
 - [ ] Свои библиотеки для фронтенда и для работы с C++
 - [ ] Позже — окна на рабочем столе: SDL3 + Skia/ThorVG

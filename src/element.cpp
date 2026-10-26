@@ -7,7 +7,7 @@ namespace rx {
 
 bool isHandler(const PropValue& value) {
     return std::holds_alternative<Callback>(value) || std::holds_alternative<KeyHandler>(value) ||
-           std::holds_alternative<InputHandler>(value);
+           std::holds_alternative<InputHandler>(value) || std::holds_alternative<ScrollHandler>(value);
 }
 
 namespace {

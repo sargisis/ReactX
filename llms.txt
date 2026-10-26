@@ -64,16 +64,19 @@ int main() {
 - `useDebounce(value, 300ms)` — the value after it stopped changing (timers run on the UI thread).
 - `auto [v, setV] = useLocalStorage("key", default);` — `std::string`, `bool` or numbers; localStorage in the browser, memory natively.
 - `WindowSize s = useWindowSize();` — browser window (px) or terminal (cells); re-renders on resize.
+- `auto [state, dispatch] = useReducer([](const State& s, Action a) { ...; return next; }, State{});` — `dispatch(action)`; the newest reducer is used.
+- `useTimeout(fn, std::optional(5s))` once, `useInterval(fn, 1s)` repeatedly; `std::nullopt` switches off; unmounting cancels.
+- `useKeyboard([](const KeyEvent& k) { if (k.ctrl && k.key == "z") { undo(); return true; } return false; });` — app-wide shortcuts, wherever the focus is; runs before the focused element's `onKey`, `true` consumes the key. Keys that type text don't reach it while a text field has focus.
 
 ## Events
 
-Handler props: `onClick` (`Callback = std::function<void()>`), `onInput` / `onChange` (`InputHandler`, gets the text; a checkbox's onChange gets "true"/"false"), `onKey` (`KeyHandler`, gets `KeyEvent{.key, .ctrl, .alt, .shift}`; keys like "Enter", "Escape", "Up", "a"), `onSubmit` (forms). Events bubble to ancestors. The browser backend listens to click, input, change, keydown and submit only — no focus/blur, mouse move or drag events.
+Handler props: `onClick` (`Callback = std::function<void()>`), `onInput` / `onChange` (`InputHandler`, gets the text; a checkbox's onChange gets "true"/"false"), `onKey` (`KeyHandler`, gets `KeyEvent{.key, .ctrl, .alt, .shift}`; keys like "Enter", "Escape", "Up", "a"), `onSubmit` (forms), `onFocus` / `onBlur` (`Callback`; browser, and terminal focus moves), `onScroll` (`ScrollHandler`, gets `ScrollEvent{.top, .left, .scrollHeight, .scrollWidth, .clientHeight, .clientWidth}` with `nearBottom(margin = 100)`; browser only, doesn't bubble). Other events bubble to ancestors. There are no mouse move, hover or drag events.
 
 Controlled input: `h("input", {{"value", text}, {"onInput", [setText](const std::string& t) { setText(t); }}})`.
 
 ## Browser specifics
 
-Any HTML tag; `className`, `style` (a CSS string), `id`, any attribute. `data-rx-self` on an element: its onClick only fires for clicks on itself (dialog backdrops). `data-rx-trap`: keeps Tab focus inside (dialogs). Styles go in `public/style.css` of the project.
+Any HTML tag; `className`, `style` (a CSS string), `id`, any attribute. SVG works: `svg`, `rect`, `circle`, `path`, `g`, ... get the SVG namespace; write `svg:text` / `svg:a` for the tags HTML also has. `data-rx-self` on an element: its onClick only fires for clicks on itself (dialog backdrops). `data-rx-trap`: keeps Tab focus inside (dialogs). Styles go in `public/style.css` of the project.
 
 ## Terminal specifics
 
@@ -107,7 +110,7 @@ server.run();
 
 - Errors that happen at run time (input, network, files) are values: `std::expected`. `REACTX_PRE(cond)` is only for programmer errors.
 - Numbers from text: `rx::parseNumber<int>(s)` / `rx::parsePort(s)` (`reactx/parse.hpp`), not `std::stoi`.
-- Never change state from another thread. Timers: `useDebounce`, or an effect; the UI thread runs them.
+- Never change state from another thread. Timers: `useTimeout`, `useInterval`, `useDebounce`; the UI thread runs them.
 - Prefer the standard library (`std::format`, `std::print`, `std::ranges`, `std::flat_map`, `std::expected`) over hand-written helpers or extra libraries.
 - Code built for the browser must not use reflection, `std::generator`, `<stacktrace>`, threads, sockets or the file system.
 

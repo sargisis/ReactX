@@ -11,6 +11,8 @@
 
 #include "reactx/hooks.hpp"
 
+#include "utf8.hpp"
+
 #if defined(__EMSCRIPTEN__)
 #include <emscripten.h>
 
@@ -48,6 +50,21 @@ std::map<int, std::function<void(WindowSize)>>& resizeListeners() {
     return all;
 }
 
+std::map<int, std::function<bool(const KeyEvent&)>>& keyListeners() {
+    static std::map<int, std::function<bool(const KeyEvent&)>> all;
+    return all;
+}
+
+// Keys that change the text of a focused field (typed characters, Backspace,
+// cursor moves). Shortcuts don't get them while the user types.
+bool editsText(const KeyEvent& k) {
+    if (k.ctrl || k.alt) return false;
+    if (rx::detail::isPrintableKey(k.key)) return true;
+    for (std::string_view name : {"Backspace", "Delete", "Left", "Right", "Home", "End"})
+        if (k.key == name) return true;
+    return false;
+}
+
 int nextId = 1;  // timers and listeners, under stateMutex()
 
 // Removes timer `id` and returns its callback (empty if it was cancelled).
@@ -72,6 +89,24 @@ EM_JS(void, rx_js_listen_resize, (), {
     window.addEventListener("resize", function() {
         Module.ccall("rx_window_resized", null, ["number", "number"], [window.innerWidth | 0, window.innerHeight | 0]);
     });
+});
+// Capture phase on the window: runs before the elements' own handlers, and
+// also when nothing on the page has focus.
+EM_JS(void, rx_js_listen_keys, (), {
+    if (Module.rxKeysListening) return;
+    Module.rxKeysListening = true;
+    const names = { ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right", Esc: "Escape" };
+    window.addEventListener("keydown", function(e) {
+        if (e.isComposing) return;
+        const t = e.target;
+        const tag = t && t.tagName ? t.tagName.toLowerCase() : "";
+        const textInput = tag === "input" && !["checkbox", "radio", "button", "submit", "reset", "range", "color", "file"].includes(t.type);
+        const editing = textInput || tag === "textarea" || tag === "select" || !!(t && t.isContentEditable);
+        const consumed = Module.ccall("rx_global_key", "number",
+            ["string", "number", "number", "number", "number"],
+            [names[e.key] || e.key, e.ctrlKey || e.metaKey ? 1 : 0, e.altKey ? 1 : 0, e.shiftKey ? 1 : 0, editing ? 1 : 0]);
+        if (consumed) { e.preventDefault(); e.stopPropagation(); }
+    }, true);
 });
 EM_JS(char*, rx_js_storage_get, (const char* key), {
     try {
@@ -162,6 +197,36 @@ void notifyResize(WindowSize size) {
     for (const auto& fn : listeners) fn(size);
 }
 
+// ---- keyboard shortcuts ----
+
+Cleanup onGlobalKey(std::function<bool(const KeyEvent&)> handler) {
+    int id = 0;
+    {
+        std::scoped_lock lock(stateMutex());
+        id = nextId++;
+        keyListeners().emplace(id, std::move(handler));
+    }
+#if defined(__EMSCRIPTEN__)
+    rx_js_listen_keys();
+#endif
+    return [id] {
+        std::scoped_lock lock(stateMutex());
+        keyListeners().erase(id);
+    };
+}
+
+bool dispatchGlobalKey(const KeyEvent& key, bool editing) {
+    if (editing && editsText(key)) return false;
+    std::vector<std::function<bool(const KeyEvent&)>> handlers;
+    {
+        std::scoped_lock lock(stateMutex());
+        for (const auto& [id, fn] : keyListeners()) handlers.push_back(fn);
+    }
+    bool consumed = false;
+    for (const auto& fn : handlers) consumed = fn(key) || consumed;  // every subscriber hears the key
+    return consumed;
+}
+
 // ---- storage ----
 
 std::string storageGet(std::string_view key) {
@@ -205,6 +270,14 @@ extern "C" EMSCRIPTEN_KEEPALIVE void rx_timer_fired(int id) {
         fn();
         rx::flushDom();
     }
+}
+
+// From the window's keydown listener; 1 = consumed (the page then calls preventDefault).
+extern "C" EMSCRIPTEN_KEEPALIVE int rx_global_key(const char* key, int ctrl, int alt, int shift, int editing) {
+    bool consumed = rx::detail::dispatchGlobalKey(
+        rx::KeyEvent{.key = key, .ctrl = ctrl != 0, .alt = alt != 0, .shift = shift != 0}, editing != 0);
+    rx::flushDom();
+    return consumed ? 1 : 0;
 }
 
 extern "C" EMSCRIPTEN_KEEPALIVE void rx_window_resized(int width, int height) {

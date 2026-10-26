@@ -221,6 +221,13 @@ if(EMSCRIPTEN)
   set_property(TARGET reactx_dom_tests APPEND PROPERTY LINK_DEPENDS ${PROJECT_SOURCE_DIR}/tests/web/fake_dom.js)
   add_test(NAME reactx_dom_tests COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} $<TARGET_FILE:reactx_dom_tests>)
 
+  add_executable(reactx_dom_events_tests tests/test_dom_events.cpp)
+  target_link_libraries(reactx_dom_events_tests PRIVATE reactx)
+  target_link_options(reactx_dom_events_tests PRIVATE
+    "SHELL:--pre-js ${PROJECT_SOURCE_DIR}/tests/web/fake_dom.js" "SHELL:-sENVIRONMENT=node")
+  set_property(TARGET reactx_dom_events_tests APPEND PROPERTY LINK_DEPENDS ${PROJECT_SOURCE_DIR}/tests/web/fake_dom.js)
+  add_test(NAME reactx_dom_events_tests COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} $<TARGET_FILE:reactx_dom_events_tests>)
+
   add_executable(reactx_web_app_tests tests/test_web_app.cpp)
   target_link_libraries(reactx_web_app_tests PRIVATE reactx)
   target_link_options(reactx_web_app_tests PRIVATE

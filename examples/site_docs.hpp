@@ -166,7 +166,7 @@ inline const std::vector<Page>& pages() {
             },
         },
         {
-            "hooks", "Хуки", "useState, useEffect, useRef, useMemo, useCallback.",
+            "hooks", "Хуки", "useState, useEffect, useReducer, useMemo, таймеры, клавиши, хранилище.",
             {
                 {"useState", "Возвращает значение и setter. Setter принимает новое значение или функцию от старого. "
                              "Равное значение не вызывает перерисовку.",
@@ -189,6 +189,22 @@ inline const std::vector<Page>& pages() {
                  "auto [theme, setTheme] = useLocalStorage(\"rx-theme\", std::string(\"dark\"));"},
                 {"useWindowSize", "Размер окна браузера (в пикселях) или терминала (в ячейках); компонент перерисовывается при изменении.",
                  "WindowSize size = useWindowSize();"},
+                {"useReducer", "Состояние, которое меняют действия: функция (состояние, действие) → новое состояние. "
+                               "Удобно, когда полей много или нужна отмена. Берётся самая свежая функция, она может читать props.",
+                 "enum class Op { Add, Undo };\n"
+                 "auto [doc, dispatch] = useReducer([](const Doc& d, Op op) { /* ... */ return next; }, Doc{});\n"
+                 "dispatch(Op::Undo);"},
+                {"useTimeout и useInterval", "Вызвать один раз через время или повторять с периодом. std::nullopt выключает; "
+                                             "размонтирование отменяет. Работают в потоке интерфейса (нативно — не чаще 100 мс).",
+                 "useTimeout([setToast] { setToast(\"\"); }, toast.empty() ? std::nullopt : std::optional(5s));\n"
+                 "useInterval([reload] { reload(); }, 30s);"},
+                {"useKeyboard", "Сочетания клавиш для всего приложения, где бы ни был фокус. Обработчик вызывается раньше onKey "
+                                "элемента; верните true, чтобы забрать клавишу. Пока пользователь печатает в поле, "
+                                "клавиши набора текста сюда не приходят — «/» и «n» не мешают печатать.",
+                 "useKeyboard([undo](const KeyEvent& k) {\n"
+                 "    if (k.ctrl && k.key == \"z\") { undo(); return true; }\n"
+                 "    return false;\n"
+                 "});"},
                 {"Правило хуков", "Как в React: хуки вызываются в одном и том же порядке при каждой отрисовке, "
                                   "не в условиях и не в циклах с переменным числом шагов.", ""},
             },
@@ -209,7 +225,8 @@ inline const std::vector<Page>& pages() {
         {
             "events", "События", "Обработчики, клавиши, ввод текста, всплытие.",
             {
-                {"Обработчики", "Callback — void(), KeyHandler — void(const KeyEvent&), InputHandler — void(const std::string&).",
+                {"Обработчики", "Callback — void(), KeyHandler — void(const KeyEvent&), InputHandler — void(const std::string&), "
+                                "ScrollHandler — void(const ScrollEvent&).",
                  "h(\"input\", {{\"value\", text},\n"
                  "             {\"onInput\", [setText](const std::string& t) { setText(t); }},\n"
                  "             {\"onKey\", [](const KeyEvent& e) { if (e.key == \"Enter\") submit(); }}})"},
@@ -217,6 +234,13 @@ inline const std::vector<Page>& pages() {
                              "Home, End. Флаги ctrl, alt, shift.", ""},
                 {"Всплытие", "Как в React: сначала обработчик элемента, затем всех его родителей. "
                              "Так Escape из кнопки внутри окна доходит до самого окна.", ""},
+                {"Фокус", "onFocus и onBlur: в браузере — при входе в элемент и уходе из него (всплывают, как в React), "
+                          "в терминале — когда фокус переходит по Tab или стрелкам.",
+                 "h(\"input\", {{\"value\", email}, {\"onBlur\", [validate] { validate(); }}})"},
+                {"Прокрутка", "onScroll (браузер) получает ScrollEvent: top, scrollHeight, clientHeight и др.; nearBottom() "
+                              "— пора подгружать ещё. Не всплывает: срабатывает только у прокручиваемого элемента.",
+                 "h(\"div\", {{\"style\", \"height: 400px; overflow: auto\"},\n"
+                 "            {\"onScroll\", [loadMore](const ScrollEvent& e) { if (e.nearBottom()) loadMore(); }}}, rows)"},
             },
         },
         {
@@ -241,7 +265,14 @@ inline const std::vector<Page>& pages() {
                 {"Props в DOM", "className → class, style — строка CSS, value — управляемое поле ввода, checked/disabled — "
                                 "свойства, остальное — атрибуты (true — есть, false — убрать).",
                  "h(\"input\", {{\"type\", \"checkbox\"}, {\"checked\", done}, {\"onChange\", toggle}})"},
-                {"События", "onClick, onInput(text), onChange, onKey(KeyEvent), onSubmit (форма не перезагружает страницу).", ""},
+                {"События", "onClick, onInput(text), onChange, onKey(KeyEvent), onSubmit (форма не перезагружает страницу), "
+                            "onFocus, onBlur, onScroll(ScrollEvent).", ""},
+                {"SVG", "Теги SVG (svg, rect, circle, path, line, g, ...) создаются в пространстве имён SVG сами. "
+                        "Текст и ссылки внутри SVG — «svg:text», «svg:a» (такие теги есть и в HTML).",
+                 "h(\"svg\", {{\"viewBox\", \"0 0 100 40\"}}, {\n"
+                 "    h(\"rect\", {{\"width\", \"60\"}, {\"height\", \"40\"}, {\"fill\", \"orange\"}}),\n"
+                 "    h(\"svg:text\", {{\"x\", \"64\"}, {\"y\", \"24\"}}, {\"60%\"}),\n"
+                 "})"},
             },
         },
         {

@@ -99,7 +99,11 @@ public:
     //   input      -> printable keys and Backspace edit "value" via "onInput"
     //   Enter / Space -> "onClick" of the focused node
     // Returns true if the key did something.
+    // When focus moves this way, the node that lost it gets "onBlur" and the
+    // one that got it "onFocus".
     bool handleKey(Root& root, const KeyEvent& key);
+    // The focus is in an input (keys that type text belong to it).
+    bool editingText() const;
 
 private:
     struct Style {
@@ -126,6 +130,7 @@ private:
     void fixFocus();
     NodeHandle focusTrap(NodeHandle h) const;
     bool bubbleKey(Root& root, const KeyEvent& key);
+    bool handleKeyNow(Root& root, const KeyEvent& key);
 
 
     Output output_;

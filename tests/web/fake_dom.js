@@ -24,9 +24,10 @@
     get outerHTML() { return this.nodeValue; }
   }
   class Element extends Node {
-    constructor(tag) {
+    constructor(tag, ns) {
       super();
       this.tagName = tag.toUpperCase();
+      this.namespaceURI = ns || "http://www.w3.org/1999/xhtml";
       this.attributes = new Map();
       this.style = { cssText: "" };
       this.listeners = {};
@@ -42,7 +43,7 @@
     addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
     dispatchEvent(e) {
       e.target ||= this;
-      for (let n = this; n; n = n.parentNode) for (const fn of (n.listeners?.[e.type] || [])) fn(e);
+      for (let n = this; n && !e.stopped; n = n.parentNode) for (const fn of (n.listeners?.[e.type] || [])) fn(e);
     }
     get innerHTML() { return this.childNodes.map(c => c.outerHTML).join(""); }
     get outerHTML() {
@@ -99,6 +100,7 @@
       return sel === "#app" ? app : app.find(e => "#" + e.getAttribute("id") === sel);
     },
     createElement(tag) { return new Element(tag); },
+    createElementNS(ns, tag) { return new Element(tag, ns); },
     createTextNode(text) { return new Text(text); },
   };
 
@@ -145,7 +147,8 @@
     if (!el) throw new Error("no element #" + id);
     return el;
   };
-  const event = (type, extra) => Object.assign({ type, preventDefault() { this.defaultPrevented = true; } }, extra);
+  const event = (type, extra) => Object.assign({
+    type, preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; } }, extra);
   const all = (pred) => {
     const out = [];
     const walk = (el) => { for (const c of el.childNodes) if (c instanceof Element) { if (pred(c)) out.push(c); walk(c); } };
@@ -185,6 +188,25 @@
     key: (id, key, shift) => byId(id).dispatchEvent(event("keydown", { key, shiftKey: !!shift })),
     submit: (id) => { const e = event("submit"); byId(id).dispatchEvent(e); return e.defaultPrevented ? "prevented" : "reloaded"; },
     value: (id) => byId(id).value,
+    // A key press the way a browser delivers it: the window's capture
+    // listeners first (useKeyboard), then the element and its ancestors.
+    // id "" = nothing focused (the event targets the page itself).
+    pressKey: (id, key, ctrl, shift) => {
+      const target = id ? byId(id) : { tagName: "BODY" };
+      const e = event("keydown", { key, ctrlKey: !!ctrl, shiftKey: !!shift, target });
+      for (const fn of (windowListeners.keydown || [])) fn(e);
+      if (!e.stopped && id) target.dispatchEvent(e);
+      return e.defaultPrevented ? "consumed" : "passed";
+    },
+    scroll: (id, top, scrollHeight, clientHeight) => {
+      const el = byId(id);
+      Object.assign(el, { scrollTop: top, scrollLeft: 0, scrollHeight, scrollWidth: 300, clientHeight, clientWidth: 300 });
+      el.dispatchEvent(event("scroll"));
+    },
+    focusIn: (id) => byId(id).dispatchEvent(event("focusin")),
+    focusOut: (id) => byId(id).dispatchEvent(event("focusout")),
+    ns: (id) => byId(id).namespaceURI,
+    tag: (id) => byId(id).tagName,
     focused: () => document.activeElement ? (document.activeElement.textContent || document.activeElement.tagName) : "",
   };
 })();

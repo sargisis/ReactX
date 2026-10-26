@@ -4,6 +4,7 @@
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -747,6 +748,187 @@ TEST(typed_component_without_props_gets_defaults) {
     Root root(r);
     root.render(h("box", {}, {h(Page)}));  // like router::routes({{"/", h(Home)}})
     CHECK(has(r, "page home"));
+}
+
+// =====================================================================
+// v0.5: useReducer, useTimeout, useInterval, useKeyboard, onScroll
+// =====================================================================
+
+enum class CounterAction { Inc, Dec, Reset };
+std::function<void(CounterAction)> dispatchOutside;
+
+struct ReducerProps {
+    int step = 1;  // the reducer captures it: the newest reducer must be used
+};
+Element ReducerBox(const ReducerProps& p) {
+    auto [n, dispatch] = useReducer(
+        [step = p.step](const int& v, CounterAction a) {
+            switch (a) {
+                case CounterAction::Inc: return v + step;
+                case CounterAction::Dec: return v - step;
+                default: return 0;
+            }
+        },
+        0);
+    dispatchOutside = [dispatch](CounterAction a) { dispatch(a); };
+    return h("text", {}, {"n=" + std::to_string(n)});
+}
+
+TEST(use_reducer_runs_actions_with_the_newest_reducer) {
+    TextRenderer r;
+    Root root(r);
+    root.render(h(ReducerBox, {.step = 1}));
+    dispatchOutside(CounterAction::Inc);
+    dispatchOutside(CounterAction::Inc);
+    root.flush();
+    CHECK(has(r, "n=2"));
+    root.render(h(ReducerBox, {.step = 10}));
+    dispatchOutside(CounterAction::Inc);
+    root.flush();
+    CHECK(has(r, "n=12"));
+    dispatchOutside(CounterAction::Reset);
+    root.flush();
+    CHECK(has(r, "n=0"));
+    root.render(h("box"));  // unmounted: dispatch is ignored, no crash
+    dispatchOutside(CounterAction::Inc);
+    root.flush();
+}
+
+int timeoutFired = 0;
+struct TimeoutProps {
+    std::optional<std::chrono::milliseconds> delay{};
+};
+Element TimeoutBox(const TimeoutProps& p) {
+    useTimeout([] { ++timeoutFired; }, p.delay);
+    return h("text", {}, {"t"});
+}
+
+TEST(use_timeout_fires_once_and_can_be_switched_off) {
+    using namespace std::chrono_literals;
+    timeoutFired = 0;
+    TextRenderer r;
+    Root root(r);
+    root.render(h(TimeoutBox, {.delay = 20ms}));
+    root.flush();
+    CHECK(timeoutFired == 0);
+    std::this_thread::sleep_for(40ms);
+    root.flush();
+    CHECK(timeoutFired == 1);
+    std::this_thread::sleep_for(40ms);
+    root.flush();
+    CHECK(timeoutFired == 1);  // once
+
+    root.render(h(TimeoutBox, {.delay = std::nullopt}));  // off
+    root.render(h(TimeoutBox, {.delay = 20ms}));           // a new delay: a new timer
+    root.render(h(TimeoutBox, {}));                        // ...cancelled right away
+    std::this_thread::sleep_for(40ms);
+    root.flush();
+    CHECK(timeoutFired == 1);
+
+    root.render(h(TimeoutBox, {.delay = 20ms}));
+    root.render(h("box"));  // unmount cancels
+    std::this_thread::sleep_for(40ms);
+    root.flush();
+    CHECK(timeoutFired == 1);
+}
+
+struct IntervalProps {
+    std::optional<std::chrono::milliseconds> period{};
+};
+Element IntervalBox(const IntervalProps& p) {
+    auto [ticks, setTicks] = useState(0);
+    useInterval([setTicks] { setTicks([](int t) { return t + 1; }); }, p.period);
+    return h("text", {}, {"ticks=" + std::to_string(ticks)});
+}
+
+int ticksShown(const TextRenderer& r) {
+    auto s = r.toString();
+    auto at = s.find("ticks=");
+    if (at == std::string::npos) return -1;
+    std::string_view rest = std::string_view(s).substr(at + 6);
+    return rx::parseNumber<int>(rest.substr(0, rest.find('"'))).value_or(-1);
+}
+
+TEST(use_interval_repeats_until_paused_or_unmounted) {
+    using namespace std::chrono_literals;
+    TextRenderer r;
+    Root root(r);
+    root.render(h(IntervalBox, {.period = 10ms}));
+    for (int i = 0; i < 4; ++i) {
+        std::this_thread::sleep_for(15ms);
+        root.flush();
+    }
+    int afterRunning = ticksShown(r);
+    CHECK(afterRunning >= 3 && afterRunning <= 4);
+    root.render(h(IntervalBox, {}));  // paused
+    for (int i = 0; i < 3; ++i) {
+        std::this_thread::sleep_for(15ms);
+        root.flush();
+    }
+    CHECK(ticksShown(r) == afterRunning);
+    root.render(h(IntervalBox, {.period = 10ms}));
+    root.render(h("box"));  // unmounted: the chain stops
+    std::this_thread::sleep_for(30ms);
+    root.flush();
+}
+
+std::vector<std::string> shortcuts;
+struct ShortcutProps {
+    std::string name{};
+};
+Element Shortcuts(const ShortcutProps& p) {
+    useKeyboard([name = p.name](const KeyEvent& k) {
+        if (k.ctrl && k.key == "z") {
+            shortcuts.push_back(name + ":undo");
+            return true;
+        }
+        if (k.key == "/") {
+            shortcuts.push_back(name + ":search");
+            return true;
+        }
+        return false;
+    });
+    return h("text", {}, {"s"});
+}
+
+TEST(use_keyboard_hears_app_wide_shortcuts) {
+    shortcuts.clear();
+    TextRenderer r;
+    Root root(r);
+    root.render(h(Shortcuts, {.name = "a"}));
+    CHECK(detail::dispatchGlobalKey(KeyEvent{.key = "z", .ctrl = true}, false));
+    CHECK(!detail::dispatchGlobalKey(KeyEvent{.key = "x"}, false));  // not consumed
+    // While typing in a field, "/" is text, not a shortcut; Ctrl+Z still is.
+    CHECK(!detail::dispatchGlobalKey(KeyEvent{.key = "/"}, true));
+    CHECK(detail::dispatchGlobalKey(KeyEvent{.key = "z", .ctrl = true}, true));
+    CHECK(detail::dispatchGlobalKey(KeyEvent{.key = "/"}, false));
+    root.render(h(Shortcuts, {.name = "b"}));  // the newest handler is used
+    detail::dispatchGlobalKey(KeyEvent{.key = "z", .ctrl = true}, false);
+    root.render(h("box"));  // unmounted: unsubscribed
+    CHECK(!detail::dispatchGlobalKey(KeyEvent{.key = "z", .ctrl = true}, false));
+    CHECK(shortcuts == (std::vector<std::string>{"a:undo", "a:undo", "a:search", "b:undo"}));
+}
+
+ScrollEvent lastScroll;
+Element ScrollBox(const Props&) {
+    auto [more, setMore] = useState(false);
+    return h("box", {{"id", "scroller"}, {"onScroll", [setMore](const ScrollEvent& e) {
+                         lastScroll = e;
+                         if (e.nearBottom()) setMore(true);
+                     }}},
+             {more ? "loading more" : "list"});
+}
+
+TEST(on_scroll_gets_the_position) {
+    TextRenderer r;
+    Root root(r);
+    root.render(h(ScrollBox));
+    CHECK(root.dispatch(byId(r, "scroller"), "onScroll",
+                        ScrollEvent{.top = 100, .scrollHeight = 2000, .clientHeight = 500}));
+    CHECK(lastScroll.top == 100 && !has(r, "loading more"));
+    root.dispatch(byId(r, "scroller"), "onScroll", ScrollEvent{.top = 1450, .scrollHeight = 2000, .clientHeight = 500});
+    CHECK(has(r, "loading more"));                              // within 100 px of the end
+    CHECK(!root.dispatch(byId(r, "scroller"), "onScroll"));   // no position: not called
 }
 
 }  // namespace

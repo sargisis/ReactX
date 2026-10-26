@@ -117,6 +117,10 @@ bool Reconciler::dispatch(NodeHandle node, const std::string& event, const Event
         const auto* key = std::get_if<KeyEvent>(&data);
         if (!key) return false;
         call = [h = *kh, k = *key] { h(k); };
+    } else if (const auto* sh = std::get_if<ScrollHandler>(value); sh && *sh) {
+        const auto* pos = std::get_if<ScrollEvent>(&data);
+        if (!pos) return false;
+        call = [h = *sh, p = *pos] { h(p); };
     } else if (const auto* ih = std::get_if<InputHandler>(value); ih && *ih) {
         const auto* text = std::get_if<std::string>(&data);
         if (!text) return false;

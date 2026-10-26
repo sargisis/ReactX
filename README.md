@@ -63,12 +63,12 @@ reactx update     # перейти на новейший релиз ReactX
 
 - **Элементы**: `h("tag", props, children)`, `h(Component, props, children)`, строки как текстовые узлы, `fragment(...)`, проп `key`.
 - **Компоненты**: обычные функции. Props — **своя структура**: `Element Counter(const CounterProps&)` и `h(Counter, {.start = 5})` — опечатку в имени поля или неверный тип ловит компилятор (назначенные инициализаторы C++20, работает и в браузере). Поле `key` структуры становится ключом элемента, поле `children` (`std::vector<Element>`) получает детей: `h(Card, {.title = "Hi"}, {детали...})`. Дайте каждому полю значение по умолчанию (`{}`), чтобы можно было указывать только нужные (и `-Wextra` молчал). Старый способ — `Element(const Props&)` с `props.get<T>("имя")` и `props.children()` — тоже работает.
-- **Хуки**: `useState` (значение или функция-updater, пропуск ререндера при равном значении), `useEffect` (без deps / `deps(a, b)` / `deps()` = один раз, cleanup), `useRef`, `useMemo` (пересчёт только при смене deps), `useCallback` (обработчик сохраняет «личность», пока не сменились deps).
+- **Хуки**: `useState` (значение или функция-updater, пропуск ререндера при равном значении), `useEffect` (без deps / `deps(a, b)` / `deps()` = один раз, cleanup), `useRef`, `useMemo` (пересчёт только при смене deps), `useCallback` (обработчик сохраняет «личность», пока не сменились deps), `useReducer` (состояние, которое меняют действия), `useTimeout` / `useInterval` (таймеры в потоке интерфейса), `useKeyboard` (сочетания клавиш для всего приложения: срабатывают раньше `onKey` элемента, не мешают печатать в полях), `useDebounce`, `useLocalStorage`, `useWindowSize`.
 - **Контекст**: `createContext<T>(default)`, `ctx.provide(value, {children})`, `useContext(ctx)` — значение передаётся вниз без props; при смене значения перерисовываются все, кто его читает, даже сквозь `memo`.
 - **memo**: `h(memo<Item>, props)` пропускает перерисовку, если props те же. Для компонента со структурой props структуры сравниваются её `operator==` (`bool operator==(const ItemProps&) const = default;`). Для `Props` значения сравниваются через `==`, обработчики — равны, только если пришли из одного `useCallback`; элементы с детьми перерисовываются всегда.
 - **Reconciler**: сравнивает деревья, сопоставляет детей по `key` или позиции, переставляет узлы вместо пересоздания, удаляет лишние пропсы.
 - **Батчинг**: `setState` только помечает компонент; перерисовка в `flush()` (автоматически после `render`/`dispatch`), родители раньше детей.
-- **События**: три вида обработчиков — `Callback` (`void()`, например `onClick`), `KeyHandler` (`void(const KeyEvent&)`, `onKey`) и `InputHandler` (`void(const std::string&)`, `onInput`). Бэкенд передаёт данные через `Root::dispatch(node, "onKey", KeyEvent{"Enter"})` или `dispatch(node, "onInput", std::string("текст"))`; если данные не подходят обработчику, `dispatch` вернёт `false`.
+- **События**: четыре вида обработчиков — `Callback` (`void()`, например `onClick`, `onFocus`, `onBlur`), `KeyHandler` (`void(const KeyEvent&)`, `onKey`), `InputHandler` (`void(const std::string&)`, `onInput`) и `ScrollHandler` (`void(const ScrollEvent&)`, `onScroll`; `nearBottom()` — пора подгружать ещё). Бэкенд передаёт данные через `Root::dispatch(node, "onKey", KeyEvent{"Enter"})` или `dispatch(node, "onInput", std::string("текст"))`; если данные не подходят обработчику, `dispatch` вернёт `false`.
 - **Бэкенд**: интерфейс [`rx::Renderer`](include/reactx/renderer.hpp). Обработчики остаются в ядре и в бэкенд не передаются.
 - **TextRenderer**: хранит дерево в памяти, печатает его и лог операций — для отладки и тестов.
 - **Терминал** ([`reactx/terminal.hpp`](include/reactx/terminal.hpp)): `TerminalRenderer` рисует дерево ANSI-кодами и перерисовывает только изменившиеся строки; `TerminalApp` включает raw-режим и запускает цикл событий; `decodeKeys` превращает байты терминала в `KeyEvent` (стрелки, Tab/Shift+Tab, Delete, Ctrl/Alt, UTF-8).
@@ -188,7 +188,9 @@ int main() { mountDom(h(Counter)); }   // в <div id="app"> страницы
 | `value` | значение поля; поле управляемое — показывает то, что в состоянии |
 | `checked`, `disabled`, `selected` | свойства DOM |
 | остальное | атрибуты (`true` — есть, `false` — убрать) |
-| `onClick`, `onInput(text)`, `onChange`, `onKey(KeyEvent)`, `onSubmit` | события; всплывают как в React — срабатывают обработчики элемента и всех его родителей; `onSubmit` не перезагружает страницу |
+| `onClick`, `onInput(text)`, `onChange`, `onKey(KeyEvent)`, `onSubmit`, `onFocus`, `onBlur` | события; всплывают как в React — срабатывают обработчики элемента и всех его родителей; `onSubmit` не перезагружает страницу |
+| `onScroll(ScrollEvent)` | прокрутка элемента (не всплывает); `top`, `scrollHeight`, `clientHeight`, `nearBottom()` |
+| `svg`, `rect`, `circle`, `path`, `g`, … | SVG создаётся в своём пространстве имён; `svg:text`, `svg:a` — для тегов, которые есть и в HTML |
 | `data-rx-self` | элемент получает только клики по себе, не по детям (фон окна) |
 | `data-rx-trap` | Tab не выходит из элемента; при появлении он забирает фокус, при удалении — возвращает |
 
@@ -418,6 +420,7 @@ cmake --preset release && cmake --build --preset release
 - `useFetch` в терминальной сборке ходит только в `setLocalFetch`-обработчик (сети там нет). Сервер на C++ пока не выложен в интернет: на GitHub Pages только статический сайт.
 - Раскладка пересчитывается целиком на каждую перерисовку (для терминала это быстро, но для тысяч узлов понадобится кэш).
 - Дети перерисовываются вместе с родителем, если не обёрнуты в `memo<...>`; `memo` не сравнивает детей (`props.children()`).
+- Браузер: нет событий мыши кроме клика (наведение, перетаскивание); `onScroll` — только у элемента с прокруткой, не у всей страницы.
 - Хуки нельзя вызывать в цикле с разным числом итераций (как и в React), поэтому `useCallback` для каждого элемента списка не сделать — нужен отдельный компонент.
 
 ## План

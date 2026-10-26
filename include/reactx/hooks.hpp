@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <format>
 #include <concepts>
 #include <cstddef>
 #include <functional>
@@ -8,12 +9,12 @@
 #include <optional>
 #include <string>
 #include <stdexcept>
-#include <thread>
 #include <tuple>
 #include <type_traits>
 #include <utility>
 
 #include "reactx/element.hpp"
+#include "reactx/parse.hpp"
 
 // The value returned by useMemo lives in the hook, not in the temporaries
 // passed to it; tell GCC so it doesn't warn about a dangling reference.
@@ -246,31 +247,34 @@ std::function<detail::HandlerSig<F>> useCallback(F&& handler, std::tuple<D...> d
     return detail::StableFn<Sig>{hook.fn};
 }
 
-// ---- Practical C++20 / C++26 utility hooks ----
+// ---- utility hooks: useDebounce, useWindowSize, useLocalStorage ----
 
-// Delays updating the returned value until `delayMs` milliseconds have passed
-// without new changes. Safe against unmounting and race conditions.
+namespace detail {
+
+// Runs `fn` after `delay` on the UI thread — never on another thread, so it
+// may set state. Browser: setTimeout. Native: the first Root::flush() after
+// the deadline (TerminalApp flushes every 100 ms). Returns the cancel
+// function, ready to be an effect's cleanup.
+Cleanup setTimer(std::chrono::milliseconds delay, std::function<void()> fn);
+// Native: runs the timers that are due (called by Root::flush()).
+void runDueTimers();
+
+std::string storageGet(std::string_view key);
+void storageSet(std::string_view key, std::string_view value);
+
+}  // namespace detail
+
+// The value, but only after it stopped changing for `delay` — for search
+// boxes and other input that shouldn't trigger work on every key press:
+//   std::string query = useDebounce(text, 300ms);
 template <class T>
-    requires std::copy_constructible<T>
+    requires std::copy_constructible<T> && std::equality_comparable<T>
 T useDebounce(const T& value, std::chrono::milliseconds delay) {
     auto [debounced, setDebounced] = useState(value);
-    useEffect([value, delay, setDebounced] {
-        auto alive = std::make_shared<bool>(true);
-#if defined(__EMSCRIPTEN__)
-        // Web: set a browser timeout
-        detail::setTimeoutJs(static_cast<int>(delay.count()), [alive, value, setDebounced] {
-            if (*alive) setDebounced(value);
-        });
-#else
-        // Native/terminal: use std::jthread with cancel/stop_token
-        std::jthread worker([alive, value, delay, setDebounced](std::stop_token st) {
-            std::this_thread::sleep_for(delay);
-            if (!st.stop_requested() && *alive) setDebounced(value);
-        });
-        worker.detach();
-#endif
-        return [alive] { *alive = false; };
-    }, deps(value, delay.count()));
+    // A new value cancels the pending timer (the effect's cleanup) and starts
+    // a new one; unmounting cancels it too.
+    useEffect([value, delay, setDebounced] { return detail::setTimer(delay, [value, setDebounced] { setDebounced(value); }); },
+              deps(value, delay.count()));
     return debounced;
 }
 
@@ -280,48 +284,47 @@ struct WindowSize {
     bool operator==(const WindowSize&) const = default;
 };
 
-// Returns current viewport/terminal dimensions and updates when resized.
-WindowSize useWindowSize();
-
 namespace detail {
-#if defined(__EMSCRIPTEN__)
-void setTimeoutJs(int delayMs, std::function<void()> cb);
-#endif
-std::string storageGet(std::string_view key);
-void storageSet(std::string_view key, std::string_view value);
+// The current size: the browser window (CSS pixels) or the terminal (cells).
+WindowSize currentWindowSize();
+// Calls `fn` with the new size after every resize; returns the unsubscribe
+// function. Browser: the window's resize event; native: TerminalApp reports
+// terminal resizes (see notifyResize).
+Cleanup onResize(std::function<void(WindowSize)> fn);
+void notifyResize(WindowSize size);
 }  // namespace detail
 
-// Persistent state hook: synchronizes value with localStorage (in the browser)
-// or an in-memory/process-level store (in terminal/CLI).
-// Works with std::string, primitives, or any type convertible to/from string.
+// The size of the browser window or of the terminal; the component
+// re-renders when it changes.
+WindowSize useWindowSize();
+
+// State that survives a reload: kept in localStorage in the browser and in
+// memory for the life of the process natively.
+//   auto [theme, setTheme] = useLocalStorage("theme", std::string("dark"));
+// Supports std::string, bool and numbers.
 template <class T>
 std::pair<T, Setter<T>> useLocalStorage(std::string key, T initialValue) {
-    T initial = initialValue;
-    std::string saved = detail::storageGet(key);
-    if (!saved.empty()) {
-        if constexpr (std::same_as<T, std::string>) {
-            initial = saved;
-        } else if constexpr (std::integral<T> || std::floating_point<T>) {
-            try {
-                if constexpr (std::same_as<T, bool>) initial = (saved == "true" || saved == "1");
-                else if constexpr (std::integral<T>) initial = static_cast<T>(std::stoll(saved));
-                else initial = static_cast<T>(std::stod(saved));
-            } catch (...) {}
+    static_assert(std::same_as<T, std::string> || std::same_as<T, bool> || std::integral<T> || std::floating_point<T>,
+                  "useLocalStorage: the value must be std::string, bool or a number");
+    T initial = std::move(initialValue);
+    // Read the stored value once, on the first render.
+    bool& loaded = useRef(false);
+    if (!loaded) {
+        loaded = true;
+        if (std::string saved = detail::storageGet(key); !saved.empty()) {
+            if constexpr (std::same_as<T, std::string>) initial = std::move(saved);
+            else if constexpr (std::same_as<T, bool>) initial = saved == "true";
+            else if (auto n = parseNumber<T>(saved)) initial = *n;  // a broken value keeps the default
         }
     }
-
     auto [state, setState] = useState(std::move(initial));
-
-    useEffect([key, state] {
-        if constexpr (std::same_as<T, std::string>) {
-            detail::storageSet(key, state);
-        } else if constexpr (std::same_as<T, bool>) {
-            detail::storageSet(key, state ? "true" : "false");
-        } else if constexpr (std::integral<T> || std::floating_point<T>) {
-            detail::storageSet(key, std::to_string(state));
-        }
-    }, deps(key, state));
-
+    useEffect(
+        [key, state] {
+            if constexpr (std::same_as<T, std::string>) detail::storageSet(key, state);
+            else if constexpr (std::same_as<T, bool>) detail::storageSet(key, state ? "true" : "false");
+            else detail::storageSet(key, std::format("{}", state));
+        },
+        deps(key, state));
     return {state, setState};
 }
 

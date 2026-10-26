@@ -11,6 +11,7 @@
 #include <utility>
 
 #include "reactx/parse.hpp"
+#include "reactx/hooks.hpp"
 #include "reactx/terminal.hpp"
 #include "utf8.hpp"
 
@@ -198,6 +199,7 @@ void TerminalApp::run(Element element) {
         int w = terminal_.width(), h = terminal_.height();
         if (w != renderer_->width() || h != renderer_->height()) {
             renderer_->setSize(w, h);
+            detail::notifyResize({w, h});  // useWindowSize; re-rendered by the flush below
             renderer_->repaint();
         }
         for (const KeyEvent& key : terminal_.readKeys(100)) {

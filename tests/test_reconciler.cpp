@@ -6,6 +6,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "reactx/reactx.hpp"
@@ -684,6 +685,68 @@ TEST(use_window_size_hook) {
     Root root(r);
     root.render(h(WindowSizeBox));
     CHECK(has(r, "x"));
+    detail::notifyResize({120, 40});  // what TerminalApp / the browser report
+    root.flush();
+    CHECK(has(r, "120x40"));
+}
+
+TEST(debounce_waits_for_the_value_to_settle) {
+    TextRenderer r;
+    Root root(r);
+    root.render(h(DebounceBox, {.text = "a"}));
+    root.render(h(DebounceBox, {.text = "ab"}));
+    std::this_thread::sleep_for(std::chrono::milliseconds(30));
+    root.render(h(DebounceBox, {.text = "abc"}));  // restarts the 50 ms wait
+    std::this_thread::sleep_for(std::chrono::milliseconds(30));
+    root.flush();  // 60 ms after "ab", 30 after "abc": nothing yet
+    CHECK(has(r, "debounced=a\""));
+    std::this_thread::sleep_for(std::chrono::milliseconds(40));
+    root.flush();
+    CHECK(has(r, "debounced=abc"));  // "ab" was never shown
+}
+
+TEST(debounce_timer_is_cancelled_on_unmount) {
+    TextRenderer r;
+    Root root(r);
+    root.render(h(DebounceBox, {.text = "x"}));
+    root.render(h(DebounceBox, {.text = "y"}));
+    root.render(h("box"));  // unmounted with a timer pending
+    std::this_thread::sleep_for(std::chrono::milliseconds(70));
+    root.flush();  // the cancelled timer must not run (nor touch the dead state)
+    CHECK(!has(r, "debounced"));
+}
+
+Element NumberStore(const Props&) {
+    auto [n, setN] = useLocalStorage("test_number", 7);
+    setOutside = [setN](int v) { setN(v); };
+    return h("text", {}, {"n=" + std::to_string(n)});
+}
+
+TEST(local_storage_keeps_numbers) {
+    {
+        TextRenderer r;
+        Root root(r);
+        root.render(h(NumberStore));
+        CHECK(has(r, "n=7"));
+        setOutside(42);
+        root.flush();
+    }
+    TextRenderer r;
+    Root root(r);
+    root.render(h(NumberStore));  // a new mount reads the stored 42
+    CHECK(has(r, "n=42"));
+}
+
+struct PageProps {
+    std::string title = "home";
+};
+Element Page(const PageProps& p) { return h("text", {}, {"page " + p.title}); }
+
+TEST(typed_component_without_props_gets_defaults) {
+    TextRenderer r;
+    Root root(r);
+    root.render(h("box", {}, {h(Page)}));  // like router::routes({{"/", h(Home)}})
+    CHECK(has(r, "page home"));
 }
 
 }  // namespace

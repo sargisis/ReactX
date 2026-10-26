@@ -172,13 +172,14 @@ inline const std::vector<Page>& pages() {
                                           "«личность» обработчика, чтобы memo-компоненты не перерисовывались.",
                  "const auto& sorted = useMemo([&] { return sortItems(items); }, deps(items));\n"
                  "Callback onSave = useCallback([setSaved] { setSaved(true); }, deps());"},
-                {"useDebounce", "Задерживает обновление значения на указанное время (std::chrono). Идеально для поиска и ввода текста.",
+                {"useDebounce", "Значение, но только после того, как оно перестало меняться на заданное время (std::chrono): "
+                                "для поиска и ввода текста. Таймер работает в потоке интерфейса и отменяется сам.",
                  "auto [query, setQuery] = useState(std::string{});\n"
                  "std::string debounced = useDebounce(query, 300ms);"},
-                {"useLocalStorage", "Синхронизирует состояние с браузерным localStorage (или постоянной памятью в CLI). "
-                                    "Поддерживает строки, числа, bool.",
+                {"useLocalStorage", "Состояние, которое переживает перезагрузку страницы: хранится в localStorage. "
+                                    "Нативно — в памяти, пока работает программа. Поддерживает строки, числа, bool.",
                  "auto [theme, setTheme] = useLocalStorage(\"rx-theme\", std::string(\"dark\"));"},
-                {"useWindowSize", "Возвращает текущие размеры окна браузера или терминала (WindowSize{.width, .height}).",
+                {"useWindowSize", "Размер окна браузера (в пикселях) или терминала (в ячейках); компонент перерисовывается при изменении.",
                  "WindowSize size = useWindowSize();"},
                 {"Правило хуков", "Как в React: хуки вызываются в одном и том же порядке при каждой отрисовке, "
                                   "не в условиях и не в циклах с переменным числом шагов.", ""},

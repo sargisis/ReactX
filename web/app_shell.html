@@ -73,7 +73,6 @@
     .stat { border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; background: var(--card); }
     .stat b { display: block; font-size: 1.8rem; font-variant-numeric: tabular-nums; }
     .stat span { color: var(--muted); font-size: 0.9rem; }
-    .stat b.feature { font-size: 1.05rem; margin-bottom: 4px; }
     .error { color: var(--danger); border: 1px solid var(--danger); border-radius: 10px; padding: 10px 14px; margin: 0; }
     .back { color: var(--muted); text-decoration: none; }
     .back:hover { color: var(--accent); }
@@ -82,33 +81,8 @@
     .filters a.active { color: var(--accent); border-color: var(--accent); }
     .status { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 0.85rem; border: 1px solid var(--border); color: var(--muted); }
     .status.done { color: #16a34a; border-color: #16a34a; }
-    .notice { margin: 0 0 16px; padding: 8px 12px; border-radius: 10px; font-size: 0.9rem;
-              color: var(--muted); border: 1px dashed var(--border); }
     .footer-note { margin-top: 48px; color: var(--muted); font-size: 0.85rem; text-align: center; }
 
-    /* ---- docs ---- */
-    .docs { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 32px; align-items: start; }
-    .docs-nav { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 16px; }
-    .docs-nav a { color: var(--muted); text-decoration: none; padding: 6px 10px; border-radius: 8px; font-size: 0.95rem; }
-    .docs-nav a:hover { color: var(--text); background: rgb(127 127 127 / 0.12); }
-    .docs-nav a.active { color: var(--accent); background: rgb(79 140 255 / 0.12); font-weight: 600; }
-    @media (max-width: 720px) {
-      .docs { grid-template-columns: 1fr; gap: 16px; }
-      .docs-nav { position: static; flex-direction: row; flex-wrap: wrap; }
-    }
-    article h2 { font-size: 1.15rem; margin: 12px 0 0; }
-    article p { margin: 0; }
-    article section { display: flex; flex-direction: column; gap: 10px; }
-    pre { margin: 0; padding: 14px 16px; border-radius: 10px; overflow-x: auto; background: rgb(127 127 127 / 0.1);
-          border: 1px solid var(--border); font-size: 0.9rem; line-height: 1.5; }
-    code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
-    .pager { display: flex; justify-content: space-between; gap: 16px; margin-top: 16px; flex-wrap: wrap; }
-    .doc-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
-    .doc-card { display: block; padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px;
-                background: var(--card); color: var(--text); text-decoration: none; }
-    .doc-card:hover { border-color: var(--accent); }
-    .doc-card b { display: block; margin-bottom: 4px; }
-    .doc-card span { color: var(--muted); font-size: 0.9rem; }
   </style>
 </head>
 <body class="app">

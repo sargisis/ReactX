@@ -158,14 +158,15 @@ if(EMSCRIPTEN)
   reactx_web_example(web_todo)
   reactx_web_example(web_ui_demo)
 
-  # Pages with a router use web/app_shell.html; @REACTX_WEB_BASE@ becomes
+  # web_app uses web/app_shell.html, the website web/site_shell.html; @REACTX_WEB_BASE@ becomes
   # <base href>: "/" for web_app, REACTX_WEB_BASE for the website.
   set(REACTX_WEB_BASE "/" CACHE STRING "Base path of the website (<base href>), e.g. /ReactX/ on GitHub Pages")
   set(REACTX_SITE_BASE ${REACTX_WEB_BASE})
   set(REACTX_WEB_BASE "/")
   configure_file(${PROJECT_SOURCE_DIR}/web/app_shell.html ${PROJECT_BINARY_DIR}/app_shell_root.html @ONLY)
   set(REACTX_WEB_BASE ${REACTX_SITE_BASE})
-  configure_file(${PROJECT_SOURCE_DIR}/web/app_shell.html ${PROJECT_BINARY_DIR}/app_shell_site.html @ONLY)
+  # The website has its own shell: fonts, light/dark theme, its stylesheet.
+  configure_file(${PROJECT_SOURCE_DIR}/web/site_shell.html ${PROJECT_BINARY_DIR}/site_shell.html @ONLY)
 
   function(reactx_web_page target source outdir shell)
     add_executable(${target} ${source})
@@ -183,7 +184,7 @@ if(EMSCRIPTEN)
   # The ReactX website (docs + demos). build/<preset>/site is everything for a
   # static host: the site is the start page and also 404.html, so direct links
   # like /ReactX/docs/hooks open it (GitHub Pages has no other fallback).
-  reactx_web_page(website examples/site.cpp site_app ${PROJECT_BINARY_DIR}/app_shell_site.html)
+  reactx_web_page(website examples/site.cpp site_app ${PROJECT_BINARY_DIR}/site_shell.html)
   add_custom_target(site ALL
     COMMAND ${CMAKE_COMMAND} -E rm -rf ${PROJECT_BINARY_DIR}/site
     COMMAND ${CMAKE_COMMAND} -E make_directory ${PROJECT_BINARY_DIR}/site

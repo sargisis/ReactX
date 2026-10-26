@@ -34,6 +34,18 @@
         "8092"
       ],
       "port": 8092
+    },
+    {
+      "name": "site",
+      "runtimeExecutable": "build/debug/reactx_serve",
+      "runtimeArgs": [
+        "build/web/site",
+        "--not-found",
+        "404.html",
+        "--port",
+        "8093"
+      ],
+      "port": 8093
     }
   ]
 }

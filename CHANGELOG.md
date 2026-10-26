@@ -4,6 +4,10 @@
 
 ## [Не выпущено]
 
+## [0.4.0] — 2026-10-26
+
+Исправления хуков из 0.3.0 и браузерной сборки; DSL для элементов. Если вы на `v0.3.0` — обновитесь: в нём не собирается ни одна веб-программа.
+
 ### Исправлено
 
 - **Браузерная сборка снова собирается**: в `v0.3.0` `useDebounce` вызывал `detail::setTimeoutJs` до его объявления, и ни одна веб-программа (в том числе проекты из `reactx new`, которые подключают тег `v0.3.0`) не компилировалась.
@@ -80,7 +84,8 @@
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.3.0...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/sargisis/ReactX/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/sargisis/ReactX/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/sargisis/ReactX/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/sargisis/ReactX/releases/tag/v0.1.0

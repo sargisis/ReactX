@@ -142,6 +142,13 @@ void quick(const fs::path& tmp) {
     CHECK(rx::json::parse(read(app / "reactx.json"))["dependencies"].size() == 0);
     CHECK(reactx({"remove", "fmt"}, app).code != 0);
 
+    std::cout << "broken manifest is reported, not crashed on\n";
+    std::ofstream(app / "reactx.json") << "{ not json";
+    auto broken = reactx({"add", "x", "https://example.com/x.git"}, app);
+    CHECK(broken.code == 1 && contains(broken.out, "reactx.json: json: "));
+    std::ofstream(app / "reactx.json") << R"({"dependencies": []})";
+    CHECK(contains(reactx({"remove", "x"}, app).out, "\"dependencies\" must be an object"));
+
     std::cout << "errors and help\n";
     auto outside = reactx({"build"}, tmp);
     CHECK(outside.code != 0 && contains(outside.out, "no reactx.json"));

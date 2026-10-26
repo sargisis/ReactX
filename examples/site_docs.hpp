@@ -26,11 +26,11 @@ inline const std::vector<Page>& pages() {
         {
             "start", "Быстрый старт", "Что такое ReactX и как собрать первый пример.",
             {
-                {"Что это", "ReactX — UI-фреймворк в духе React на C++20. Компоненты — обычные функции, состояние — хуки, "
+                {"Что это", "ReactX — UI-фреймворк в духе React на современном C++ (режим C++26). Компоненты — обычные функции, состояние — хуки, "
                             "изменения в дерево вносит reconciler.\n\nОдин и тот же код компонентов работает в терминале "
                             "(бэкенд TerminalRenderer) и в браузере (WebAssembly + DOM).", ""},
                 {"Свой проект", "Проще всего начать с CLI: reactx new my-app && cd my-app && reactx dev. Подробнее — в разделе «CLI reactx».", ""},
-                {"Сборка ReactX", "Нужны CMake 3.28+, Ninja и GCC 14+ / Clang 17+. Для браузера — Emscripten (переменная EMSDK).",
+                {"Сборка ReactX", "Нужны CMake 3.28+, Ninja и GCC 15+ / Clang 19+ (режим C++26). Для браузера — Emscripten 6+ (переменная EMSDK).",
                  "cmake --preset debug && cmake --build --preset debug\n"
                  "ctest --preset debug\n\n"
                  "cmake --preset web && cmake --build --preset web    # WebAssembly\n"
@@ -42,7 +42,7 @@ inline const std::vector<Page>& pages() {
                  "    return h(\"button\", {{\"onClick\", [setCount] { setCount([](int c) { return c + 1; }); }}},\n"
                  "             {\"Нажато: \" + std::to_string(count)});\n"
                  "}\n\nint main() { mountDom(h(Counter)); }"},
-                {"Модуль C++20", "Вместо заголовков можно подключить модуль (в нативной сборке с Ninja).", "import reactx;"},
+                {"Модуль", "Вместо заголовков можно подключить модуль (в нативной сборке с Ninja).", "import reactx;"},
             },
         },
         {
@@ -89,6 +89,28 @@ inline const std::vector<Page>& pages() {
                  "static_assert(REACTX_VERSION_MAJOR == 0);"},
                 {"Обновиться", "Поменяйте rev в reactx.json на новый тег и пересоберите проект.",
                  "\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.2.0\" }"},
+            },
+        },
+        {
+            "safety", "Стандарт C++ и безопасность", "C++26, hardening, предусловия, std::expected, санитайзеры.",
+            {
+                {"Режим C++26", "Весь C++23 и части C++26, которые уже есть в GCC 15 и Emscripten: = delete(\"причина\"), "
+                                "static_assert с вычисляемым сообщением, T...[0], _ как имя-заглушка, #embed, std::add_sat, "
+                                "std::span::at. Минимум — C++20.", ""},
+                {"Hardening", "REACTX_HARDENING (по умолчанию включено): выход за границы в v[i], s[i] и front() пустого "
+                              "контейнера останавливает программу, а не портит память. Действует и на ваше приложение.",
+                 "cmake -B build -DREACTX_HARDENING=OFF   # выключить, если очень нужно"},
+                {"Предусловия", "REACTX_PRE — для ошибок программиста. При нарушении программа печатает условие, файл, строку "
+                                "и функцию и останавливается. Когда компиляторы получат контракты C++26, макрос станет "
+                                "contract_assert без изменений в коде.",
+                 "#include \"reactx/contract.hpp\"\n\nvoid resize(int w) {\n    REACTX_PRE(w > 0);\n    ...\n}"},
+                {"std::expected", "Там, где сбой — обычное дело (ввод, сеть, файлы), ошибка возвращается значением.",
+                 "if (auto v = json::tryParse(body)) use(*v);\nelse std::println(\"bad JSON at {}: {}\", v.error().offset(), v.error().what());\n\n"
+                 "if (auto started = server.tryStart(); !started) std::println(\"{}\", started.error());   // порт занят"},
+                {"Санитайзеры", "В CI все тесты идут под ASan + UBSan + LeakSanitizer (первая ошибка или утечка роняет сборку) "
+                                "и под ThreadSanitizer. Локально:",
+                 "cmake -B build -G Ninja -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=all\"\n"
+                 "cmake --build build && ctest --test-dir build -LE slow"},
             },
         },
         {

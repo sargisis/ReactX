@@ -17,8 +17,8 @@ class Root {
 public:
     explicit Root(Renderer& renderer);
     ~Root();
-    Root(const Root&) = delete;
-    Root& operator=(const Root&) = delete;
+    Root(const Root&) = delete("a Root owns the mounted tree: pass it by reference");
+    Root& operator=(const Root&) = delete("a Root owns the mounted tree: pass it by reference");
 
     // Mount or update the whole tree.
     void render(Element element);

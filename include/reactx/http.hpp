@@ -17,6 +17,7 @@
 
 #include <atomic>
 #include <cstddef>
+#include <expected>
 #include <filesystem>
 #include <functional>
 #include <map>
@@ -66,8 +67,8 @@ public:
     // port 0 picks a free port (see port() after start()).
     explicit HttpServer(std::string host = "127.0.0.1", int port = 8080);
     ~HttpServer();
-    HttpServer(const HttpServer&) = delete;
-    HttpServer& operator=(const HttpServer&) = delete;
+    HttpServer(const HttpServer&) = delete("a server owns its socket and threads");
+    HttpServer& operator=(const HttpServer&) = delete("a server owns its socket and threads");
 
     // Routes are tried before the files. A path can have parameters
     // ("/api/todos/:id") and end with "*" (the rest of the path); exact
@@ -93,7 +94,10 @@ public:
     // Print one line per request ("GET /app.wasm 200 145765").
     void setLogging(bool on) { logging_ = on; }
 
-    void start();  // bind + listen; throws std::runtime_error on failure
+    // Bind + listen. tryStart() returns the reason on failure ("port in use");
+    // start() throws std::runtime_error with it.
+    std::expected<void, std::string> tryStart();
+    void start();
     void run();    // accept connections until stop()
     void stop();   // safe to call from another thread or a signal handler
 

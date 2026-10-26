@@ -7,7 +7,13 @@
 
 #include "reactx/reactx.hpp"
 #include "reactx/text_renderer.hpp"
+#include "reactx/contract.hpp"
+#include "reactx/router.hpp"
 #include "reactx/version.hpp"
+
+#include <csignal>
+#include <sys/wait.h>
+#include <unistd.h>
 
 using namespace rx;
 
@@ -149,6 +155,33 @@ Element ThemeApp(const Props&) {
 }
 
 // ---- tests ----
+
+// Runs `fn` in a child process; true if it aborted and printed `message`.
+bool diesWith(const std::function<void()>& fn, const std::string& message) {
+    int fds[2];
+    if (::pipe(fds) != 0) return false;
+    pid_t pid = ::fork();
+    if (pid == 0) {
+        ::dup2(fds[1], 2);
+        ::close(fds[0]);
+        fn();
+        ::_exit(0);  // did not die
+    }
+    ::close(fds[1]);
+    std::string err;
+    char buf[512];
+    for (ssize_t n; (n = ::read(fds[0], buf, sizeof buf)) > 0;) err.append(buf, static_cast<std::size_t>(n));
+    ::close(fds[0]);
+    int status = 0;
+    ::waitpid(pid, &status, 0);
+    return WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT && err.find(message) != std::string::npos;
+}
+
+TEST(precondition_violation_stops_with_a_message) {
+    CHECK(diesWith([] { REACTX_PRE(1 + 1 == 3); }, "precondition failed: 1 + 1 == 3"));
+    CHECK(diesWith([] { router::navigate("todos/7"); }, "precondition failed: path.starts_with('/')"));
+    CHECK(!diesWith([] { REACTX_PRE(2 > 1); }, "precondition failed"));  // a true condition is free
+}
 
 TEST(version_is_semver) {
     std::string v = rx::version();

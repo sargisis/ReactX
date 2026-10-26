@@ -14,6 +14,7 @@
 // The network is used in the browser build; in the terminal build requests
 // only reach a setLocalFetch() handler (otherwise they fail with an error).
 
+#include <expected>
 #include <functional>
 #include <optional>
 #include <string>
@@ -37,6 +38,8 @@ struct FetchResponse {
     bool ok() const { return error.empty() && status >= 200 && status < 300; }
     // Parses the body; throws json::Error for invalid JSON.
     json::Value json() const { return json::parse(body); }
+    // The same without exceptions (a server can always send broken JSON).
+    std::expected<json::Value, json::Error> tryJson() const { return json::tryParse(body); }
     bool operator==(const FetchResponse&) const = default;
 };
 
@@ -59,6 +62,7 @@ struct FetchState {
 
     bool ok() const { return !loading && response.ok(); }
     json::Value json() const { return response.json(); }
+    std::expected<json::Value, json::Error> tryJson() const { return response.tryJson(); }
     // "404", "network error: ..." — for showing to the user.
     std::string errorText() const;
 };

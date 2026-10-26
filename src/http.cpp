@@ -2,6 +2,8 @@
 // "Connection: close" after each response.
 #include "reactx/http.hpp"
 
+#include "reactx/contract.hpp"
+
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <poll.h>
@@ -177,6 +179,9 @@ HttpServer::~HttpServer() {
 }
 
 void HttpServer::route(std::string method, std::string path, Handler handler) {
+    REACTX_PRE(!method.empty() && std::ranges::all_of(method, [](char c) { return c >= 'A' && c <= 'Z'; }));
+    REACTX_PRE(path.starts_with('/'));
+    REACTX_PRE(static_cast<bool>(handler));
     routes_[{std::move(method), std::move(path)}] = std::move(handler);
 }
 
@@ -192,26 +197,34 @@ void HttpServer::setUrlPrefix(std::string prefix) {
 
 void HttpServer::setNotFoundPage(std::filesystem::path file) { notFound_ = std::move(file); }
 
-void HttpServer::start() {
-    listenFd_ = ::socket(AF_INET, SOCK_STREAM, 0);
-    if (listenFd_ < 0) throw std::runtime_error("ReactX http: socket() failed");
+std::expected<void, std::string> HttpServer::tryStart() {
+    int fd = ::socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) return std::unexpected(std::string("socket() failed: ") + std::strerror(errno));
     int yes = 1;
-    ::setsockopt(listenFd_, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes);
+    ::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes);
 
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(static_cast<std::uint16_t>(port_));
-    if (::inet_pton(AF_INET, host_.c_str(), &addr.sin_addr) != 1)
-        throw std::runtime_error("ReactX http: bad IPv4 address " + host_);
-    if (::bind(listenFd_, reinterpret_cast<sockaddr*>(&addr), sizeof addr) != 0)
-        throw std::runtime_error("ReactX http: can't bind " + host_ + ":" + std::to_string(port_) + " (" +
-                                 std::strerror(errno) + ")");
-    if (::listen(listenFd_, 64) != 0) throw std::runtime_error("ReactX http: listen() failed");
+    auto fail = [fd](std::string why) {
+        ::close(fd);
+        return std::unexpected(std::move(why));
+    };
+    if (::inet_pton(AF_INET, host_.c_str(), &addr.sin_addr) != 1) return fail("bad IPv4 address " + host_);
+    if (::bind(fd, reinterpret_cast<sockaddr*>(&addr), sizeof addr) != 0)
+        return fail("can't bind " + host_ + ":" + std::to_string(port_) + " (" + std::strerror(errno) + ")");
+    if (::listen(fd, 64) != 0) return fail(std::string("listen() failed: ") + std::strerror(errno));
 
     socklen_t len = sizeof addr;
-    ::getsockname(listenFd_, reinterpret_cast<sockaddr*>(&addr), &len);
+    ::getsockname(fd, reinterpret_cast<sockaddr*>(&addr), &len);
     port_ = ntohs(addr.sin_port);
+    listenFd_ = fd;
     running_ = true;
+    return {};
+}
+
+void HttpServer::start() {
+    if (auto started = tryStart(); !started) throw std::runtime_error("ReactX http: " + started.error());
 }
 
 void HttpServer::stop() { running_ = false; }

@@ -8,6 +8,7 @@
 //   v["done"] = true;
 //   v["tags"].push("shop");
 //   std::string text = v.dump();              // {"done":true,"tags":["home","shop"],"title":"Buy milk"}
+//   auto maybe = rx::json::tryParse(input);   // std::expected<Value, json::Error>, no exceptions
 //
 //   rx::json::Value todo = rx::json::object({{"id", 1}, {"title", "Read"}});
 //
@@ -16,6 +17,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <expected>
 #include <initializer_list>
 #include <map>
 #include <stdexcept>
@@ -115,6 +117,9 @@ Value array(std::initializer_list<Value> items = {});
 
 // Parses JSON text. Throws json::Error on invalid input.
 Value parse(std::string_view text);
+// The same without exceptions: the value, or the error (message + offset).
+//   if (auto v = json::tryParse(body)) use(*v); else log(v.error().what());
+std::expected<Value, Error> tryParse(std::string_view text);
 
 // JSON string literal for `s` (with quotes and escapes).
 std::string quote(std::string_view s);

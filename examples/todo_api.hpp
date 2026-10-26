@@ -164,12 +164,10 @@ inline std::optional<std::string> validTitle(const rx::json::Value& v, std::stri
 // Answers one request. `path` has no query string.
 inline Reply handle(Store& store, std::string_view method, std::string_view path, std::string_view body) {
     auto parseBody = [&](rx::json::Value& out) -> std::optional<Reply> {
-        try {
-            out = rx::json::parse(body);
-            return std::nullopt;
-        } catch (const rx::json::Error& e) {
-            return error(400, e.what());
-        }
+        auto parsed = rx::json::tryParse(body);
+        if (!parsed) return error(400, parsed.error().what());
+        out = std::move(*parsed);
+        return std::nullopt;
     };
 
     std::map<std::string, std::string> params;

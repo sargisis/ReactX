@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "reactx/context.hpp"
+#include "reactx/contract.hpp"
 #include "reactx/hooks.hpp"
 #include "reactx/path.hpp"
 
@@ -198,6 +199,7 @@ Element link(LinkProps p) {
 }
 
 void navigate(const std::string& path, bool replace) {
+    REACTX_PRE(path.starts_with('/'));  // app paths are absolute: "/todos/7", not "todos/7"
     start();
     if (path == store().path) return;
 #ifdef __EMSCRIPTEN__

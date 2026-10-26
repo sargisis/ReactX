@@ -3,7 +3,9 @@ cmake_minimum_required(VERSION 3.20...3.31)
 # MAJOR.MINOR.PATCH; release tags are vMAJOR.MINOR.PATCH, see CHANGELOG.md).
 project(ReactX VERSION 0.1.0 LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 20)
+# C++26 (GCC 15+, Clang 19+). C++20 is the floor; we use C++23 fully and the
+# C++26 parts our compilers implement (see README: "Стандарт C++").
+set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -18,11 +20,16 @@ option(REACTX_BUILD_TESTS "Build the ReactX tests" ${PROJECT_IS_TOP_LEVEL})
 option(REACTX_BUILD_TOOLS "Build reactx_serve, api_server and the reactx CLI" ${PROJECT_IS_TOP_LEVEL})
 set(REACTX_DIR ${PROJECT_SOURCE_DIR} CACHE INTERNAL "ReactX source directory")
 
+# Checks inside the standard library: v[i] / s[i] / front() on an empty
+# container stop the program instead of corrupting memory. Cheap ("fast"
+# mode in libc++), so on by default; applies to programs linking ReactX too.
+option(REACTX_HARDENING "Bounds checks in the C++ standard library" ON)
+
 # reactx/version.hpp (REACTX_VERSION, rx::version()) for the CLI and for apps.
 configure_file(${PROJECT_SOURCE_DIR}/cmake/version.hpp.in ${PROJECT_BINARY_DIR}/generated/reactx/version.hpp @ONLY)
 
-# C++20 modules (`import reactx;`) need CMake 3.28+, the Ninja or Visual Studio
-# generator (not Makefiles) and GCC 14+ / Clang 17+ / MSVC 17.4+.
+# The module (`import reactx;`) needs CMake 3.28+, the Ninja or Visual Studio
+# generator (not Makefiles) and GCC 15+ / Clang 17+ / MSVC 17.4+.
 # Otherwise the library still works through the headers.
 set(REACTX_MODULES_DEFAULT OFF)
 if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.28 AND
@@ -63,6 +70,9 @@ if(EMSCRIPTEN)
   # Native WebAssembly exceptions (all current browsers and Node support them);
   # PUBLIC, so every program that links reactx uses the same model.
   target_compile_options(reactx PUBLIC -fwasm-exceptions)
+  if(REACTX_HARDENING)  # libc++ (Emscripten)
+    target_compile_definitions(reactx PUBLIC _LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST)
+  endif()
   target_link_options(reactx PUBLIC -fwasm-exceptions)
   add_library(reactx::reactx ALIAS reactx)
   include(${PROJECT_SOURCE_DIR}/cmake/ReactXApp.cmake)
@@ -202,6 +212,9 @@ add_library(reactx
 )
 target_include_directories(reactx PUBLIC include ${PROJECT_BINARY_DIR}/generated)
 target_link_libraries(reactx PRIVATE ${REACTX_YOGA_TARGET})
+if(REACTX_HARDENING)  # libstdc++ (GCC) and libc++ (Clang)
+  target_compile_definitions(reactx PUBLIC _GLIBCXX_ASSERTIONS _LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST)
+endif()
 add_library(reactx::reactx ALIAS reactx)
 include(${PROJECT_SOURCE_DIR}/cmake/ReactXApp.cmake)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -211,9 +224,9 @@ endif()
 if(REACTX_MODULES)
   target_sources(reactx PUBLIC FILE_SET CXX_MODULES FILES modules/reactx.cppm)
   target_compile_features(reactx PUBLIC cxx_std_20)
-  message(STATUS "ReactX: C++20 module enabled (import reactx;)")
+  message(STATUS "ReactX: module enabled (import reactx;)")
 else()
-  message(STATUS "ReactX: C++20 module disabled, using headers (needs CMake 3.28+ and -G Ninja)")
+  message(STATUS "ReactX: module disabled, using headers (needs CMake 3.28+, -G Ninja, GCC 15+)")
 endif()
 
 # ---- HTTP server (development server for the web build, API routes) ----
@@ -223,6 +236,9 @@ target_include_directories(reactx_net PUBLIC include ${PROJECT_BINARY_DIR}/gener
 target_link_libraries(reactx_net PUBLIC Threads::Threads)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   target_compile_options(reactx_net PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+if(REACTX_HARDENING)
+  target_compile_definitions(reactx_net PUBLIC _GLIBCXX_ASSERTIONS _LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST)
 endif()
 add_library(reactx::net ALIAS reactx_net)
 
@@ -269,6 +285,10 @@ enable_testing()
 add_executable(reactx_tests tests/test_core.cpp)
 target_link_libraries(reactx_tests PRIVATE reactx)
 add_test(NAME reactx_tests COMMAND reactx_tests)
+
+add_executable(reactx_reconciler_tests tests/test_reconciler.cpp)
+target_link_libraries(reactx_reconciler_tests PRIVATE reactx)
+add_test(NAME reactx_reconciler_tests COMMAND reactx_reconciler_tests)
 
 add_executable(reactx_terminal_tests tests/test_terminal.cpp)
 target_link_libraries(reactx_terminal_tests PRIVATE reactx)

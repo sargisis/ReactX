@@ -2,6 +2,8 @@
 // keeps a Map from id to DOM node and forwards browser events back to C++.
 #include "reactx/dom.hpp"
 
+#include "reactx/contract.hpp"
+
 #include <emscripten.h>
 
 #include <memory>
@@ -260,6 +262,7 @@ void flushDom() {
 }
 
 Root& mountDom(Element element, const std::string& container) {
+    REACTX_PRE(!container.empty());
     // Lives for the whole page: the runtime keeps running after main().
     auto* app = new DomApp(container);
     int index = static_cast<int>(apps().size());

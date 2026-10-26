@@ -1,5 +1,7 @@
 #include "reactx/hooks.hpp"
 
+#include "reactx/contract.hpp"
+
 #include <algorithm>
 #include <mutex>
 #include <unordered_set>
@@ -26,7 +28,10 @@ HookSlot nextHook(const std::function<std::unique_ptr<HookBase>()>& make) {
     return {fiber.hooks[index].get(), fiber.weak_from_this(), index};
 }
 
-HookBase* hookAt(Fiber& fiber, std::size_t index) { return fiber.hooks.at(index).get(); }
+HookBase* hookAt(Fiber& fiber, std::size_t index) {
+    REACTX_PRE(index < fiber.hooks.size());  // a setter always points at an existing hook
+    return fiber.hooks[index].get();
+}
 
 void scheduleUpdate(Fiber& fiber) {
     if (fiber.alive && fiber.owner) fiber.owner->schedule(fiber);

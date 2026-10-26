@@ -423,4 +423,12 @@ Value array(std::initializer_list<Value> items) { return Value(Array(items)); }
 
 Value parse(std::string_view text) { return Parser(text).document(); }
 
+std::expected<Value, Error> tryParse(std::string_view text) {
+    try {
+        return Parser(text).document();
+    } catch (const Error& e) {
+        return std::unexpected(e);
+    }
+}
+
 }  // namespace rx::json

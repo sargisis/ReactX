@@ -143,8 +143,8 @@ class Terminal {
 public:
     Terminal();
     ~Terminal();
-    Terminal(const Terminal&) = delete;
-    Terminal& operator=(const Terminal&) = delete;
+    Terminal(const Terminal&) = delete("there is one terminal: pass it by reference");
+    Terminal& operator=(const Terminal&) = delete("there is one terminal: pass it by reference");
 
     static bool isInteractive();  // stdin and stdout are terminals
 

@@ -139,6 +139,17 @@ TEST(type_mismatch_throws) {
     CHECK(threw);
 }
 
+TEST(try_parse_returns_expected) {
+    auto ok = json::tryParse(R"({"a": [1, 2]})");
+    CHECK(ok.has_value());
+    CHECK((*ok)["a"].size() == 2);
+    auto bad = json::tryParse(R"({"a": tru})");
+    CHECK(!bad.has_value());
+    CHECK(bad.error().offset() == 6);
+    CHECK(json::tryParse("[1,").transform([](const json::Value& v) { return v.size(); }).value_or(99) == 99);
+    CHECK(json::tryParse("[1,2,3]").transform([](const json::Value& v) { return v.size(); }).value_or(99) == 3);
+}
+
 TEST(temporaries_are_safe_in_range_for) {
     // C++20 would destroy the parsed value before the loop if asArray()
     // returned a reference here; on a temporary it returns a copy.

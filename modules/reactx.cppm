@@ -2,6 +2,7 @@
 // The headers stay the source of truth; this file only re-exports them.
 module;
 
+#include "reactx/contract.hpp"
 #include "reactx/fetch.hpp"
 #include "reactx/json.hpp"
 #include "reactx/path.hpp"

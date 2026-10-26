@@ -233,6 +233,24 @@ TEST(routes_and_methods) {
     CHECK(request(r.port(), "GET", "/api/fail").status == 500);
 }
 
+TEST(try_start_reports_a_busy_port) {
+    HttpServer first("127.0.0.1", 0);
+    CHECK(first.tryStart().has_value());
+    HttpServer second("127.0.0.1", first.port());
+    auto again = second.tryStart();
+    CHECK(!again.has_value());
+    CHECK(again.error().find("can't bind") != std::string::npos);
+    HttpServer bad("not-an-ip", 0);
+    CHECK(bad.tryStart().error() == "bad IPv4 address not-an-ip");
+    bool threw = false;
+    try {
+        bad.start();
+    } catch (const std::runtime_error& e) {
+        threw = std::string(e.what()).find("bad IPv4") != std::string::npos;
+    }
+    CHECK(threw);
+}
+
 TEST(path_patterns) {
     std::map<std::string, std::string> p;
     CHECK(matchPath("/api/todos/:id", "/api/todos/7", p) && p["id"] == "7");

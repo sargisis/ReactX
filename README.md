@@ -1,10 +1,10 @@
 # ReactX
 
-**Сайт с документацией и демо: https://sargisis.github.io/ReactX/** — сам сайт тоже написан на ReactX (C++20 → WebAssembly).
+**Сайт с документацией и демо: https://sargisis.github.io/ReactX/** — сам сайт тоже написан на ReactX (C++26 → WebAssembly).
 
 Текущая версия — **0.1.0** ([CHANGELOG.md](CHANGELOG.md)). Версии по [SemVer](https://semver.org/lang/ru/): `MAJOR.MINOR.PATCH`, теги `vX.Y.Z`; номер записан только в `project(ReactX VERSION ...)` и доступен в коде как `rx::version()` (`reactx/version.hpp`).
 
-React-подобный UI-фреймворк на C++20 (только стандарт C++20, без C++23) с подключаемым бэкендом отрисовки.
+React-подобный UI-фреймворк на современном C++ (режим C++26: весь C++23 и реализованные части C++26; минимум — C++20) с подключаемым бэкендом отрисовки.
 
 ```cpp
 import reactx;          // C++20-модуль; или #include "reactx/reactx.hpp"
@@ -196,7 +196,7 @@ ctest --preset web                                   # тесты DOM-бэкен
 
 ### Сервер на C++ (`reactx_serve`, `rx::net::HttpServer`)
 
-Для разработки не нужен Python: свой HTTP/1.1-сервер на C++20 ([`reactx/http.hpp`](include/reactx/http.hpp), POSIX-сокеты, поток на соединение).
+Для разработки не нужен Python: свой HTTP/1.1-сервер на C++ ([`reactx/http.hpp`](include/reactx/http.hpp), POSIX-сокеты, поток на соединение).
 
 ```sh
 ./build/debug/reactx_serve [ПАПКА] [--port 8090] [--host 127.0.0.1] [--spa] [--quiet]
@@ -221,7 +221,7 @@ server.run();   // до Ctrl+C
 
 ## Сайт из нескольких страниц: роутер, данные, API
 
-Полноценное веб-приложение, где и интерфейс, и сервер — C++20 ([examples/web_app.cpp](examples/web_app.cpp) + [examples/api_server.cpp](examples/api_server.cpp)):
+Полноценное веб-приложение, где и интерфейс, и сервер — C++ ([examples/web_app.cpp](examples/web_app.cpp) + [examples/api_server.cpp](examples/api_server.cpp)):
 
 ```sh
 cmake --build --preset web && cmake --build --preset debug
@@ -270,7 +270,7 @@ fetch({.method = "POST", .url = "/api/todos", .body = json::object({{"title", "�
 
 ## Публикация сайта (GitHub Pages)
 
-Сайт собирается и публикуется автоматически ([.github/workflows/pages.yml](.github/workflows/pages.yml)) при каждом `push` в `main`: нативные тесты (GCC 14), сборка Emscripten, веб-тесты под Node; если всё прошло — содержимое `build/pages/site` записывается в ветку **`gh-pages`** (каждый раз один свежий коммит, только готовые файлы). Один раз нужно выбрать в репозитории **Settings → Pages → Build and deployment → Deploy from a branch → `gh-pages` / `(root)`** (ветка появляется после первой удачной сборки).
+Сайт собирается и публикуется автоматически ([.github/workflows/pages.yml](.github/workflows/pages.yml)) при каждом `push` в `main`: нативные тесты (GCC 15), все тесты под **ASan + UBSan + LeakSanitizer** и под **ThreadSanitizer**, сборка Emscripten, веб-тесты под Node; если всё прошло — содержимое `build/pages/site` записывается в ветку **`gh-pages`** (каждый раз один свежий коммит, только готовые файлы). Один раз нужно выбрать в репозитории **Settings → Pages → Build and deployment → Deploy from a branch → `gh-pages` / `(root)`** (ветка появляется после первой удачной сборки).
 
 Что внутри сайта ([examples/site.cpp](examples/site.cpp), тоже на ReactX):
 - главная с описанием и примером кода;
@@ -290,11 +290,19 @@ cmake --preset pages && cmake --build --preset pages && ctest --preset pages
 
 `reactx_serve --base` отдаёт папку по URL-префиксу, `--not-found` — свой файл с кодом 404 (как GitHub Pages).
 
+## Стандарт C++ и безопасность
+
+- **Режим C++26.** Используем весь C++23 (`std::expected`, `std::print`, deducing this) и те части C++26, что уже есть в GCC 15 и в Emscripten: `= delete("причина")`, `static_assert` с вычисляемым сообщением, индексация пачек `T...[0]`, `_` как имя-заглушка, `#embed`, `std::add_sat`, `std::span::at`. Контракты, рефлексию (`<meta>`), `<inplace_vector>` подключим, когда они появятся в компиляторах.
+- **Hardening стандартной библиотеки** (`REACTX_HARDENING`, включено по умолчанию): выход за границы в `v[i]`, `s[i]`, `front()` пустого контейнера останавливает программу, а не портит память (`_GLIBCXX_ASSERTIONS`, `_LIBCPP_HARDENING_MODE=FAST`). Действует и на программы, подключившие ReactX.
+- **Предусловия** `REACTX_PRE(условие)` ([`reactx/contract.hpp`](include/reactx/contract.hpp)) — для ошибок программиста (путь роутера без `/`, неверный метод маршрута): программа останавливается с сообщением, где и что нарушено. С компилятором, поддерживающим контракты C++26, макрос станет `contract_assert`.
+- **Ошибки как значения** (`std::expected`) там, где сбой — нормальная ситуация: `json::tryParse`, `FetchResponse::tryJson`, `HttpServer::tryStart` (занятый порт), чтение `reactx.json` в CLI. Версии с исключениями тоже остались.
+- **Санитайзеры в CI**: каждый `push` прогоняет все тесты под ASan + UBSan + LeakSanitizer (первая же ошибка или утечка роняет сборку) и под ThreadSanitizer.
+
 ## Сборка
 
 Зависимость одна — [Yoga](https://github.com/facebook/yoga) v3.2.1 (MIT). Если её нет в системе, CMake скачает её сам при первой настройке (нужен интернет; без интернета: `-DFETCHCONTENT_SOURCE_DIR_YOGA=/путь/к/yoga`).
 
-С модулями C++20 (`import reactx;`) — нужны CMake 3.28+, Ninja и GCC 14+ / Clang 17+ / MSVC 17.4+:
+Нужен компилятор с режимом C++26: **GCC 15+** или **Clang 19+** (для браузера — Emscripten 6+). С модулем (`import reactx;`) — ещё CMake 3.28+ и Ninja:
 
 ```sh
 cmake --preset debug            # или release
@@ -334,7 +342,8 @@ web/              shell.html — HTML-шаблон и CSS для веб-прим
 tests/            тесты ядра, test_terminal.cpp — терминал, test_ui.cpp — rx::ui, test_module.cpp — import reactx;
                   test_dom.cpp, test_ui_web.cpp, test_web_app.cpp, test_web_base.cpp + web/fake_dom.js — браузер под Node;
                   test_http.cpp, test_todo_api.cpp — сервер; test_json.cpp; test_router.cpp;
-                  test_cli.cpp — CLI (быстрые + медленный полный прогон, ctest -LE slow пропускает его)
+                  test_cli.cpp — CLI (быстрые + медленный полный прогон, ctest -LE slow пропускает его);
+                  test_reconciler.cpp — граничные случаи useState, useEffect, useContext, memo
 tools/            reactx.cpp — CLI; serve.cpp — reactx_serve, сервер для разработки
 cmake/            ReactXApp.cmake — reactx_add_app() для своих проектов; version.hpp.in — reactx/version.hpp
 CHANGELOG.md      изменения по версиям
@@ -399,5 +408,7 @@ cmake --preset release && cmake --build --preset release
 - [x] Шаг 8 — несколько страниц (роутер), загрузка данных (`useFetch`), свой JSON, REST API на C++
 - [x] Шаг 9 — сайт с документацией на GitHub Pages: автосборка, базовый путь, прямые ссылки на страницы
 - [x] CLI `reactx` (аналог `npm`): `new`, `dev` (сервер на C++ + автообновление), `build`, `add`/`remove` зависимостей
+- [x] v0.2.0 — режим C++26, hardening, `std::expected`, `REACTX_PRE`, санитайзеры в CI, тесты граничных случаев reconciler
+- [ ] `llms.txt` и `AGENTS.md` для AI-помощников (в том числе в шаблоне `reactx new`)
 - [ ] Свои библиотеки для фронтенда и для работы с C++; более короткий синтаксис элементов
 - [ ] Позже — окна на рабочем столе: SDL3 + Skia/ThorVG

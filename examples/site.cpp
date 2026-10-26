@@ -47,7 +47,7 @@ Element Home(const Props&) {
         return h("div", {{"className", "stat"}, {"key", title}}, {h("b", {{"className", "feature"}}, {title}), h("span", {}, {text})});
     };
     return page({
-        h("h1", {}, {"ReactX — React на C++20"}),
+        h("h1", {}, {"ReactX — React на современном C++"}),
         h("p", {{"className", "lead"}},
           {"Компоненты, хуки и reconciler как в React — только на C++. Один и тот же код работает в терминале и в "
            "браузере (WebAssembly). Этот сайт тоже написан на ReactX."}),
@@ -70,7 +70,7 @@ Element Home(const Props&) {
             feature("rx::ui", "кнопки, поля, вкладки, окна, списки с темой"),
             feature("Роутер и данные", "страницы, ссылки, useFetch, свой JSON"),
             feature("Сервер на C++", "HTTP-сервер с маршрутами и раздачей файлов"),
-            feature("Только C++20", "без C++23; модуль import reactx;"),
+            feature("C++26", "весь C++23 и части C++26: std::expected, предусловия, hardening; модуль import reactx;"),
         }),
     });
 }
@@ -166,7 +166,7 @@ Element Site(const Props&) {
                 {"*", h(NotFound)},
             }),
         }),
-        h("footer", {{"className", "footer-note"}}, {"ReactX · C++20 · WebAssembly"}),
+        h("footer", {{"className", "footer-note"}}, {"ReactX · C++26 · WebAssembly"}),
     });
 }
 

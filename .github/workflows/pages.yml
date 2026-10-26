@@ -1,4 +1,5 @@
-# Builds and tests ReactX, then publishes the site to GitHub Pages:
+# Builds and tests ReactX (GCC 15 and Emscripten; ASan+UBSan+LSan and TSan),
+# then publishes the site to GitHub Pages:
 #   https://sargisis.github.io/ReactX/
 # The site is pushed to the gh-pages branch; in Settings -> Pages choose
 # "Deploy from a branch" -> gh-pages / (root).
@@ -21,27 +22,72 @@ env:
   EMSDK_VERSION: "6.0.13"  # same Emscripten as in development
 
 jobs:
+  # All native jobs run in the official gcc:15 image: ReactX builds in C++26
+  # mode and uses C++26 features that GCC 14 doesn't have.
   native:
-    name: Native build and tests (GCC 14)
+    name: Native build and tests (GCC 15, C++26)
     runs-on: ubuntu-24.04
+    container: gcc:15
     steps:
       - uses: actions/checkout@v4
-
       - name: Install tools
-        run: sudo apt-get update && sudo apt-get install -y ninja-build g++-14
-
-      # The C++20 module is tested locally with GCC 15; CI checks the headers.
+        run: apt-get update && apt-get install -y --no-install-recommends cmake ninja-build
       - name: Configure
         run: >
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
-          -DCMAKE_CXX_COMPILER=g++-14 -DREACTX_MODULES=OFF
           -DCMAKE_CXX_FLAGS="-Wall -Wextra -Wpedantic -Werror"
-
       - name: Build
         run: cmake --build build -j
-
-      - name: Test
+      - name: Test (including the slow end-to-end CLI run)
         run: ctest --test-dir build --output-on-failure
+
+  # Memory errors, leaks and undefined behaviour stop the run on the first
+  # finding: -fno-sanitize-recover makes UBSan fatal (by default it only
+  # prints), detect_leaks turns LeakSanitizer on, halt_on_error stops ASan.
+  sanitize-address:
+    name: ASan + UBSan + LeakSanitizer
+    runs-on: ubuntu-24.04
+    container:
+      image: gcc:15
+      options: --cap-add=SYS_PTRACE  # LeakSanitizer needs ptrace in a container
+    env:
+      ASAN_OPTIONS: detect_leaks=1:halt_on_error=1:abort_on_error=1:detect_stack_use_after_return=1:strict_string_checks=1
+      UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: apt-get update && apt-get install -y --no-install-recommends cmake ninja-build
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_FLAGS="-Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined
+          -fno-sanitize-recover=all -fno-omit-frame-pointer"
+      - name: Build
+        run: cmake --build build -j
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -LE slow
+
+  # Data races in the HTTP server, the CLI's watcher and the tests' threads.
+  sanitize-thread:
+    name: ThreadSanitizer
+    runs-on: ubuntu-24.04
+    container:
+      image: gcc:15
+      options: --security-opt seccomp=unconfined  # lets setarch turn off ASLR (TSan's memory layout)
+    env:
+      TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: apt-get update && apt-get install -y --no-install-recommends cmake ninja-build
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_FLAGS="-Wall -Wextra -Wpedantic -Werror -fsanitize=thread"
+      - name: Build
+        run: cmake --build build -j
+      - name: Test
+        run: setarch "$(uname -m)" -R ctest --test-dir build --output-on-failure -LE slow
 
   site:
     name: Web build, tests and site
@@ -79,7 +125,7 @@ jobs:
   deploy:
     name: Publish to the gh-pages branch
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    needs: [native, site]
+    needs: [native, sanitize-address, sanitize-thread, site]
     runs-on: ubuntu-24.04
     permissions:
       contents: write  # push the gh-pages branch with the built-in token

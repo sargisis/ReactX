@@ -22,6 +22,7 @@
 #include <csignal>
 #include <chrono>
 #include <cstdlib>
+#include <expected>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -109,12 +110,20 @@ fs::path projectRoot() {
     }
 }
 
+// The manifest, or why it can't be used (shown to the user).
+std::expected<Value, std::string> loadManifest(const fs::path& root) {
+    auto parsed = rx::json::tryParse(readFile(root / "reactx.json"));
+    if (!parsed) return std::unexpected("reactx.json: " + std::string(parsed.error().what()));
+    if (!parsed->isObject()) return std::unexpected(std::string("reactx.json: must be a JSON object"));
+    if (!(*parsed)["dependencies"].isObject() && !(*parsed)["dependencies"].isNull())
+        return std::unexpected(std::string("reactx.json: \"dependencies\" must be an object"));
+    return std::move(*parsed);
+}
+
 Value readManifest(const fs::path& root) {
-    try {
-        return rx::json::parse(readFile(root / "reactx.json"));
-    } catch (const rx::json::Error& e) {
-        fail("reactx.json: " + std::string(e.what()));
-    }
+    auto manifest = loadManifest(root);
+    if (!manifest) fail(manifest.error());
+    return std::move(*manifest);
 }
 
 void writeManifest(const fs::path& root, const Value& manifest) { writeFile(root / "reactx.json", manifest.dump(2) + "\n"); }
@@ -135,7 +144,7 @@ std::string cmakeName(std::string name) {  // my-app -> my_app (a valid CMake ta
 constexpr std::string_view kCMakeLists = R"cmake(cmake_minimum_required(VERSION 3.24)
 project({{target}} LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 26)   # ReactX needs C++26 mode (GCC 15+, Clang 19+)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)

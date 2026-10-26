@@ -268,7 +268,7 @@ fetch({.method = "POST", .url = "/api/todos", .body = json::object({{"title", "�
 
 ## Публикация сайта (GitHub Pages)
 
-Сайт собирается и публикуется автоматически ([.github/workflows/pages.yml](.github/workflows/pages.yml)) при каждом `push` в `main`: нативные тесты (GCC 14), сборка Emscripten, веб-тесты под Node, затем выкладка `build/pages/site`. Один раз нужно включить в репозитории **Settings → Pages → Source: GitHub Actions**.
+Сайт собирается и публикуется автоматически ([.github/workflows/pages.yml](.github/workflows/pages.yml)) при каждом `push` в `main`: нативные тесты (GCC 14), сборка Emscripten, веб-тесты под Node; если всё прошло — содержимое `build/pages/site` записывается в ветку **`gh-pages`** (каждый раз один свежий коммит, только готовые файлы). Один раз нужно выбрать в репозитории **Settings → Pages → Build and deployment → Deploy from a branch → `gh-pages` / `(root)`** (ветка появляется после первой удачной сборки).
 
 Что внутри сайта ([examples/site.cpp](examples/site.cpp), тоже на ReactX):
 - главная с описанием и примером кода;

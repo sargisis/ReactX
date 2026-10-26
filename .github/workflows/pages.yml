@@ -1,6 +1,7 @@
 # Builds and tests ReactX, then publishes the site to GitHub Pages:
 #   https://sargisis.github.io/ReactX/
-# Pages must use "GitHub Actions" as the source (Settings -> Pages).
+# The site is pushed to the gh-pages branch; in Settings -> Pages choose
+# "Deploy from a branch" -> gh-pages / (root).
 name: Build, test and publish the site
 
 on:
@@ -14,7 +15,7 @@ permissions:
 
 concurrency:
   group: pages-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false  # never stop a publish half-way
 
 env:
   EMSDK_VERSION: "6.0.13"  # same Emscripten as in development
@@ -68,23 +69,38 @@ jobs:
           source "$HOME/emsdk/emsdk_env.sh"
           ctest --preset pages
 
-      - name: Upload the site
-        uses: actions/upload-pages-artifact@v3
+      - name: Keep the site for the publish job
+        uses: actions/upload-artifact@v4
         with:
+          name: site
           path: build/pages/site
+          if-no-files-found: error
 
   deploy:
-    name: Publish to GitHub Pages
+    name: Publish to the gh-pages branch
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: [native, site]
     runs-on: ubuntu-24.04
     permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      contents: write  # push the gh-pages branch with the built-in token
     steps:
-      - name: Deploy
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Get the site
+        uses: actions/download-artifact@v4
+        with:
+          name: site
+          path: site
+
+      # A fresh one-commit branch each time: only the built files, no history.
+      - name: Push to gh-pages
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          cd site
+          touch .nojekyll
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Publish ${GITHUB_SHA::7}"
+          git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+          echo "Published ${GITHUB_SHA::7}: https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"

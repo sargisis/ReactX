@@ -13,6 +13,7 @@
 [![C++26](https://img.shields.io/badge/C%2B%2B-26-0d0f12?logo=cplusplus)](https://sargisis.github.io/ReactX/docs/safety)
 [![WebAssembly](https://img.shields.io/badge/WebAssembly-Emscripten-654ff0?logo=webassembly&logoColor=white)](https://sargisis.github.io/ReactX/docs/browser)
 [![Сайт](https://img.shields.io/badge/%D1%81%D0%B0%D0%B9%D1%82-sargisis.github.io%2FReactX-b45309)](https://sargisis.github.io/ReactX/)
+[![Лицензия: MIT или Apache-2.0](https://img.shields.io/badge/%D0%BB%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F-MIT%20%7C%20Apache--2.0-6b675e)](#лицензия)
 
 [Сайт и документация](https://sargisis.github.io/ReactX/) · [Быстрый старт](#быстрый-старт) · [Примеры](examples) · [Изменения](CHANGELOG.md) · [Для AI-помощников](#для-ai-помощников)
 
@@ -443,6 +444,15 @@ AGENTS.md         правила и проверки для тех, кто ме�
 ## Для AI-помощников
 
 [llms.txt](llms.txt) — API, полные программы и частые ошибки для тех, кто пишет приложения на ReactX (опубликован на сайте: https://sargisis.github.io/ReactX/llms.txt). [AGENTS.md](AGENTS.md) — правила и проверки для тех, кто меняет сам ReactX. `reactx new` кладёт в каждый проект свой `AGENTS.md`.
+
+## Лицензия
+
+ReactX распространяется **на ваш выбор** на условиях одной из двух лицензий:
+
+- [Apache License 2.0](LICENSE-APACHE)
+- [MIT](LICENSE-MIT)
+
+Если вы присылаете изменения в ReactX (pull request), вы соглашаетесь, что они распространяются на тех же условиях — под обеими лицензиями, без дополнительных требований.
 
 ---
 

@@ -14,8 +14,14 @@ import reactx;
 
 using namespace rx;
 
-Element Counter(const Props& props) {
-    auto [count, setCount] = useState(props.get<int>("start", 0));
+// Props are a plain struct: h(Counter, {.start = 5}) — a typo in a field
+// name or a wrong type is a compile error.
+struct CounterProps {
+    int start = 0;
+};
+
+Element Counter(const CounterProps& props) {
+    auto [count, setCount] = useState(props.start);
 
     useEffect(
         [count] {
@@ -43,7 +49,7 @@ int main() {
     };
 
     std::println(">>> mount");
-    root.render(h(Counter, {{"start", 5}}));
+    root.render(h(Counter, {.start = 5}));
     std::print("{}", renderer.toString());
 
     click("inc");

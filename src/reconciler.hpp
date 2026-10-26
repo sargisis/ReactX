@@ -21,6 +21,7 @@ struct Fiber : std::enable_shared_from_this<Fiber> {
     std::string type;
     Component component = nullptr;
     Props props;
+    std::shared_ptr<const TypedProps> typed;  // typed component: its struct of props
     std::string key;
 
     Reconciler* owner = nullptr;

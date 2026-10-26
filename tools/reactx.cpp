@@ -305,7 +305,7 @@ Element Home(const Props&) {
 Element About(const Props&) {
     return h("section", {{"className", "page"}}, {
         h("h1", {}, {"About"}),
-        h("p", {}, {"Made with ReactX: React-like UI in C++20, compiled to WebAssembly."}),
+        h("p", {}, {"Made with ReactX: React-like UI in C++26, compiled to WebAssembly."}),
     });
 }
 

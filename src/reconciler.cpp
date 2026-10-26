@@ -21,7 +21,9 @@ bool sameType(const Fiber& fiber, const Element& e) {
     if (fiber.kind != e.kind) return false;
     switch (e.kind) {
         case ElementKind::Host: return fiber.type == e.type;
-        case ElementKind::Component: return fiber.component == e.component;
+        case ElementKind::Component:
+            if (fiber.component != e.component || bool(fiber.typed) != bool(e.typed)) return false;
+            return !e.typed || fiber.typed->component() == e.typed->component();
         case ElementKind::Provider: return fiber.provided->id == e.provided->id;
         default: return true;
     }
@@ -169,6 +171,7 @@ std::shared_ptr<Fiber> Reconciler::mount(Element e, Fiber& parent) {
             break;
         case ElementKind::Component:
             f->props = std::move(e.props);
+            f->typed = std::move(e.typed);
             renderComponent(*f);
             break;
     }
@@ -202,8 +205,10 @@ void Reconciler::update(Fiber& f, Element e) {
         }
         case ElementKind::Component:
             // memo: same props and no pending update -> keep the old output.
-            if (!f.dirty && isMemo(f.component) && shallowEqual(f.props, e.props)) break;
+            if (!f.dirty && f.typed && isTypedMemo(f.typed->component()) && f.typed->equals(*e.typed)) break;
+            if (!f.dirty && !f.typed && isMemo(f.component) && shallowEqual(f.props, e.props)) break;
             f.props = std::move(e.props);
+            f.typed = std::move(e.typed);
             renderComponent(f);
             break;
     }
@@ -252,7 +257,7 @@ void Reconciler::renderComponent(Fiber& f) {
     RenderContext* previous = std::exchange(currentContext, &ctx);
     Element out;
     try {
-        out = f.component(f.props);
+        out = f.typed ? f.typed->render() : f.component(f.props);
     } catch (...) {
         currentContext = previous;
         throw;

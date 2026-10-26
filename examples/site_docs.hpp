@@ -130,17 +130,30 @@ inline const std::vector<Page>& pages() {
                  "h(\"div\", {{\"className\", \"card\"}}, {\n"
                  "    h(\"h1\", {}, {\"Заголовок\"}),\n"
                  "    \"просто текст\",\n"
-                 "    h(Counter, {{\"start\", 5}}),\n"
+                 "    h(Counter, {.start = 5}),\n"
                  "})"},
-                {"Props", "Значения: bool, числа, строки и обработчики. В компоненте читаются через props.get<T>(имя, запасное).",
+                {"Props — структура", "Props компонента — обычная структура. Опечатку в имени поля или неверный тип ловит "
+                                      "компилятор. Дайте полям значения по умолчанию ({}), тогда указываются только нужные.",
+                 "struct HelloProps {\n    std::string name = \"мир\";\n};\n\n"
+                 "Element Hello(const HelloProps& p) {\n"
+                 "    return h(\"p\", {}, {\"Привет, \" + p.name});\n"
+                 "}\n\n"
+                 "h(Hello, {.name = \"ReactX\"})\n"
+                 "h(Hello, {})                  // \"Привет, мир\""},
+                {"Дети компонента", "Поле children (std::vector<Element>) получает детей, переданных третьим аргументом.",
+                 "struct CardProps {\n    std::string title{};\n    std::vector<Element> children{};\n};\n\n"
+                 "Element Card(const CardProps& p) {\n"
+                 "    return h(\"div\", {{\"className\", \"card\"}}, p.children);\n}\n\n"
+                 "h(Card, {.title = \"Hi\"}, {h(\"p\", {}, {\"текст\"})})"},
+                {"Props по строкам", "Старый способ тоже работает: Element(const Props&), props.get<T>(имя, запасное), "
+                                     "props.children().",
                  "Element Hello(const Props& p) {\n"
                  "    return h(\"p\", {}, {\"Привет, \" + p.get<std::string>(\"name\", \"мир\")});\n"
-                 "}"},
-                {"Дети компонента", "Дети, переданные компоненту, доступны через props.children().",
-                 "Element Card(const Props& p) { return h(\"div\", {{\"className\", \"card\"}}, p.children()); }"},
+                 "}\n\nh(Hello, {{\"name\", \"ReactX\"}})"},
                 {"Ключи и фрагменты", "key помогает reconciler'у узнавать элементы списка: при перестановке узлы переносятся, "
                                       "а не создаются заново. fragment() группирует детей без лишнего узла.",
-                 "for (const auto& t : todos) items.push_back(h(TodoItem, {{\"key\", t.id}, {\"title\", t.title}}));\n"
+                 "// поле key структуры props — ключ элемента\n"
+                 "for (const auto& t : todos) items.push_back(h(TodoItem, {.key = t.id, .title = t.title}));\n"
                  "return fragment(std::move(items));"},
             },
         },

@@ -25,12 +25,20 @@ struct Todo {
     bool operator==(const Todo&) const = default;
 };
 
-Element TodoItem(const Props& p) {
-    std::string id = "todo-" + std::to_string(p.get<int>("todoId"));
-    std::string mark = p.get<bool>("done") ? "[x] " : "[ ] ";
-    return h("item", {{"id", id}, {"onClick", p.get<Callback>("onToggle")}}, {
-        h("text", {}, {mark + p.get<std::string>("title")}),
-        h("button", {{"id", id + "-remove"}, {"onClick", p.get<Callback>("onRemove")}}, {"x"}),
+struct TodoItemProps {
+    int key = 0;  // the element key: items keep their state when the list is reordered
+    std::string title{};
+    bool done = false;
+    Callback onToggle{};
+    Callback onRemove{};
+};
+
+Element TodoItem(const TodoItemProps& p) {
+    std::string id = "todo-" + std::to_string(p.key);
+    std::string mark = p.done ? "[x] " : "[ ] ";
+    return h("item", {{"id", id}, {"onClick", p.onToggle}}, {
+        h("text", {}, {mark + p.title}),
+        h("button", {{"id", id + "-remove"}, {"onClick", p.onRemove}}, {"x"}),
     });
 }
 
@@ -45,22 +53,21 @@ Element App(const Props&) {
     for (const Todo& t : todos) {
         int id = t.id;
         items.push_back(h(TodoItem, {
-            {"key", id},
-            {"todoId", id},
-            {"title", t.title},
-            {"done", t.done},
-            {"onToggle", [setTodos, id] {
-                 setTodos([id](List list) {
-                     for (auto& t : list) if (t.id == id) t.done = !t.done;
-                     return list;
-                 });
-             }},
-            {"onRemove", [setTodos, id] {
-                 setTodos([id](List list) {
-                     std::erase_if(list, [id](const Todo& t) { return t.id == id; });
-                     return list;
-                 });
-             }},
+            .key = id,
+            .title = t.title,
+            .done = t.done,
+            .onToggle = [setTodos, id] {
+                setTodos([id](List list) {
+                    for (auto& t : list) if (t.id == id) t.done = !t.done;
+                    return list;
+                });
+            },
+            .onRemove = [setTodos, id] {
+                setTodos([id](List list) {
+                    std::erase_if(list, [id](const Todo& t) { return t.id == id; });
+                    return list;
+                });
+            },
         }));
     }
 

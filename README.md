@@ -8,15 +8,19 @@ React-подобный UI-фреймворк на современном C++ (р
 
 ```cpp
 import reactx;          // C++20-модуль; или #include "reactx/reactx.hpp"
-#include <iostream>
+#include <print>
 #include <string>
 using namespace rx;
 
-Element Counter(const Props& props) {
-    auto [count, setCount] = useState(props.get<int>("start", 0));
+struct CounterProps {
+    int start = 0;
+};
+
+Element Counter(const CounterProps& props) {
+    auto [count, setCount] = useState(props.start);
 
     useEffect([count] {
-        std::cout << "count = " << count << '\n';
+        std::println("count = {}", count);
         return [] { /* cleanup */ };
     }, deps(count));
 
@@ -29,7 +33,7 @@ Element Counter(const Props& props) {
 int main() {
     TextRenderer renderer;          // любой класс, реализующий rx::Renderer
     Root root(renderer);
-    root.render(h(Counter, {{"start", 5}}));
+    root.render(h(Counter, {.start = 5}));   // .strat = 5 — ошибка компиляции
     root.dispatch(*renderer.findByProp("id", "inc"), "onClick");
 }
 ```
@@ -54,10 +58,10 @@ reactx add fmt https://github.com/fmtlib/fmt.git --rev 11.0.2 --target fmt::fmt
 ## Что есть
 
 - **Элементы**: `h("tag", props, children)`, `h(Component, props, children)`, строки как текстовые узлы, `fragment(...)`, проп `key`.
-- **Компоненты**: обычные функции `Element(const Props&)`; дети доступны через `props.children()`.
+- **Компоненты**: обычные функции. Props — **своя структура**: `Element Counter(const CounterProps&)` и `h(Counter, {.start = 5})` — опечатку в имени поля или неверный тип ловит компилятор (назначенные инициализаторы C++20, работает и в браузере). Поле `key` структуры становится ключом элемента, поле `children` (`std::vector<Element>`) получает детей: `h(Card, {.title = "Hi"}, {детали...})`. Дайте каждому полю значение по умолчанию (`{}`), чтобы можно было указывать только нужные (и `-Wextra` молчал). Старый способ — `Element(const Props&)` с `props.get<T>("имя")` и `props.children()` — тоже работает.
 - **Хуки**: `useState` (значение или функция-updater, пропуск ререндера при равном значении), `useEffect` (без deps / `deps(a, b)` / `deps()` = один раз, cleanup), `useRef`, `useMemo` (пересчёт только при смене deps), `useCallback` (обработчик сохраняет «личность», пока не сменились deps).
 - **Контекст**: `createContext<T>(default)`, `ctx.provide(value, {children})`, `useContext(ctx)` — значение передаётся вниз без props; при смене значения перерисовываются все, кто его читает, даже сквозь `memo`.
-- **memo**: `h(memo<Item>, props)` пропускает перерисовку, если props те же. Значения сравниваются через `==`, обработчики — равны, только если пришли из одного `useCallback`; элементы с детьми перерисовываются всегда.
+- **memo**: `h(memo<Item>, props)` пропускает перерисовку, если props те же. Для компонента со структурой props структуры сравниваются её `operator==` (`bool operator==(const ItemProps&) const = default;`). Для `Props` значения сравниваются через `==`, обработчики — равны, только если пришли из одного `useCallback`; элементы с детьми перерисовываются всегда.
 - **Reconciler**: сравнивает деревья, сопоставляет детей по `key` или позиции, переставляет узлы вместо пересоздания, удаляет лишние пропсы.
 - **Батчинг**: `setState` только помечает компонент; перерисовка в `flush()` (автоматически после `render`/`dispatch`), родители раньше детей.
 - **События**: три вида обработчиков — `Callback` (`void()`, например `onClick`), `KeyHandler` (`void(const KeyEvent&)`, `onKey`) и `InputHandler` (`void(const std::string&)`, `onInput`). Бэкенд передаёт данные через `Root::dispatch(node, "onKey", KeyEvent{"Enter"})` или `dispatch(node, "onInput", std::string("текст"))`; если данные не подходят обработчику, `dispatch` вернёт `false`.

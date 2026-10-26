@@ -1,5 +1,7 @@
 #pragma once
 
+#include <bit>
+#include <concepts>
 #include <cstdint>
 #include <flat_map>
 #include <functional>
@@ -29,6 +31,23 @@ struct StableFn<R(A...)> {
     std::shared_ptr<std::function<R(A...)>> impl;
     R operator()(A... args) const { return (*impl)(std::forward<A>(args)...); }
 };
+
+// Props of a typed component — h(Counter, {.start = 5}): the struct and the
+// function that renders it, behind one interface the reconciler can use.
+struct TypedProps {
+    virtual ~TypedProps() = default;
+    virtual std::uintptr_t component() const = 0;  // which function (its address)
+    virtual Element render() const = 0;
+    virtual bool equals(const TypedProps& other) const = 0;  // same props? (for memo)
+};
+
+// Address of a function, as a number: identity of a typed component.
+template <class F>
+    requires std::is_function_v<F>
+std::uintptr_t addressOf(F* fn) {
+    static_assert(sizeof(F*) == sizeof(std::uintptr_t));
+    return std::bit_cast<std::uintptr_t>(fn);
+}
 
 // Value given by a context provider (see context.hpp).
 struct ContextValueBase {
@@ -67,6 +86,13 @@ bool isHandler(const PropValue& value);
 
 // A component is a plain function: props in, element tree out.
 using Component = Element (*)(const Props&);
+
+// A typed component takes its own struct of props instead:
+//   struct CounterProps { int start = 0; bool operator==(const CounterProps&) const = default; };
+//   Element Counter(const CounterProps& p);
+//   h(Counter, {.start = 5})        // .strat = 5 does not compile
+template <class P>
+using TypedComponent = Element (*)(const P&);
 
 using PropList = std::initializer_list<std::pair<std::string, PropValue>>;
 
@@ -115,6 +141,7 @@ struct Element {
     Props props;       // children live in props.children()
     std::string key;
     std::shared_ptr<const detail::ContextValueBase> provided;  // Provider only
+    std::shared_ptr<const detail::TypedProps> typed;           // typed Component only
 
     Element() = default;
     Element(const char* text);  // implicit: lets you write {"Hello"} as a child
@@ -125,10 +152,68 @@ struct Element {
 Element h(std::string type, PropList props = {}, std::vector<Element> children = {});
 // h(Counter, {{"start", 5}})
 Element h(Component component, PropList props = {}, std::vector<Element> children = {});
+// h(Counter, {.start = 5}) — a typed component. A `key` field in the struct
+// becomes the element's key (for lists); a `children` field
+// (std::vector<Element>) receives the children:
+//   h(Card, {.title = "Hi"}, {h("p", {}, {"text"})})
+template <class P>
+    requires(!std::same_as<P, Props>)
+Element h(TypedComponent<P> component, P props);
+template <class P>
+    requires(!std::same_as<P, Props>) && requires(P p) { p.children = std::vector<Element>{}; }
+Element h(TypedComponent<P> component, P props, std::vector<Element> children);
 Element text(std::string content);
 Element fragment(std::vector<Element> children, std::string key = {});
 
 // ---- template implementation ----
+
+namespace detail {
+
+template <class P>
+struct TypedPropsOf final : TypedProps {
+    TypedComponent<P> fn;
+    P props;
+    TypedPropsOf(TypedComponent<P> f, P p) : fn(f), props(std::move(p)) {}
+
+    std::uintptr_t component() const override { return addressOf(fn); }
+    Element render() const override;
+    bool equals(const TypedProps& other) const override {
+        if constexpr (std::equality_comparable<P>) {
+            auto* o = dynamic_cast<const TypedPropsOf*>(&other);
+            return o && o->fn == fn && o->props == props;
+        } else {
+            return false;  // can't compare: always re-render
+        }
+    }
+};
+
+template <class P>
+Element makeTyped(TypedComponent<P> component, P props) {
+    Element e;
+    e.kind = ElementKind::Component;
+    if constexpr (requires { std::string(props.key); }) {
+        e.key = std::string(props.key);
+    } else if constexpr (requires { std::to_string(props.key); }) {
+        e.key = std::to_string(props.key);
+    }
+    e.typed = std::make_shared<const TypedPropsOf<P>>(component, std::move(props));
+    return e;
+}
+
+}  // namespace detail
+
+template <class P>
+    requires(!std::same_as<P, Props>)
+Element h(TypedComponent<P> component, P props) {
+    return detail::makeTyped(component, std::move(props));
+}
+
+template <class P>
+    requires(!std::same_as<P, Props>) && requires(P p) { p.children = std::vector<Element>{}; }
+Element h(TypedComponent<P> component, P props, std::vector<Element> children) {
+    props.children = std::move(children);
+    return detail::makeTyped(component, std::move(props));
+}
 
 template <class T>
 T Props::get(std::string_view name, T fallback) const {
@@ -148,6 +233,11 @@ T Props::get(std::string_view name, T fallback) const {
         static_assert(sizeof(T) == 0, "Props::get: unsupported type");
     }
     return fallback;
+}
+
+template <class P>
+Element detail::TypedPropsOf<P>::render() const {
+    return fn(props);
 }
 
 }  // namespace rx

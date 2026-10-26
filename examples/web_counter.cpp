@@ -6,8 +6,12 @@
 
 using namespace rx;
 
-Element Counter(const Props& props) {
-    auto [count, setCount] = useState(props.get<int>("start", 0));
+struct CounterProps {
+    int start = 0;
+};
+
+Element Counter(const CounterProps& props) {
+    auto [count, setCount] = useState(props.start);
     return h("div", {{"className", "card demo"}}, {
         h("h1", {}, {"ReactX in the browser"}),
         h("p", {{"className", "count"}, {"id", "count"}}, {std::to_string(count)}),
@@ -17,8 +21,8 @@ Element Counter(const Props& props) {
                          {"onClick", [setCount] { setCount([](int c) { return c + 1; }); }}}, {"+1"}),
             h("button", {{"id", "reset"}, {"onClick", [setCount] { setCount(0); }}}, {"reset"}),
         }),
-        h("p", {{"className", "hint"}}, {"C++20 → WebAssembly. No JavaScript written by hand."}),
+        h("p", {{"className", "hint"}}, {"C++26 → WebAssembly. No JavaScript written by hand."}),
     });
 }
 
-int main() { mountDom(h(Counter, {{"start", 0}})); }
+int main() { mountDom(h(Counter, {.start = 0})); }

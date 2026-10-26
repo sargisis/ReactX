@@ -33,29 +33,42 @@ using List = std::vector<Todo>;
 const auto Accent = createContext<std::string>("cyan");
 
 // Bordered frame; reads the accent color from the context.
-Element Frame(const Props& p) {
+struct FrameProps {
+    std::string title{};
+    std::vector<Element> children{};  // h(Frame, {.title = ...}, {children})
+};
+
+Element Frame(const FrameProps& p) {
     return h("box", {{"border", true},
-                     {"title", p.get<std::string>("title")},
+                     {"title", p.title},
                      {"paddingX", 2},
                      {"paddingY", 1},
                      {"gap", 1},
                      {"width", 58},
                      {"maxWidth", "100%"},
                      {"color", useContext(Accent)}},
-             p.children());
+             p.children);
 }
 
-Element TodoItem(const Props& p) {
-    bool done = p.get<bool>("done");
+struct TodoItemProps {
+    int key = 0;
+    std::string title{};
+    bool done = false;
+    Callback onToggle{};
+    Callback onRemove{};  // Delete or "d"
+};
+
+Element TodoItem(const TodoItemProps& p) {
+    bool done = p.done;
     const std::string& accent = useContext(Accent);
-    auto onRemove = p.get<Callback>("onRemove");
+    auto onRemove = p.onRemove;
     return h("item", {{"focusable", true},
-                      {"onClick", p.get<Callback>("onToggle")},
+                      {"onClick", p.onToggle},
                       {"onKey", [onRemove](const KeyEvent& e) {
                            if (e.key == "Delete" || e.key == "d") onRemove();
                        }}}, {
         h("text", {{"color", done ? "gray" : accent}},
-          {std::string(done ? "[x] " : "[ ] ") + p.get<std::string>("title")}),
+          {std::string(done ? "[x] " : "[ ] ") + p.title}),
     });
 }
 
@@ -78,21 +91,21 @@ Element App(const Props& props) {
     for (const Todo& t : todos) {
         int id = t.id;
         items.push_back(h(TodoItem, {
-            {"key", id},
-            {"title", t.title},
-            {"done", t.done},
-            {"onToggle", [setTodos, id] {
-                 setTodos([id](List list) {
-                     for (auto& t : list) if (t.id == id) t.done = !t.done;
-                     return list;
-                 });
-             }},
-            {"onRemove", [setTodos, id] {
-                 setTodos([id](List list) {
-                     std::erase_if(list, [id](const Todo& t) { return t.id == id; });
-                     return list;
-                 });
-             }},
+            .key = id,
+            .title = t.title,
+            .done = t.done,
+            .onToggle = [setTodos, id] {
+                setTodos([id](List list) {
+                    for (auto& t : list) if (t.id == id) t.done = !t.done;
+                    return list;
+                });
+            },
+            .onRemove = [setTodos, id] {
+                setTodos([id](List list) {
+                    std::erase_if(list, [id](const Todo& t) { return t.id == id; });
+                    return list;
+                });
+            },
         }));
     }
     if (items.empty()) items.push_back(h("text", {{"dim", true}}, {"nothing to do"}));
@@ -101,7 +114,7 @@ Element App(const Props& props) {
 
     // Flexbox (Yoga): the frame is centered on the screen.
     return Accent.provide(accent, {h("box", {{"flexGrow", 1}, {"justifyContent", "center"}, {"alignItems", "center"}}, {
-        h(Frame, {{"title", "ReactX todo"}}, {
+        h(Frame, {.title = "ReactX todo"}, {
             h("box", {{"direction", "row"}, {"justifyContent", "space-between"}}, {
                 h("text", {{"bold", true}, {"color", left ? "yellow" : "green"}},
                   {left ? std::to_string(left) + " left" : std::string("all done!")}),

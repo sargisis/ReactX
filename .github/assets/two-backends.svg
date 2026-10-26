@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="320" viewBox="0 0 860 320" role="img"
+     aria-label="One component, drawn in a terminal and in a browser">
+  <style>
+    .mono { font-family: JetBrains Mono, SFMono-Regular, Menlo, Consolas, monospace; }
+    .sans { font-family: Inter, -apple-system, Segoe UI, Roboto, sans-serif; }
+  </style>
+  <rect width="860" height="320" rx="16" fill="#0d0f12"/>
+
+  <!-- the component -->
+  <text x="28" y="40" class="mono" font-size="13" fill="#6c6a64">counter.cpp</text>
+  <text class="mono" font-size="14" fill="#ebe7df" xml:space="preserve"><tspan x="28" y="76"><tspan fill="#c792ea">struct</tspan> <tspan fill="#7fdbca">CounterProps</tspan> { <tspan fill="#c792ea">int</tspan> start = <tspan fill="#f5a524">0</tspan>; };</tspan><tspan x="28" y="112"><tspan fill="#7fdbca">Element</tspan> <tspan fill="#82aaff">Counter</tspan>(<tspan fill="#c792ea">const</tspan> <tspan fill="#7fdbca">CounterProps</tspan>&amp; p) {</tspan><tspan x="28" y="136">    <tspan fill="#c792ea">auto</tspan> [n, setN] = <tspan fill="#82aaff">useState</tspan>(p.start);</tspan><tspan x="28" y="160">    <tspan fill="#c792ea">return</tspan> <tspan fill="#82aaff">h</tspan>(<tspan fill="#a5d6a7">"box"</tspan>, {}, {</tspan><tspan x="28" y="184">        <tspan fill="#82aaff">h</tspan>(<tspan fill="#a5d6a7">"text"</tspan>, {}, {<tspan fill="#a5d6a7">"Count: "</tspan> + ...}),</tspan><tspan x="28" y="208">        <tspan fill="#82aaff">h</tspan>(<tspan fill="#a5d6a7">"button"</tspan>, {{<tspan fill="#a5d6a7">"onClick"</tspan>, inc}}, {<tspan fill="#a5d6a7">"+1"</tspan>}),</tspan><tspan x="28" y="232">    });</tspan><tspan x="28" y="256">}</tspan><tspan x="28" y="292" fill="#6c6a64">h(Counter, {.start = 5})</tspan></text>
+
+  <text x="452" y="108" class="mono" font-size="20" fill="#f5a524">→</text>
+  <text x="452" y="248" class="mono" font-size="20" fill="#f5a524">→</text>
+
+  <!-- terminal -->
+  <rect x="486" y="28" width="346" height="140" rx="10" fill="#14171c" stroke="#252a32"/>
+  <text x="502" y="50" class="mono" font-size="11" fill="#6c6a64">терминал · TerminalRenderer</text>
+  <text class="mono" font-size="14" fill="#6c6a64" xml:space="preserve"><tspan x="502" y="80">┌─ <tspan fill="#f5a524">counter</tspan> ────────────┐</tspan><tspan x="502" y="102">│ <tspan fill="#ebe7df">Count: 5</tspan>             │</tspan><tspan x="502" y="124">│ <tspan fill="#f5a524" font-weight="700">[ +1 ]</tspan>               │</tspan><tspan x="502" y="146">└──────────────────────┘</tspan></text>
+
+  <!-- browser -->
+  <rect x="486" y="184" width="346" height="112" rx="10" fill="#faf8f4"/>
+  <circle cx="502" cy="200" r="4" fill="#cfc8b8"/><circle cx="515" cy="200" r="4" fill="#cfc8b8"/><circle cx="528" cy="200" r="4" fill="#cfc8b8"/>
+  <text x="544" y="204" class="mono" font-size="11" fill="#9a958a">браузер · DomRenderer</text>
+  <text x="560" y="262" class="sans" font-size="40" font-weight="700" fill="#1b1a17">5</text>
+  <rect x="640" y="232" width="72" height="36" rx="8" fill="#b45309"/>
+  <text x="676" y="256" text-anchor="middle" class="sans" font-size="15" font-weight="600" fill="#ffffff">+1</text>
+</svg>

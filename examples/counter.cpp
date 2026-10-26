@@ -1,5 +1,6 @@
 // Counter: useState, useEffect and events on the text backend.
 #include <iostream>
+#include <print>
 #include <string>
 
 // __INTELLISENSE__: the VS Code C/C++ extension can't parse GCC modules yet,
@@ -18,8 +19,8 @@ Element Counter(const Props& props) {
 
     useEffect(
         [count] {
-            std::cout << "  [effect] count = " << count << '\n';
-            return [count] { std::cout << "  [cleanup] count was " << count << '\n'; };
+            std::println("  [effect] count = {}", count);
+            return [count] { std::println("  [cleanup] count was {}", count); };
         },
         deps(count));
 
@@ -36,14 +37,14 @@ int main() {
     Root root(renderer);
 
     auto click = [&](const std::string& id) {
-        std::cout << "\n>>> click #" << id << '\n';
+        std::println("\n>>> click #{}", id);
         root.dispatch(*renderer.findByProp("id", id), "onClick");
-        std::cout << renderer.toString();
+        std::print("{}", renderer.toString());
     };
 
-    std::cout << ">>> mount\n";
+    std::println(">>> mount");
     root.render(h(Counter, {{"start", 5}}));
-    std::cout << renderer.toString();
+    std::print("{}", renderer.toString());
 
     click("inc");
     click("inc");

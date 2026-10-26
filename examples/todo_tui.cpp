@@ -5,7 +5,7 @@
 //   Delete / d        remove the focused task
 //   Ctrl+C            quit
 #include <algorithm>
-#include <iostream>
+#include <print>
 #include <ranges>
 #include <string>
 #include <vector>
@@ -150,7 +150,7 @@ Element App(const Props& props) {
 
 int main() {
     if (!Terminal::isInteractive()) {
-        std::cerr << "todo_tui needs an interactive terminal\n";
+        std::println(stderr, "todo_tui needs an interactive terminal");
         return 1;
     }
     TerminalApp app;

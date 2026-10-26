@@ -3,6 +3,7 @@
 #include "reactx/http.hpp"
 
 #include "reactx/contract.hpp"
+#include "reactx/parse.hpp"
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -14,12 +15,13 @@
 #include <cctype>
 #include <cerrno>
 #include <cstring>
+#include <format>
 #include <fstream>
-#include <iostream>
 #include <iterator>
 #include <mutex>
-#include <sstream>
+#include <print>
 #include <stdexcept>
+#include <system_error>
 #include <thread>
 
 namespace rx::net {
@@ -80,12 +82,23 @@ bool inside(const std::filesystem::path& root, const std::filesystem::path& path
 
 std::mutex logMutex;
 
+// Whole file, or why it can't be read.
+std::expected<std::string, std::error_code> readFile(const std::filesystem::path& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) return std::unexpected(std::make_error_code(std::errc::permission_denied));
+    std::string data{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+    if (in.bad()) return std::unexpected(std::make_error_code(std::errc::io_error));
+    return data;
+}
+
+std::unexpected<HttpError> badRequest(std::string message) { return std::unexpected(HttpError{400, std::move(message)}); }
+
 }  // namespace
 
 // ---- helpers ----
 
 std::string mimeType(std::string_view ext) {
-    static const std::map<std::string, std::string, std::less<>> types = {
+    static const std::flat_map<std::string, std::string, std::less<>> types = {
         {".html", "text/html; charset=utf-8"},  {".htm", "text/html; charset=utf-8"},
         {".js", "text/javascript; charset=utf-8"}, {".mjs", "text/javascript; charset=utf-8"},
         {".css", "text/css; charset=utf-8"},    {".json", "application/json; charset=utf-8"},
@@ -106,7 +119,7 @@ std::string Request::pathParam(const std::string& name) const {
     return it == pathParams.end() ? std::string{} : it->second;
 }
 
-std::string Request::header(const std::string& name) const {
+std::string Request::header(std::string_view name) const {
     auto it = headers.find(lower(name));
     return it == headers.end() ? std::string{} : it->second;
 }
@@ -123,26 +136,27 @@ Response Response::json(std::string body, int status) {
     return {status, "application/json; charset=utf-8", std::move(body), {}};
 }
 
-std::optional<Request> parseRequestHead(std::string_view head) {
+std::expected<Request, HttpError> parseRequestHead(std::string_view head) {
     auto lineEnd = head.find("\r\n");
-    if (lineEnd == std::string_view::npos) return std::nullopt;
+    if (lineEnd == std::string_view::npos) return badRequest("no request line");
     std::string_view line = head.substr(0, lineEnd);
 
     auto sp1 = line.find(' ');
     auto sp2 = line.rfind(' ');
-    if (sp1 == std::string_view::npos || sp2 == sp1) return std::nullopt;
+    if (sp1 == std::string_view::npos || sp2 == sp1) return badRequest("request line is not \"METHOD target HTTP/1.x\"");
     Request req;
     req.method = std::string(line.substr(0, sp1));
     std::string_view target = line.substr(sp1 + 1, sp2 - sp1 - 1);
     std::string_view version = line.substr(sp2 + 1);
     if (req.method.empty() || !std::ranges::all_of(req.method, [](char c) { return c >= 'A' && c <= 'Z'; }))
-        return std::nullopt;
-    if (!version.starts_with("HTTP/1.") || target.empty() || target.front() != '/') return std::nullopt;
+        return badRequest("bad method");
+    if (!version.starts_with("HTTP/1.")) return badRequest("not HTTP/1.x");
+    if (target.empty() || target.front() != '/') return badRequest("target must start with /");
 
     auto q = target.find('?');
     req.path = urlDecode(target.substr(0, q));
     if (q != std::string_view::npos) req.query = std::string(target.substr(q + 1));
-    if (req.path.find('\0') != std::string::npos) return std::nullopt;
+    if (req.path.find('\0') != std::string::npos) return badRequest("NUL in path");
 
     std::string_view rest = head.substr(lineEnd + 2);
     while (!rest.empty()) {
@@ -151,18 +165,27 @@ std::optional<Request> parseRequestHead(std::string_view head) {
         rest = end == std::string_view::npos ? std::string_view{} : rest.substr(end + 2);
         if (h.empty()) break;
         auto colon = h.find(':');
-        if (colon == std::string_view::npos || colon == 0) return std::nullopt;
-        req.headers[lower(trim(h.substr(0, colon)))] = std::string(trim(h.substr(colon + 1)));
+        if (colon == std::string_view::npos || colon == 0) return badRequest("bad header line");
+        req.headers.insert_or_assign(lower(trim(h.substr(0, colon))), std::string(trim(h.substr(colon + 1))));
     }
     return req;
 }
 
+std::expected<std::size_t, HttpError> bodyLength(const Request& req, std::size_t limit) {
+    auto it = req.headers.find("content-length");
+    if (it == req.headers.end()) return 0;
+    return parseNumber<std::size_t>(it->second)
+        .transform_error([](ParseError e) { return HttpError{400, "Content-Length: " + std::string(describe(e))}; })
+        .and_then([limit](std::size_t n) -> std::expected<std::size_t, HttpError> {
+            if (n > limit) return std::unexpected(HttpError{413, "body too large"});
+            return n;
+        });
+}
+
 std::string serializeResponse(const Response& r, bool headOnly) {
-    std::string out = "HTTP/1.1 " + std::to_string(r.status) + " " + reason(r.status) + "\r\n";
-    out += "Content-Type: " + r.contentType + "\r\n";
-    out += "Content-Length: " + std::to_string(r.body.size()) + "\r\n";
-    out += "Connection: close\r\n";
-    for (const auto& [name, value] : r.headers) out += name + ": " + value + "\r\n";
+    std::string out = std::format("HTTP/1.1 {} {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n",
+                                  r.status, reason(r.status), r.contentType, r.body.size());
+    for (const auto& [name, value] : r.headers) std::format_to(std::back_inserter(out), "{}: {}\r\n", name, value);
     out += "\r\n";
     if (!headOnly) out += r.body;
     return out;
@@ -212,7 +235,7 @@ std::expected<void, std::string> HttpServer::tryStart() {
     };
     if (::inet_pton(AF_INET, host_.c_str(), &addr.sin_addr) != 1) return fail("bad IPv4 address " + host_);
     if (::bind(fd, reinterpret_cast<sockaddr*>(&addr), sizeof addr) != 0)
-        return fail("can't bind " + host_ + ":" + std::to_string(port_) + " (" + std::strerror(errno) + ")");
+        return fail(std::format("can't bind {}:{} ({})", host_, port_, std::strerror(errno)));
     if (::listen(fd, 64) != 0) return fail(std::string("listen() failed: ") + std::strerror(errno));
 
     socklen_t len = sizeof addr;
@@ -270,29 +293,21 @@ void HttpServer::serveConnection(int fd) {
         response = data.size() > kMaxHead ? Response::text("request head too large\n", 431)
                                           : Response::text("bad request\n", 400);
     } else if (auto req = parseRequestHead(std::string_view(data).substr(0, headEnd + 4)); !req) {
-        response = Response::text("bad request\n", 400);
+        response = Response::text(req.error().message + "\n", req.error().status);
     } else {
         method = req->method;
         path = req->path;
         headOnly = req->method == "HEAD";
-        std::size_t length = 0;
-        if (auto cl = req->header("content-length"); !cl.empty()) {
-            try {
-                length = std::stoull(cl);
-            } catch (...) {
-                length = kMaxBody + 1;
-            }
-        }
-        if (length > kMaxBody) {
-            response = Response::text("body too large\n", 413);
+        if (auto length = bodyLength(*req, kMaxBody); !length) {
+            response = Response::text(length.error().message + "\n", length.error().status);
         } else {
             req->body = data.substr(headEnd + 4);
-            while (req->body.size() < length) {
+            while (req->body.size() < *length) {
                 ssize_t n = ::recv(fd, buf, sizeof buf, 0);
                 if (n <= 0) break;
                 req->body.append(buf, static_cast<std::size_t>(n));
             }
-            req->body.resize(std::min(req->body.size(), length));
+            req->body.resize(std::min(req->body.size(), *length));
             try {
                 response = handle(*req);
             } catch (const std::exception& e) {
@@ -307,7 +322,8 @@ void HttpServer::serveConnection(int fd) {
 
     if (logging_) {
         std::scoped_lock lock(logMutex);
-        std::cout << method << ' ' << path << ' ' << response.status << ' ' << response.body.size() << std::endl;
+        std::println("{} {} {} {}", method, path, response.status, response.body.size());
+        std::fflush(stdout);
     }
 }
 
@@ -343,9 +359,8 @@ Response HttpServer::handle(const Request& req) const {
         if (auto file = serveFile(req)) return *file;
 
     if (method == "GET" && !notFound_.empty() && !root_.empty()) {
-        std::ifstream in(root_ / notFound_, std::ios::binary);
-        if (in) {
-            Response r = Response::html(std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()), 404);
+        if (auto page = readFile(root_ / notFound_)) {
+            Response r = Response::html(std::move(*page), 404);
             r.contentType = mimeType(notFound_.extension().string());
             return r;
         }
@@ -377,10 +392,10 @@ std::optional<Response> HttpServer::serveFile(const Request& req) const {
         if (!fs::is_regular_file(target, ec)) return std::nullopt;
     }
 
-    std::ifstream in(target, std::ios::binary);
-    if (!in) return Response::text("forbidden\n", 403);
+    auto body = readFile(target);
+    if (!body) return Response::text("forbidden\n", 403);
     Response r;
-    r.body.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    r.body = std::move(*body);
     r.contentType = mimeType(target.extension().string());
     r.headers.emplace_back("Cache-Control", "no-cache");
     return r;

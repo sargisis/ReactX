@@ -119,6 +119,27 @@ TEST(box_with_border_and_title) {
     CHECK(lines[3] == "└──────────┘");
 }
 
+TEST(ascii_borders_for_non_utf8_locales) {
+    TerminalRenderer r;
+    r.setSize(20, 10);
+    r.setUnicode(false);  // what TerminalApp does when std::text_encoding says the locale isn't UTF-8
+    Root root(r);
+    root.render(h("box", {{"border", true}, {"title", "Hi"}, {"width", 12}}, {h("text", {}, {"one"})}));
+    auto lines = r.frameLines();
+    CHECK(lines.size() == 3);
+    CHECK(lines[0] == "+- Hi -----+");
+    CHECK(lines[1] == "|one       |");
+    CHECK(lines[2] == "+----------+");
+}
+
+TEST(cells_keep_multibyte_characters) {  // a cell is a std::inplace_vector<char, 4>
+    TerminalRenderer r;
+    r.setSize(10, 3);
+    Root root(r);
+    root.render(h("text", {}, {"€a𝄞ж"}));  // 3, 1, 4 and 2 bytes
+    CHECK(r.frameLines().at(0) == "€a𝄞ж");
+}
+
 TEST(row_direction_places_children_side_by_side) {
     TerminalRenderer r;
     r.setSize(30, 5);

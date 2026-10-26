@@ -1,7 +1,7 @@
 #include "reactx/element.hpp"
 
 #include <concepts>
-#include <sstream>
+#include <format>
 
 namespace rx {
 
@@ -40,9 +40,7 @@ std::string propToString(const PropValue& value) {
             else if constexpr (std::is_same_v<T, bool>) return x ? "true" : "false";
             else if constexpr (std::is_same_v<T, std::int64_t>) return std::to_string(x);
             else if constexpr (std::is_same_v<T, double>) {
-                std::ostringstream out;
-                out << x;
-                return out.str();
+                return std::format("{}", x);  // shortest form that reads back exactly
             } else if constexpr (std::is_same_v<T, std::string>) return x;
             else return "<handler>";
         },
@@ -53,7 +51,7 @@ Props::Props(PropList list) {
     for (const auto& [name, value] : list) values_.insert_or_assign(name, value);
 }
 
-const PropValue* Props::find(const std::string& name) const {
+const PropValue* Props::find(std::string_view name) const {
     auto it = values_.find(name);
     return it == values_.end() ? nullptr : &it->second;
 }

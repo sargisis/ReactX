@@ -4,7 +4,7 @@
 
 Текущая версия — **0.2.0** ([CHANGELOG.md](CHANGELOG.md)). Версии по [SemVer](https://semver.org/lang/ru/): `MAJOR.MINOR.PATCH`, теги `vX.Y.Z`; номер записан только в `project(ReactX VERSION ...)` и доступен в коде как `rx::version()` (`reactx/version.hpp`).
 
-React-подобный UI-фреймворк на современном C++ (режим C++26: весь C++23 и реализованные части C++26; минимум — C++20) с подключаемым бэкендом отрисовки.
+React-подобный UI-фреймворк на современном C++ (режим C++26: всё из C++23 и C++26, что есть в стандартной библиотеке компилятора) с подключаемым бэкендом отрисовки.
 
 ```cpp
 import reactx;          // C++20-модуль; или #include "reactx/reactx.hpp"
@@ -270,7 +270,7 @@ fetch({.method = "POST", .url = "/api/todos", .body = json::object({{"title", "�
 
 ## Публикация сайта (GitHub Pages)
 
-Сайт собирается и публикуется автоматически ([.github/workflows/pages.yml](.github/workflows/pages.yml)) при каждом `push` в `main`: нативные тесты (GCC 15), все тесты под **ASan + UBSan + LeakSanitizer** и под **ThreadSanitizer**, сборка Emscripten, веб-тесты под Node; если всё прошло — содержимое `build/pages/site` записывается в ветку **`gh-pages`** (каждый раз один свежий коммит, только готовые файлы). Один раз нужно выбрать в репозитории **Settings → Pages → Build and deployment → Deploy from a branch → `gh-pages` / `(root)`** (ветка появляется после первой удачной сборки).
+Сайт собирается и публикуется автоматически ([.github/workflows/pages.yml](.github/workflows/pages.yml)) при каждом `push` в `main`: нативные тесты (GCC 16), все тесты под **ASan + UBSan + LeakSanitizer** и под **ThreadSanitizer**, сборка Emscripten, веб-тесты под Node; если всё прошло — содержимое `build/pages/site` записывается в ветку **`gh-pages`** (каждый раз один свежий коммит, только готовые файлы). Один раз нужно выбрать в репозитории **Settings → Pages → Build and deployment → Deploy from a branch → `gh-pages` / `(root)`** (ветка появляется после первой удачной сборки).
 
 Что внутри сайта ([examples/site.cpp](examples/site.cpp), тоже на ReactX):
 - главная с описанием и примером кода;
@@ -292,20 +292,44 @@ cmake --preset pages && cmake --build --preset pages && ctest --preset pages
 
 ## Стандарт C++ и безопасность
 
-- **Режим C++26.** Используем весь C++23 (`std::expected`, `std::print`, deducing this) и те части C++26, что уже есть в GCC 15 и в Emscripten: `= delete("причина")`, `static_assert` с вычисляемым сообщением, индексация пачек `T...[0]`, `_` как имя-заглушка, `#embed`, `std::add_sat`, `std::span::at`. Контракты, рефлексию (`<meta>`), `<inplace_vector>` подключим, когда они появятся в компиляторах.
+- **Режим C++26.** Правило простое: берём из стандартной библиотеки всё, что в ней уже есть, и не пишем замен тому, чего нет. Нативная сборка требует **GCC 16**, браузерная — Emscripten 6 (libc++), а в ней C++26-библиотеки пока нет, поэтому общий код (ядро, хуки, роутер, DOM) использует только то, что есть в обеих.
+
+  | Где | Что используем |
+  |---|---|
+  | везде | `std::expected` (+ `and_then` / `transform_error`), `std::flat_map` (props, заголовки HTTP), `std::flat_set`, `std::format` / `std::print`, `std::from_chars` ([`reactx/parse.hpp`](include/reactx/parse.hpp)), `= delete("причина")`, `T...[0]`, `#embed`, `std::add_sat` |
+  | терминал (GCC 16) | `std::inplace_vector<char, 4>` — символ в ячейке без кучи, `std::mdspan` — экран `screen[строка, столбец]`, `std::text_encoding` — рамки `┌─┐` или ASCII `+-+` по локали |
+  | CLI (GCC 16) | `std::generator` — обход отслеживаемых файлов, `std::expected` — чтение `reactx.json` цепочкой «прочитать → разобрать → проверить» |
+  | предусловия | контракты C++26 (`-fcontracts`), `<stacktrace>`, `<debugging>` |
+  | JSON (GCC 16) | рефлексия C++26 `<meta>`: `rx::json::to(структура)` и `rx::json::from<Структура>(json)`; CLI проверяет ею `reactx.json` |
+
+  Пока нет ни в GCC 16, ни в Emscripten — и поэтому не используются: `<hive>`, `<simd>`, `<linalg>`, `<rcu>`, `<hazard_pointer>`. Рефлексии нет в Emscripten, поэтому код, который собирается и для браузера, её не использует.
+
+- **JSON для структур через рефлексию** (GCC 16). Поля структуры — ключи JSON, типы проверяются, ошибка говорит, где именно:
+
+  ```cpp
+  struct Dependency { std::string git; std::string rev; std::optional<std::string> target; };
+  struct Manifest { std::string name; std::optional<std::map<std::string, Dependency>> dependencies; };
+
+  auto m = rx::json::from<Manifest>(rx::json::parse(text));   // std::expected<Manifest, json::Error>
+  // ошибка: field "dependencies": "fmt": missing field "rev"
+  rx::json::Value v = rx::json::to(*m);
+  ```
+
+  Поддерживаются `bool`, числа, строки, `std::optional` (нет ключа или `null` — пусто), `std::vector` и другие последовательности, словари со строковыми ключами и вложенные структуры. Поле `template_` читается как ключ `"template"` (чтобы называть поля как ключевые слова). Включается для цели `target_link_libraries(app PRIVATE reactx::reflection)`: флаг `-freflection` не ставится на всё сразу, потому что GCC 16.0.1 с ним не может прочитать модуль `import reactx;` — файлы с рефлексией подключают заголовки.
 - **Hardening стандартной библиотеки** (`REACTX_HARDENING`, включено по умолчанию): выход за границы в `v[i]`, `s[i]`, `front()` пустого контейнера останавливает программу, а не портит память (`_GLIBCXX_ASSERTIONS`, `_LIBCPP_HARDENING_MODE=FAST`). Действует и на программы, подключившие ReactX.
-- **Предусловия** `REACTX_PRE(условие)` ([`reactx/contract.hpp`](include/reactx/contract.hpp)) — для ошибок программиста (путь роутера без `/`, неверный метод маршрута): программа останавливается с сообщением, где и что нарушено. С компилятором, поддерживающим контракты C++26, макрос станет `contract_assert`.
-- **Ошибки как значения** (`std::expected`) там, где сбой — нормальная ситуация: `json::tryParse`, `FetchResponse::tryJson`, `HttpServer::tryStart` (занятый порт), чтение `reactx.json` в CLI. Версии с исключениями тоже остались.
+- **Предусловия** `REACTX_PRE(условие)` ([`reactx/contract.hpp`](include/reactx/contract.hpp)) — для ошибок программиста (путь роутера без `/`, неверный метод маршрута). На GCC 16 это **контракт C++26** `contract_assert` (ReactX включает `-fcontracts`): нарушение печатает функцию, файл, строку и условие и останавливает программу. Без контрактов (в браузере) макрос делает то же сам, а где есть `<stacktrace>` и `<debugging>` — ещё печатает стек вызовов и останавливается в отладчике.
+- **Ошибки как значения** (`std::expected`) там, где сбой — нормальная ситуация: `json::tryParse`, `FetchResponse::tryJson`, `HttpServer::tryStart` (занятый порт), `net::parseRequestHead` и `net::bodyLength` (причина и код ответа: 400 / 413), `rx::parseNumber` / `rx::parsePort` вместо `std::stoi` (`--port abc` — понятная ошибка, а не падение), чтение и запись файлов в CLI, проверка задачи в REST API. Версии с исключениями тоже остались.
 - **Санитайзеры в CI**: каждый `push` прогоняет все тесты под ASan + UBSan + LeakSanitizer (первая же ошибка или утечка роняет сборку) и под ThreadSanitizer.
 
 ## Сборка
 
 Зависимость одна — [Yoga](https://github.com/facebook/yoga) v3.2.1 (MIT). Если её нет в системе, CMake скачает её сам при первой настройке (нужен интернет; без интернета: `-DFETCHCONTENT_SOURCE_DIR_YOGA=/путь/к/yoga`).
 
-Нужен компилятор с режимом C++26: **GCC 15+** или **Clang 19+** (для браузера — Emscripten 6+). С модулем (`import reactx;`) — ещё CMake 3.28+ и Ninja:
+Нужен **GCC 16+** (стандартная библиотека C++26; для браузера — Emscripten 6+). Если `g++` в системе старше, укажите компилятор при первой настройке. С модулем (`import reactx;`) — ещё CMake 3.28+ и Ninja:
 
 ```sh
-cmake --preset debug            # или release
+cmake --preset debug -DCMAKE_CXX_COMPILER=g++-16   # или release
+
 cmake --build --preset debug
 ctest --preset debug
 ./build/debug/counter

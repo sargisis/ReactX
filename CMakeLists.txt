@@ -3,8 +3,9 @@ cmake_minimum_required(VERSION 3.20...3.31)
 # MAJOR.MINOR.PATCH; release tags are vMAJOR.MINOR.PATCH, see CHANGELOG.md).
 project(ReactX VERSION 0.2.0 LANGUAGES CXX)
 
-# C++26 (GCC 15+, Clang 19+). C++20 is the floor; we use C++23 fully and the
-# C++26 parts our compilers implement (see README: "Стандарт C++").
+# C++26: GCC 16+ natively, Emscripten 6+ for the web. We use the parts of
+# C++23/C++26 each standard library ships, and nothing it doesn't
+# (see README: "Стандарт C++").
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -50,6 +51,66 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_FLAGS MATCHES "sanitize=[a
 endif()
 option(REACTX_MODULES "Build the reactx C++20 module (import reactx;)" ${REACTX_MODULES_DEFAULT})
 
+# ---- Standard library settings shared by every ReactX library ----
+# Hardening (above) and C++23 <stacktrace>: a failed REACTX_PRE prints the
+# call stack. GCC keeps std::stacktrace in libstdc++exp; without it (or with
+# a library that lacks <stacktrace>) the check just prints file and line.
+add_library(reactx_std INTERFACE)
+if(REACTX_HARDENING)  # libstdc++ (GCC) and libc++ (Clang)
+  target_compile_definitions(reactx_std INTERFACE _GLIBCXX_ASSERTIONS _LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST)
+endif()
+# Native builds use the C++26 library of GCC 16+: std::inplace_vector and
+# std::mdspan (terminal screen), std::text_encoding. The web build (Emscripten
+# libc++) doesn't have them, so code shared with it doesn't use them.
+include(CheckCXXSourceCompiles)
+include(CheckCXXCompilerFlag)
+if(NOT EMSCRIPTEN)
+  check_cxx_source_compiles("#include <inplace_vector>\n#include <mdspan>\n#include <text_encoding>\nint main() { std::inplace_vector<char, 4> v; return static_cast<int>(v.size()); }"
+                            REACTX_HAS_CXX26_LIBRARY)
+  if(NOT REACTX_HAS_CXX26_LIBRARY)
+    message(FATAL_ERROR "ReactX needs the C++26 standard library of GCC 16 or newer "
+                        "(std::inplace_vector, std::mdspan, std::text_encoding). "
+                        "Configure with -DCMAKE_CXX_COMPILER=g++-16.")
+  endif()
+endif()
+# C++26 contracts (GCC 16): REACTX_PRE becomes contract_assert. PUBLIC, so an
+# app and ReactX agree on it.
+check_cxx_compiler_flag(-fcontracts REACTX_HAS_FCONTRACTS)
+if(REACTX_HAS_FCONTRACTS)
+  target_compile_options(reactx_std INTERFACE -fcontracts)
+  message(STATUS "ReactX: C++26 contracts (-fcontracts)")
+endif()
+# C++26 reflection (<meta>, GCC 16): rx::json::to / from for plain structs.
+# Opt-in per target — link reactx::reflection — because GCC 16 (checked with
+# 16.0.1 20260322) can't read the reactx module back with -freflection on.
+# Checked with real code: clang accepts -freflection with only a warning.
+add_library(reactx_reflection INTERFACE)
+add_library(reactx::reflection ALIAS reactx_reflection)
+set(CMAKE_REQUIRED_FLAGS -freflection)
+check_cxx_source_compiles("#include <meta>\nint main() { return std::meta::is_type(^^int) ? 0 : 1; }" REACTX_HAS_REFLECTION)
+unset(CMAKE_REQUIRED_FLAGS)
+if(REACTX_HAS_REFLECTION)
+  target_compile_options(reactx_reflection INTERFACE -freflection)
+  message(STATUS "ReactX: C++26 reflection available (link reactx::reflection)")
+endif()
+option(REACTX_STACKTRACE "Print the call stack when a precondition fails (C++23 <stacktrace>)" ON)
+if(REACTX_STACKTRACE)
+  set(_rx_stacktrace_test "#include <stacktrace>\n#include <print>\nint main() { std::println(\"{}\", std::stacktrace::current()); }")
+  check_cxx_source_compiles("${_rx_stacktrace_test}" REACTX_STACKTRACE_BUILTIN)
+  if(NOT REACTX_STACKTRACE_BUILTIN)
+    set(CMAKE_REQUIRED_LIBRARIES stdc++exp)
+    check_cxx_source_compiles("${_rx_stacktrace_test}" REACTX_STACKTRACE_STDCXXEXP)
+    unset(CMAKE_REQUIRED_LIBRARIES)
+  endif()
+  if(REACTX_STACKTRACE_BUILTIN OR REACTX_STACKTRACE_STDCXXEXP)
+    target_compile_definitions(reactx_std INTERFACE REACTX_HAS_STACKTRACE)
+    if(REACTX_STACKTRACE_STDCXXEXP)
+      target_link_libraries(reactx_std INTERFACE stdc++exp)
+    endif()
+    message(STATUS "ReactX: std::stacktrace on precondition failures")
+  endif()
+endif()
+
 if(EMSCRIPTEN)
   # ---- Web build (emcmake cmake ...): core + DOM backend ----
   add_library(reactx
@@ -70,9 +131,7 @@ if(EMSCRIPTEN)
   # Native WebAssembly exceptions (all current browsers and Node support them);
   # PUBLIC, so every program that links reactx uses the same model.
   target_compile_options(reactx PUBLIC -fwasm-exceptions)
-  if(REACTX_HARDENING)  # libc++ (Emscripten)
-    target_compile_definitions(reactx PUBLIC _LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST)
-  endif()
+  target_link_libraries(reactx PUBLIC reactx_std)
   target_link_options(reactx PUBLIC -fwasm-exceptions)
   add_library(reactx::reactx ALIAS reactx)
   include(${PROJECT_SOURCE_DIR}/cmake/ReactXApp.cmake)
@@ -145,6 +204,12 @@ if(EMSCRIPTEN)
   if(REACTX_BUILD_TESTS)
   # Tests run under Node with a tiny fake DOM (tests/web/fake_dom.js).
   enable_testing()
+  # rx::parseNumber on libc++ (from_chars differs from libstdc++'s).
+  add_executable(reactx_parse_tests tests/test_parse.cpp)
+  target_link_libraries(reactx_parse_tests PRIVATE reactx)
+  target_link_options(reactx_parse_tests PRIVATE "SHELL:-sENVIRONMENT=node")
+  add_test(NAME reactx_parse_tests COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} $<TARGET_FILE:reactx_parse_tests>)
+
   add_executable(reactx_dom_tests tests/test_dom.cpp)
   target_link_libraries(reactx_dom_tests PRIVATE reactx)
   target_link_options(reactx_dom_tests PRIVATE
@@ -211,10 +276,7 @@ add_library(reactx
   src/ui_helpers.cpp
 )
 target_include_directories(reactx PUBLIC include ${PROJECT_BINARY_DIR}/generated)
-target_link_libraries(reactx PRIVATE ${REACTX_YOGA_TARGET})
-if(REACTX_HARDENING)  # libstdc++ (GCC) and libc++ (Clang)
-  target_compile_definitions(reactx PUBLIC _GLIBCXX_ASSERTIONS _LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST)
-endif()
+target_link_libraries(reactx PUBLIC reactx_std PRIVATE ${REACTX_YOGA_TARGET})
 add_library(reactx::reactx ALIAS reactx)
 include(${PROJECT_SOURCE_DIR}/cmake/ReactXApp.cmake)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -233,12 +295,9 @@ endif()
 find_package(Threads REQUIRED)
 add_library(reactx_net src/http.cpp)
 target_include_directories(reactx_net PUBLIC include ${PROJECT_BINARY_DIR}/generated)
-target_link_libraries(reactx_net PUBLIC Threads::Threads)
+target_link_libraries(reactx_net PUBLIC reactx_std Threads::Threads)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   target_compile_options(reactx_net PRIVATE -Wall -Wextra -Wpedantic)
-endif()
-if(REACTX_HARDENING)
-  target_compile_definitions(reactx_net PUBLIC _GLIBCXX_ASSERTIONS _LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST)
 endif()
 add_library(reactx::net ALIAS reactx_net)
 
@@ -248,9 +307,11 @@ if(REACTX_BUILD_TOOLS)
 
   # The CLI: reactx new / dev / build / add (tools/reactx.cpp).
   add_executable(reactx_cli tools/reactx.cpp)
-  target_link_libraries(reactx_cli PRIVATE reactx reactx_net)
+  target_link_libraries(reactx_cli PRIVATE reactx reactx_net reactx_reflection)  # reactx.json via json::from
   set_target_properties(reactx_cli PROPERTIES OUTPUT_NAME reactx)
-  target_compile_definitions(reactx_cli PRIVATE REACTX_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+  # Native projects are built with the compiler of the CLI (GCC 16+) unless CXX is set.
+  target_compile_definitions(reactx_cli PRIVATE REACTX_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
+                                                REACTX_CXX_COMPILER="${CMAKE_CXX_COMPILER}")
 
   # Site + REST API in one process (examples/web_app.cpp is its front end).
   add_executable(api_server examples/api_server.cpp)
@@ -282,6 +343,11 @@ if(NOT REACTX_BUILD_TESTS)
   return()
 endif()
 enable_testing()
+add_executable(reactx_parse_tests tests/test_parse.cpp)
+target_link_libraries(reactx_parse_tests PRIVATE reactx_std)
+target_include_directories(reactx_parse_tests PRIVATE include)
+add_test(NAME reactx_parse_tests COMMAND reactx_parse_tests)
+
 add_executable(reactx_tests tests/test_core.cpp)
 target_link_libraries(reactx_tests PRIVATE reactx)
 add_test(NAME reactx_tests COMMAND reactx_tests)
@@ -299,7 +365,7 @@ target_link_libraries(reactx_router_tests PRIVATE reactx)
 add_test(NAME reactx_router_tests COMMAND reactx_router_tests)
 
 add_executable(reactx_json_tests tests/test_json.cpp)
-target_link_libraries(reactx_json_tests PRIVATE reactx)
+target_link_libraries(reactx_json_tests PRIVATE reactx reactx_reflection)
 add_test(NAME reactx_json_tests COMMAND reactx_json_tests)
 
 add_executable(reactx_todo_api_tests tests/test_todo_api.cpp)

@@ -177,10 +177,18 @@ bool diesWith(const std::function<void()>& fn, const std::string& message) {
     return WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT && err.find(message) != std::string::npos;
 }
 
+// C++26 contracts (GCC 16 -fcontracts) report "contract violation ...: <condition>";
+// without them REACTX_PRE prints "precondition failed: <condition>".
+#if defined(__cpp_contracts)
+constexpr std::string_view kViolation = ": ";
+#else
+constexpr std::string_view kViolation = "precondition failed: ";
+#endif
+
 TEST(precondition_violation_stops_with_a_message) {
-    CHECK(diesWith([] { REACTX_PRE(1 + 1 == 3); }, "precondition failed: 1 + 1 == 3"));
-    CHECK(diesWith([] { router::navigate("todos/7"); }, "precondition failed: path.starts_with('/')"));
-    CHECK(!diesWith([] { REACTX_PRE(2 > 1); }, "precondition failed"));  // a true condition is free
+    CHECK(diesWith([] { REACTX_PRE(1 + 1 == 3); }, std::string(kViolation) + "1 + 1 == 3"));
+    CHECK(diesWith([] { router::navigate("todos/7"); }, std::string(kViolation) + "path.starts_with('/')"));
+    CHECK(!diesWith([] { REACTX_PRE(2 > 1); }, ""));  // a true condition is free
 }
 
 TEST(version_is_semver) {

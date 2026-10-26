@@ -1,4 +1,4 @@
-// reactx — the ReactX command line tool (C++20).
+// reactx — the ReactX command line tool (C++26).
 //
 //   reactx new <name> [--terminal] [--local]   create a project
 //   reactx dev [--port N] [--native]           build, serve, rebuild on changes
@@ -25,19 +25,30 @@
 #include <expected>
 #include <filesystem>
 #include <fstream>
-#include <iostream>
 #include <iterator>
 #include <map>
 #include <optional>
+#include <print>
 #include <stop_token>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <thread>
 #include <vector>
+#include <version>
+#if defined(__cpp_lib_generator)
+#include <generator>
+#endif
 
 #include "reactx/http.hpp"
 #include "reactx/json.hpp"
+#include "reactx/parse.hpp"
 #include "reactx/version.hpp"
+
+// reactx.json is checked with C++26 reflection (rx::json::from).
+#if !defined(__cpp_lib_reflection)
+#error "the reactx CLI needs C++26 reflection: GCC 16+ (ReactX adds -freflection)"
+#endif
 
 namespace fs = std::filesystem;
 using rx::json::Value;
@@ -52,25 +63,37 @@ constexpr std::string_view kReactXGit = "https://github.com/sargisis/ReactX.git"
 #ifndef REACTX_SOURCE_DIR
 #define REACTX_SOURCE_DIR ""
 #endif
+#ifndef REACTX_CXX_COMPILER
+#define REACTX_CXX_COMPILER ""
+#endif
 
 // ---- small helpers ----
 
-[[noreturn]] void fail(const std::string& message) {
-    std::cerr << "reactx: " << message << '\n';
+[[noreturn]] void fail(std::string_view message) {
+    std::println(stderr, "reactx: {}", message);
     std::exit(1);
 }
 
-std::string readFile(const fs::path& p) {
+// Whole file, or why it can't be read.
+std::expected<std::string, std::string> readFile(const fs::path& p) {
     std::ifstream in(p, std::ios::binary);
-    if (!in) fail("can't read " + p.string());
-    return {std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+    if (!in) return std::unexpected("can't read " + p.string());
+    return std::string{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
 }
 
-void writeFile(const fs::path& p, std::string_view text) {
-    fs::create_directories(p.parent_path());
+// Creates the folders and writes the file, or says why it couldn't.
+std::expected<void, std::string> writeFile(const fs::path& p, std::string_view text) {
+    std::error_code ec;
+    fs::create_directories(p.parent_path(), ec);
+    if (ec) return std::unexpected("can't create " + p.parent_path().string() + ": " + ec.message());
     std::ofstream out(p, std::ios::binary);
     out << text;
-    if (!out) fail("can't write " + p.string());
+    if (!out) return std::unexpected("can't write " + p.string());
+    return {};
+}
+
+void writeOrFail(const fs::path& p, std::string_view text) {
+    if (auto written = writeFile(p, text); !written) fail(written.error());
 }
 
 // Replaces every {{key}} in `text`.
@@ -93,7 +116,7 @@ int run(const std::vector<std::string>& args, const fs::path& cwd) {
         for (const auto& a : args) argv.push_back(const_cast<char*>(a.c_str()));
         argv.push_back(nullptr);
         ::execvp(argv[0], argv.data());
-        std::cerr << "reactx: can't run " << args[0] << '\n';
+        std::println(stderr, "reactx: can't run {}", args[0]);
         ::_exit(127);
     }
     int status = 0;
@@ -110,23 +133,64 @@ fs::path projectRoot() {
     }
 }
 
-// The manifest, or why it can't be used (shown to the user).
-std::expected<Value, std::string> loadManifest(const fs::path& root) {
-    auto parsed = rx::json::tryParse(readFile(root / "reactx.json"));
-    if (!parsed) return std::unexpected("reactx.json: " + std::string(parsed.error().what()));
-    if (!parsed->isObject()) return std::unexpected(std::string("reactx.json: must be a JSON object"));
-    if (!(*parsed)["dependencies"].isObject() && !(*parsed)["dependencies"].isNull())
-        return std::unexpected(std::string("reactx.json: \"dependencies\" must be an object"));
-    return std::move(*parsed);
+// ---- reactx.json ----
+//
+// The manifest as C++ types. rx::json::from checks every field by C++26
+// reflection — the struct is the schema (what the project's CMakeLists.txt
+// reads), and a mistake is reported with its place:
+//   reactx.json: field "dependencies": "fmt": missing field "rev"
+
+struct Source {  // "reactx": {"path": ...} or {"git": ..., "rev": ...}
+    std::optional<std::string> path;
+    std::optional<std::string> git;
+    std::optional<std::string> rev;
+};
+
+struct Dependency {
+    std::string git;
+    std::string rev;
+    std::optional<std::string> target;  // CMake target linked to the app
+};
+
+struct WebOptions {
+    std::optional<std::string> base;  // <base href>, "/" by default
+};
+
+struct Manifest {
+    std::string name;
+    std::optional<std::string> version;
+    std::optional<std::string> template_;  // key "template": "web" (default) or "terminal"
+    std::optional<Source> reactx;
+    std::optional<std::map<std::string, Dependency>> dependencies;
+    std::optional<WebOptions> web;
+};
+
+// The JSON (kept as it is, so `reactx add` doesn't drop fields it doesn't
+// know) and what it says.
+struct Project {
+    Value json;
+    Manifest manifest;
+};
+
+// read -> parse -> check, each step std::expected (C++23 and_then / transform_error).
+std::expected<Project, std::string> loadManifest(const fs::path& root) {
+    auto parse = [](const std::string& text) { return rx::json::tryParse(text); };
+    auto check = [](Value json) {
+        return rx::json::from<Manifest>(json).transform([&](Manifest m) { return Project{std::move(json), std::move(m)}; });
+    };
+    return readFile(root / "reactx.json").and_then([&](const std::string& text) {
+        return parse(text).and_then(check).transform_error(
+            [](const rx::json::Error& e) { return "reactx.json: " + std::string(e.what()); });
+    });
 }
 
-Value readManifest(const fs::path& root) {
-    auto manifest = loadManifest(root);
-    if (!manifest) fail(manifest.error());
-    return std::move(*manifest);
+Project readManifest(const fs::path& root) {
+    auto project = loadManifest(root);
+    if (!project) fail(project.error());
+    return std::move(*project);
 }
 
-void writeManifest(const fs::path& root, const Value& manifest) { writeFile(root / "reactx.json", manifest.dump(2) + "\n"); }
+void writeManifest(const fs::path& root, const Value& manifest) { writeOrFail(root / "reactx.json", manifest.dump(2) + "\n"); }
 
 bool validName(std::string_view name) {
     if (name.empty() || name.size() > 64 || !(std::isalpha(static_cast<unsigned char>(name[0])))) return false;
@@ -350,33 +414,37 @@ int cmdNew(const std::vector<std::string>& args) {
         {"name", name}, {"target", cmakeName(name)},
         {"output", terminal ? "build/native/" + cmakeName(name) : "build/web/dist/ (static files for any host)"}};
     writeManifest(dir, manifest);
-    writeFile(dir / "CMakeLists.txt", fill(std::string(kCMakeLists), vars));
-    writeFile(dir / "CMakePresets.json", kPresets);
-    writeFile(dir / "src/main.cpp", fill(std::string(terminal ? kTerminalMain : kWebMain), vars));
-    if (!terminal) writeFile(dir / "public/style.css", kStyle);
+    writeOrFail(dir / "CMakeLists.txt", fill(std::string(kCMakeLists), vars));
+    writeOrFail(dir / "CMakePresets.json", kPresets);
+    writeOrFail(dir / "src/main.cpp", fill(std::string(terminal ? kTerminalMain : kWebMain), vars));
+    if (!terminal) writeOrFail(dir / "public/style.css", kStyle);
     else fs::create_directories(dir / "public");
-    writeFile(dir / ".gitignore", kGitignore);
-    writeFile(dir / "README.md", fill(std::string(kReadme), vars));
+    writeOrFail(dir / ".gitignore", kGitignore);
+    writeOrFail(dir / "README.md", fill(std::string(kReadme), vars));
 
-    std::cout << "Created " << name << " (" << (terminal ? "terminal" : "web") << " app)\n\n"
-              << "  cd " << name << "\n  reactx dev\n";
+    std::println("Created {} ({} app)\n\n  cd {}\n  reactx dev", name, terminal ? "terminal" : "web", name);
     return 0;
 }
 
-bool isTerminal(const Value& manifest) { return manifest.get<std::string>("template") == "terminal"; }
+bool isTerminal(const Manifest& manifest) { return manifest.template_ == "terminal"; }
 
 // Configures (first time) and builds a preset; returns true on success.
 bool build(const fs::path& root, const std::string& preset) {
     if (preset == "web" && !std::getenv("EMSDK"))
         fail("the web build needs Emscripten: install emsdk and `source emsdk_env.sh` (EMSDK is not set)");
-    if (!fs::exists(root / "build" / preset / "CMakeCache.txt"))
-        if (run({"cmake", "--preset", preset}, root) != 0) return false;
+    if (!fs::exists(root / "build" / preset / "CMakeCache.txt")) {
+        std::vector<std::string> configure{"cmake", "--preset", preset};
+        // ReactX needs GCC 16+ natively; the default `c++` may be older.
+        if (preset == "native" && !std::getenv("CXX") && !std::string_view(REACTX_CXX_COMPILER).empty())
+            configure.push_back(std::string("-DCMAKE_CXX_COMPILER=") + REACTX_CXX_COMPILER);
+        if (run(configure, root) != 0) return false;
+    }
     return run({"cmake", "--build", "--preset", preset}, root) == 0;
 }
 
 int cmdBuild(const std::vector<std::string>& args) {
     fs::path root = projectRoot();
-    Value manifest = readManifest(root);
+    Manifest manifest = readManifest(root).manifest;
     bool native = isTerminal(manifest);
     for (const auto& a : args) {
         if (a == "--native") native = true;
@@ -384,25 +452,42 @@ int cmdBuild(const std::vector<std::string>& args) {
     }
     std::string preset = native ? "native" : "web";
     if (!build(root, preset)) fail("build failed");
-    std::cout << "Built: " << (native ? (root / "build/native").string() : (root / "build/web/dist").string()) << '\n';
+    std::println("Built: {}", (root / (native ? "build/native" : "build/web/dist")).string());
     return 0;
 }
 
-// Newest modification time of the sources (src/, public/, the manifest, CMake).
-fs::file_time_type sourcesTime(const fs::path& root) {
-    // min(), not {}: libstdc++ counts file times from 2174, so real ones are negative.
-    auto newest = fs::file_time_type::min();
-    auto look = [&](const fs::path& p) {
-        std::error_code ec;
-        auto t = fs::last_write_time(p, ec);
-        if (!ec && t > newest) newest = t;
-    };
-    for (const char* f : {"reactx.json", "CMakeLists.txt", "CMakePresets.json"}) look(root / f);
+// Every file `reactx dev` watches: the manifest, the CMake files, src/ and public/.
+#if defined(__cpp_lib_generator)
+std::generator<fs::path> watchedFiles(fs::path root) {  // by value: the coroutine outlives the call
+    for (const char* f : {"reactx.json", "CMakeLists.txt", "CMakePresets.json"}) co_yield root / f;
     for (const char* d : {"src", "public"}) {
         std::error_code ec;
         if (!fs::is_directory(root / d, ec)) continue;
         for (auto it = fs::recursive_directory_iterator(root / d, ec); !ec && it != fs::recursive_directory_iterator(); it.increment(ec))
-            look(it->path());
+            co_yield it->path();
+    }
+}
+#else  // a standard library without <generator> (libc++): the same list, collected up front
+std::vector<fs::path> watchedFiles(const fs::path& root) {
+    std::vector<fs::path> files;
+    for (const char* f : {"reactx.json", "CMakeLists.txt", "CMakePresets.json"}) files.push_back(root / f);
+    for (const char* d : {"src", "public"}) {
+        std::error_code ec;
+        if (!fs::is_directory(root / d, ec)) continue;
+        for (auto it = fs::recursive_directory_iterator(root / d, ec); !ec && it != fs::recursive_directory_iterator(); it.increment(ec))
+            files.push_back(it->path());
+    }
+    return files;
+}
+#endif
+
+// Newest modification time of the watched files.
+fs::file_time_type sourcesTime(const fs::path& root) {
+    // min(), not {}: libstdc++ counts file times from 2174, so real ones are negative.
+    auto newest = fs::file_time_type::min();
+    for (const fs::path& p : watchedFiles(root)) {
+        std::error_code ec;
+        if (auto t = fs::last_write_time(p, ec); !ec) newest = std::max(newest, t);
     }
     return newest;
 }
@@ -414,21 +499,24 @@ void onSignal(int) {
 
 int cmdDev(const std::vector<std::string>& args) {
     fs::path root = projectRoot();
-    Value manifest = readManifest(root);
+    Manifest manifest = readManifest(root).manifest;
     bool native = isTerminal(manifest);
     int port = 8090;
     for (std::size_t i = 0; i < args.size(); ++i) {
-        if (args[i] == "--port" && i + 1 < args.size()) port = std::stoi(args[++i]);
-        else if (args[i] == "--native") native = true;
+        if (args[i] == "--port" && i + 1 < args.size()) {
+            auto parsed = rx::parsePort(args[++i]);
+            if (!parsed) fail("dev: " + parsed.error());
+            port = *parsed;
+        } else if (args[i] == "--native") native = true;
         else fail("dev: unknown option " + args[i]);
     }
 
     if (native) {  // terminal app: build and run it
         if (!build(root, "native")) fail("build failed");
-        return run({(root / "build/native" / cmakeName(manifest.get<std::string>("name"))).string()}, root);
+        return run({(root / "build/native" / cmakeName(manifest.name)).string()}, root);
     }
 
-    std::cout << "reactx: building...\n";
+    std::println("reactx: building...");
     if (!build(root, "web")) fail("build failed (fix the error and run reactx dev again)");
 
     std::atomic<int> version{1};
@@ -439,7 +527,7 @@ int cmdDev(const std::vector<std::string>& args) {
         return r;
     });
     server.serveDirectory(root / "build/web/dist", /*spaFallback=*/true);
-    server.start();
+    if (auto started = server.tryStart(); !started) fail(started.error());
 
     devServer = &server;
     std::signal(SIGINT, onSignal);
@@ -453,17 +541,17 @@ int cmdDev(const std::vector<std::string>& args) {
             auto now = sourcesTime(root);
             if (now == seen) continue;
             seen = now;
-            std::cout << "reactx: change detected, rebuilding...\n" << std::flush;
-            if (build(root, "web")) {
-                ++version;
-                std::cout << "reactx: rebuilt, reloading the page\n" << std::flush;
-            } else {
-                std::cout << "reactx: build failed, keeping the previous version\n" << std::flush;
-            }
+            std::println("reactx: change detected, rebuilding...");
+            std::fflush(stdout);
+            bool ok = build(root, "web");
+            if (ok) ++version;
+            std::println("{}", ok ? "reactx: rebuilt, reloading the page" : "reactx: build failed, keeping the previous version");
+            std::fflush(stdout);
         }
     });
 
-    std::cout << "reactx: http://127.0.0.1:" << server.port() << "/  (Ctrl+C to stop)\n" << std::flush;
+    std::println("reactx: http://127.0.0.1:{}/  (Ctrl+C to stop)", server.port());
+    std::fflush(stdout);
     server.run();
     devServer = nullptr;
     return 0;
@@ -486,37 +574,36 @@ int cmdAdd(const std::vector<std::string>& args) {
         fail("add: the git URL must start with https://, git@, ssh:// or file://");
 
     fs::path root = projectRoot();
-    Value manifest = readManifest(root);
+    Value manifest = readManifest(root).json;
     Value dep = rx::json::object({{"git", url}, {"rev", rev}});
     if (!target.empty()) dep["target"] = target;
     bool replaced = manifest["dependencies"].contains(name);
     manifest["dependencies"][name] = dep;
     writeManifest(root, manifest);
-    std::cout << (replaced ? "Updated " : "Added ") << name << " (" << url << " @ " << rev << ")";
-    if (target.empty()) std::cout << "\n  hint: --target <cmake-target> links it to the app automatically";
-    std::cout << '\n';
+    std::println("{} {} ({} @ {}){}", replaced ? "Updated" : "Added", name, url, rev,
+                 target.empty() ? "\n  hint: --target <cmake-target> links it to the app automatically" : "");
     return 0;
 }
 
 int cmdRemove(const std::vector<std::string>& args) {
     if (args.size() != 1) fail("remove: usage: reactx remove <name>");
     fs::path root = projectRoot();
-    Value manifest = readManifest(root);
-    if (!manifest["dependencies"].contains(args[0])) fail("remove: no dependency " + args[0]);
+    auto [manifest, info] = readManifest(root);
+    if (!info.dependencies || !info.dependencies->contains(args[0])) fail("remove: no dependency " + args[0]);
     manifest["dependencies"].asObject().erase(args[0]);
     writeManifest(root, manifest);
-    std::cout << "Removed " << args[0] << '\n';
+    std::println("Removed {}", args[0]);
     return 0;
 }
 
-int usage(std::ostream& out, int code) {
-    out << "reactx " << kVersion << " - the ReactX tool\n\n"
+int usage(std::FILE* out, int code) {
+    std::print(out, "reactx {} - the ReactX tool\n\n"
            "  reactx new <name> [--terminal] [--local]   create a project (web by default)\n"
            "  reactx dev [--port N] [--native]           build, serve, rebuild and reload on changes\n"
            "  reactx build [--native]                    build (web: build/web/dist)\n"
            "  reactx add <name> <git-url> [--rev R] [--target T]   add a dependency\n"
            "  reactx remove <name>                       remove a dependency\n"
-           "  reactx help | --version\n";
+           "  reactx help | --version\n", kVersion);
     return code;
 }
 
@@ -524,7 +611,7 @@ int usage(std::ostream& out, int code) {
 
 int main(int argc, char** argv) {
     std::vector<std::string> args(argv + 1, argv + argc);
-    if (args.empty()) return usage(std::cerr, 2);
+    if (args.empty()) return usage(stderr, 2);
     std::string command = args.front();
     args.erase(args.begin());
     try {
@@ -533,14 +620,14 @@ int main(int argc, char** argv) {
         if (command == "build") return cmdBuild(args);
         if (command == "add") return cmdAdd(args);
         if (command == "remove") return cmdRemove(args);
-        if (command == "help" || command == "--help" || command == "-h") return usage(std::cout, 0);
+        if (command == "help" || command == "--help" || command == "-h") return usage(stdout, 0);
         if (command == "--version") {
-            std::cout << "reactx " << kVersion << '\n';
+            std::println("reactx {}", kVersion);
             return 0;
         }
     } catch (const std::exception& e) {
         fail(e.what());
     }
-    std::cerr << "reactx: unknown command " << command << "\n\n";
-    return usage(std::cerr, 2);
+    std::println(stderr, "reactx: unknown command {}\n", command);
+    return usage(stderr, 2);
 }

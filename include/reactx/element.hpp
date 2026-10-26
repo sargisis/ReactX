@@ -1,11 +1,12 @@
 #pragma once
 
 #include <cstdint>
+#include <flat_map>
 #include <functional>
 #include <initializer_list>
-#include <map>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -79,25 +80,28 @@ public:
     Props() = default;
     Props(PropList list);
 
-    bool has(const std::string& name) const { return values_.contains(name); }
-    const PropValue* find(const std::string& name) const;
+    bool has(std::string_view name) const { return values_.contains(name); }
+    const PropValue* find(std::string_view name) const;
 
     // Typed read with a fallback: get<int>("start", 0), get<std::string>("title").
     template <class T>
-    T get(const std::string& name, T fallback = T{}) const;
-    std::string get(const std::string& name, const char* fallback) const {
+    T get(std::string_view name, T fallback = T{}) const;
+    std::string get(std::string_view name, const char* fallback) const {
         return get<std::string>(name, fallback);
     }
 
     void set(std::string name, PropValue value);
-    const std::map<std::string, PropValue>& values() const { return values_; }
+    // Sorted by name. A flat map (C++23): props are few, so one sorted array
+    // beats a tree of nodes for lookups and copies.
+    using Values = std::flat_map<std::string, PropValue, std::less<>>;
+    const Values& values() const { return values_; }
 
     const std::vector<Element>& children() const { return children_; }
     void setChildren(std::vector<Element> children);
     std::vector<Element> takeChildren();
 
 private:
-    std::map<std::string, PropValue> values_;
+    Values values_;
     std::vector<Element> children_;
 };
 
@@ -127,7 +131,7 @@ Element fragment(std::vector<Element> children, std::string key = {});
 // ---- template implementation ----
 
 template <class T>
-T Props::get(const std::string& name, T fallback) const {
+T Props::get(std::string_view name, T fallback) const {
     const PropValue* v = find(name);
     if (!v) return fallback;
     if constexpr (std::is_same_v<T, bool>) {

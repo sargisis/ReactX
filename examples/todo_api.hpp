@@ -14,7 +14,7 @@
 // Errors are {"error": "..."} with status 400 / 404 / 405.
 
 #include <algorithm>
-#include <charconv>
+#include <expected>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "reactx/json.hpp"
+#include "reactx/parse.hpp"
 #include "reactx/path.hpp"
 
 namespace todo_api {
@@ -139,26 +140,23 @@ inline Reply error(int status, const std::string& message) {
     return {status, rx::json::object({{"error", message}}).dump()};
 }
 
-inline std::optional<int> parseId(const std::string& s) {
-    int id = 0;
-    auto [p, ec] = std::from_chars(s.data(), s.data() + s.size(), id);
-    if (ec != std::errc{} || p != s.data() + s.size() || id <= 0) return std::nullopt;
-    return id;
+// A todo id from the URL: a positive integer.
+inline std::optional<int> parseId(std::string_view s) {
+    auto id = rx::parseNumber<int>(s);
+    if (!id || *id <= 0) return std::nullopt;
+    return *id;
 }
 
 // Validates {"title": "..."}: a non-empty string of at most 200 bytes.
-inline std::optional<std::string> validTitle(const rx::json::Value& v, std::string& why) {
-    if (!v["title"].isString()) {
-        why = "title must be a string";
-        return std::nullopt;
-    }
+// The trimmed title, or why it is not valid.
+inline std::expected<std::string, std::string> validTitle(const rx::json::Value& v) {
+    if (!v["title"].isString()) return std::unexpected("title must be a string");
     std::string title = v["title"].asString();
     title.erase(0, title.find_first_not_of(" \t\n\r"));
     title.erase(title.find_last_not_of(" \t\n\r") + 1);
-    if (title.empty()) why = "title is empty";
-    else if (title.size() > 200) why = "title is longer than 200 bytes";
-    else return title;
-    return std::nullopt;
+    if (title.empty()) return std::unexpected("title is empty");
+    if (title.size() > 200) return std::unexpected("title is longer than 200 bytes");
+    return title;
 }
 
 // Answers one request. `path` has no query string.
@@ -180,9 +178,8 @@ inline Reply handle(Store& store, std::string_view method, std::string_view path
         if (method == "POST") {
             rx::json::Value v;
             if (auto bad = parseBody(v)) return *bad;
-            std::string why;
-            auto title = validTitle(v, why);
-            if (!title) return error(400, why);
+            auto title = validTitle(v);
+            if (!title) return error(400, title.error());
             return {201, store.add(*title).toJson().dump()};
         }
         return error(405, "method not allowed");
@@ -201,9 +198,9 @@ inline Reply handle(Store& store, std::string_view method, std::string_view path
             std::optional<std::string> title;
             std::optional<bool> done;
             if (v.contains("title")) {
-                std::string why;
-                title = validTitle(v, why);
-                if (!title) return error(400, why);
+                auto valid = validTitle(v);
+                if (!valid) return error(400, valid.error());
+                title = std::move(*valid);
             }
             if (v.contains("done")) {
                 if (!v["done"].isBool()) return error(400, "done must be true or false");

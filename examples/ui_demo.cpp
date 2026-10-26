@@ -4,7 +4,7 @@
 //   Delete           remove task     Escape         close the dialog
 //   Ctrl+C           quit
 #include <algorithm>
-#include <iostream>
+#include <print>
 #include <string>
 #include <vector>
 
@@ -150,7 +150,7 @@ Element App(const Props& props) {
 
 int main() {
     if (!Terminal::isInteractive()) {
-        std::cerr << "ui_demo needs an interactive terminal\n";
+        std::println(stderr, "ui_demo needs an interactive terminal");
         return 1;
     }
     TerminalApp app;

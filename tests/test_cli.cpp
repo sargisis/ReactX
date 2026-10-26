@@ -146,8 +146,13 @@ void quick(const fs::path& tmp) {
     std::ofstream(app / "reactx.json") << "{ not json";
     auto broken = reactx({"add", "x", "https://example.com/x.git"}, app);
     CHECK(broken.code == 1 && contains(broken.out, "reactx.json: json: "));
-    std::ofstream(app / "reactx.json") << R"({"dependencies": []})";
-    CHECK(contains(reactx({"remove", "x"}, app).out, "\"dependencies\" must be an object"));
+    // Checked field by field (C++26 reflection): the message says where.
+    std::ofstream(app / "reactx.json") << R"({"dependencies": {}})";
+    CHECK(contains(reactx({"remove", "x"}, app).out, "reactx.json: missing field \"name\""));
+    std::ofstream(app / "reactx.json") << R"({"name": "app", "dependencies": []})";
+    CHECK(contains(reactx({"remove", "x"}, app).out, "reactx.json: field \"dependencies\": expected an object"));
+    std::ofstream(app / "reactx.json") << R"({"name": "app", "dependencies": {"fmt": {"git": "https://x"}}})";
+    CHECK(contains(reactx({"remove", "x"}, app).out, "reactx.json: field \"dependencies\": \"fmt\": missing field \"rev\""));
 
     std::cout << "errors and help\n";
     auto outside = reactx({"build"}, tmp);

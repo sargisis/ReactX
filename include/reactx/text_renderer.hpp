@@ -1,6 +1,6 @@
 #pragma once
 
-#include <map>
+#include <flat_map>
 #include <optional>
 #include <ostream>
 #include <string>
@@ -42,7 +42,7 @@ protected:
         std::string type;  // empty for text nodes
         std::string text;
         bool isText = false;
-        std::map<std::string, std::string, std::less<>> props;
+        std::flat_map<std::string, std::string, std::less<>> props;
         std::vector<NodeHandle> children;
         NodeHandle parent = 0;
     };
@@ -52,7 +52,7 @@ protected:
     const Node* findNode(NodeHandle h) const;
 
 private:
-    void print(std::ostream& out, NodeHandle h, int depth) const;
+    void print(std::string& out, NodeHandle h, int depth) const;
     void log(const std::string& line);
 
 protected:

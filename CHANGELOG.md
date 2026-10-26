@@ -4,6 +4,25 @@
 
 ## [Не выпущено]
 
+Стандартная библиотека C++23/C++26 — всё, что в ней есть, и ничего самописного вместо того, чего нет.
+
+### Изменено
+
+- **Нативная сборка требует GCC 16** (стандартная библиотека C++26); CI — образ `gcc:16`. CMake сразу говорит, если компилятор старше. `reactx` собирает нативные проекты тем же компилятором, которым собран сам (или `CXX`).
+- **Контракты C++26**: на GCC 16 ReactX включает `-fcontracts`, и `REACTX_PRE` становится `contract_assert`. Без контрактов нарушение печатает ещё и стек вызовов (`<stacktrace>`) и останавливается в отладчике (`<debugging>`) — где они есть.
+- `net::parseRequestHead` возвращает `std::expected<Request, HttpError>` с причиной; новый `net::bodyLength` проверяет `Content-Length` (400 — не число, 413 — слишком большое; раньше `-5` читалось как огромное число).
+- `Props::values()`, `Request::headers` и props в `TextRenderer` — `std::flat_map` вместо `std::map`; `Props::has` / `find` / `get` принимают `std::string_view`.
+- Терминал: ячейка экрана — `std::inplace_vector<char, 4>` (без кучи), экран — `std::mdspan` над одним массивом вместо `vector<vector<Cell>>`.
+- Вывод CLI, `reactx_serve`, `api_server` и примеров — `std::print`; `std::format` вместо `ostringstream` (числа в props печатаются в кратчайшей точной форме: `3.14159265`, а не `3.14159`).
+
+### Добавлено
+
+- **Рефлексия C++26** (`<meta>`, GCC 16): `rx::json::to(значение)` и `rx::json::from<T>(json)` для обычных структур — поля становятся ключами, типы проверяются, ошибка показывает путь (`field "dependencies": "fmt": missing field "rev"`). Поддерживаются числа, строки, `bool`, `std::optional`, последовательности, словари со строковыми ключами, вложенные структуры. Подключается к цели через `reactx::reflection` (в браузере рефлексии пока нет).
+- CLI читает `reactx.json` как структуру `Manifest` через `json::from`: забытый `rev` у зависимости теперь виден сразу, а не ошибкой CMake при сборке.
+- `reactx/parse.hpp`: `rx::parseNumber<T>` (`std::from_chars` + `std::expected`, без исключений и локалей) и `rx::parsePort`. `--port abc` в `reactx dev`, `reactx_serve` и `api_server` теперь даёт понятную ошибку, а не падение в `std::stoi`.
+- `TerminalRenderer::setUnicode`: рамки ASCII (`+-|`) для терминалов не в UTF-8; `TerminalApp` выбирает по `std::text_encoding`.
+- CLI: чтение и запись файлов через `std::expected`, `reactx.json` — цепочка `and_then` (прочитать → разобрать → проверить), обход исходников в `reactx dev` — `std::generator`.
+
 ## [0.2.0] — 2026-10-26
 
 Безопасность и современный C++.

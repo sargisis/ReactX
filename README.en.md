@@ -13,6 +13,7 @@
 [![C++26](https://img.shields.io/badge/C%2B%2B-26-0d0f12?logo=cplusplus)](https://sargisis.github.io/ReactX/docs/safety)
 [![WebAssembly](https://img.shields.io/badge/WebAssembly-Emscripten-654ff0?logo=webassembly&logoColor=white)](https://sargisis.github.io/ReactX/docs/browser)
 [![Site](https://img.shields.io/badge/site-sargisis.github.io%2FReactX-b45309)](https://sargisis.github.io/ReactX/)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20%7C%20Apache--2.0-6b675e)](#license)
 
 [Site and docs](https://sargisis.github.io/ReactX/) · [Quick start](#quick-start) · [Examples](examples) · [Changelog](CHANGELOG.md) · [For AI assistants](#for-ai-assistants)
 
@@ -445,6 +446,17 @@ AGENTS.md         rules and checks for anyone changing ReactX itself
 ## For AI assistants
 
 [llms.txt](llms.txt) — the API, complete programs and common mistakes for anyone writing apps with ReactX (published at https://sargisis.github.io/ReactX/llms.txt). [AGENTS.md](AGENTS.md) — rules and checks for anyone changing ReactX itself. `reactx new` puts an `AGENTS.md` into every project.
+
+## License
+
+ReactX is licensed under either of
+
+- [Apache License, Version 2.0](LICENSE-APACHE)
+- [MIT license](LICENSE-MIT)
+
+at your option.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in ReactX by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
 
 ---
 

@@ -1,0 +1,159 @@
+# Publishes a release when a tag vX.Y.Z is pushed (see "Releases" in AGENTS.md):
+#   - a GitHub Release with the CHANGELOG section as its notes;
+#   - reactx and reactx_serve for Linux x86-64, linked statically;
+#   - the Docker image ghcr.io/<owner>/reactx:X.Y.Z (and :X.Y, :latest).
+# The tag must match project(ReactX VERSION ...) in CMakeLists.txt.
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  notes:
+    name: Check the version, take the notes from CHANGELOG.md
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The tag matches CMakeLists.txt
+        id: version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          project=$(sed -nE 's/^project\(ReactX VERSION ([0-9.]+).*/\1/p' CMakeLists.txt)
+          if [ "$tag" != "$project" ]; then
+            echo "::error::tag $GITHUB_REF_NAME, but CMakeLists.txt says $project"
+            exit 1
+          fi
+          echo "version=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Release notes
+        run: |
+          v="${{ steps.version.outputs.version }}"
+          awk -v v="$v" '
+            index($0, "## [" v "]") == 1 { on = 1; next }
+            on && /^## \[/ { exit }
+            on && /^\[[^]]+\]: http/ { exit }
+            on { print }
+          ' CHANGELOG.md > notes.md
+          if ! grep -q '[^[:space:]]' notes.md; then
+            echo "::error::CHANGELOG.md has no section ## [$v]"
+            exit 1
+          fi
+          printf '\n---\n\nУстановка: архив `reactx-%s-linux-x86_64.tar.gz` ниже (`bin/reactx` — в PATH) или образ `ghcr.io/%s/reactx:%s` с GCC 16 и Emscripten.\n' \
+            "$v" "${GITHUB_REPOSITORY_OWNER,,}" "$v" >> notes.md
+          cat notes.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: notes
+          path: notes.md
+
+  binaries:
+    name: reactx for Linux x86-64 (static)
+    needs: notes
+    runs-on: ubuntu-24.04
+    container: gcc:16
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: apt-get update && apt-get install -y --no-install-recommends cmake ninja-build
+
+      - name: Build
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DREACTX_BUILD_EXAMPLES=OFF -DREACTX_BUILD_TESTS=OFF -DCMAKE_EXE_LINKER_FLAGS=-static
+          cmake --build build --target reactx_cli reactx_serve
+
+      - name: Smoke test
+        run: |
+          ./build/reactx --version | grep -qx "reactx ${{ needs.notes.outputs.version }}"
+          cd "$(mktemp -d)" && "$GITHUB_WORKSPACE/build/reactx" new smoke && test -f smoke/reactx.json
+
+      - name: Package
+        run: |
+          name="reactx-${{ needs.notes.outputs.version }}-linux-x86_64"
+          mkdir -p "dist/$name/bin"
+          install -s build/reactx build/reactx_serve "dist/$name/bin/"
+          cp LICENSE-MIT LICENSE-APACHE README.md README.en.md CHANGELOG.md "dist/$name/"
+          tar -C dist -czf "dist/$name.tar.gz" "$name"
+          (cd dist && sha256sum "$name.tar.gz" > "$name.tar.gz.sha256")
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binaries
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+
+  image:
+    name: Docker image on ghcr.io
+    needs: notes
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tags
+        id: tags
+        run: |
+          v="${{ needs.notes.outputs.version }}"
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/reactx"
+          tags="$image:$v"
+          case "$v" in
+            *-*) ;;  # a pre-release gets only its own tag
+            *) tags="$tags,$image:${v%.*},$image:latest" ;;
+          esac
+          echo "tags=$tags" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ needs.notes.outputs.version }}
+            org.opencontainers.image.licenses=MIT OR Apache-2.0
+
+  publish:
+    name: GitHub Release
+    needs: [notes, binaries, image]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          prerelease=""
+          case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag $prerelease \
+            --title "ReactX $GITHUB_REF_NAME" --notes-file artifacts/notes.md \
+            artifacts/*.tar.gz artifacts/*.sha256

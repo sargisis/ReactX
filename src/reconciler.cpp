@@ -14,11 +14,6 @@ namespace {
 
 constexpr int kMaxUpdatePasses = 100;
 
-// Children match by key, or by position when they have no key.
-std::string identity(const std::string& key, std::size_t index) {
-    return key.empty() ? "#" + std::to_string(index) : "k:" + key;
-}
-
 bool sameType(const Fiber& fiber, const Element& e) {
     if (fiber.kind != e.kind) return false;
     switch (e.kind) {
@@ -268,29 +263,45 @@ void Reconciler::notifyConsumers(Fiber& provider) {
         if (auto c = weak.lock()) schedule(*c);
 }
 
+// Children match by key, or by position when they have no key. Old
+// children that match nothing are unmounted after the new ones rendered.
 void Reconciler::reconcileChildren(Fiber& f, std::vector<Element> elements) {
-    std::unordered_map<std::string, std::shared_ptr<Fiber>> old;
-    for (std::size_t i = 0; i < f.children.size(); ++i) {
-        auto& child = f.children[i];
-        auto [it, inserted] = old.try_emplace(identity(child->key, i), child);
-        if (!inserted) unmount(*child);  // duplicate key
-    }
-    f.children.clear();
-
-    for (std::size_t i = 0; i < elements.size(); ++i) {
-        Element& e = elements[i];
-        auto it = old.find(identity(e.key, i));
-        if (it != old.end() && sameType(*it->second, e)) {
-            auto child = std::move(it->second);
-            old.erase(it);
-            update(*child, std::move(e));
-            f.children.push_back(std::move(child));
+    std::vector<std::shared_ptr<Fiber>> old = std::exchange(f.children, {});
+    f.children.reserve(elements.size());
+    std::vector<bool> used(old.size(), false);
+    auto place = [&](std::size_t j, Element& e) {  // reuse old[j] if it can show e
+        if (j < old.size() && !used[j] && sameType(*old[j], e)) {
+            used[j] = true;
+            update(*old[j], std::move(e));
+            f.children.push_back(old[j]);
         } else {
             f.children.push_back(mount(std::move(e), f));
         }
+    };
+
+    // Most renders keep every child where it was: match position by position
+    // while the keys agree, without building a map.
+    std::size_t i = 0;
+    for (; i < elements.size() && i < old.size() && old[i]->key == elements[i].key; ++i) place(i, elements[i]);
+
+    if (i < elements.size()) {
+        std::unordered_map<std::string_view, std::size_t> byKey;  // the rest of the old keyed children
+        for (std::size_t j = i; j < old.size(); ++j)
+            if (!old[j]->key.empty()) byKey.try_emplace(old[j]->key, j);  // a duplicate key matches nothing
+        for (; i < elements.size(); ++i) {
+            Element& e = elements[i];
+            std::size_t j = SIZE_MAX;
+            if (e.key.empty()) {
+                if (i < old.size() && old[i]->key.empty()) j = i;
+            } else if (auto it = byKey.find(e.key); it != byKey.end()) {
+                j = it->second;
+            }
+            place(j, e);
+        }
     }
 
-    for (auto& [id, child] : old) unmount(*child);
+    for (std::size_t j = 0; j < old.size(); ++j)
+        if (!used[j]) unmount(*old[j]);
     if (f.kind == ElementKind::Host) sync(f);
 }
 

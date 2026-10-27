@@ -403,6 +403,131 @@ TEST(keyed_lists_reorder_with_the_fewest_moves) {
 }
 
 // =====================================================================
+// errorBoundary: a component that throws doesn't take the app down
+// =====================================================================
+
+bool explode = false;
+int bombCleanups = 0;
+
+struct BombProps {
+    int at = 1;  // throws once the counter reaches this
+};
+
+Element Bomb(const BombProps& p) {
+    auto [n, setN] = useState(0);
+    useEffect([] { return [] { ++bombCleanups; }; }, deps());
+    if (explode || n >= p.at) throw std::runtime_error("boom at " + std::to_string(n));
+    return h("box", {}, {h("button", {{"id", "bump"}, {"onClick", [setN] { setN([](int v) { return v + 1; }); }}}, {"bump"}),
+                         h("text", {}, {"n=" + std::to_string(n)})});
+}
+
+Element showError(const RenderError& e) {
+    return h("box", {{"id", "fallback"}},
+             {h("text", {}, {"error: " + e.message}), h("button", {{"id", "retry"}, {"onClick", e.retry}}, {"retry"})});
+}
+
+TEST(boundary_shows_the_fallback_when_the_first_render_throws) {
+    explode = true;
+    TextRenderer r;
+    Root root(r);
+    root.render(h("app", {}, {h("text", {}, {"header"}), errorBoundary(showError, {h(Bomb, {.at = 1})})}));
+    CHECK(has(r, "header"));
+    CHECK(has(r, "error: boom at 0"));
+    explode = false;
+}
+
+TEST(boundary_catches_a_throw_on_a_state_update_and_retry_recovers) {
+    bombCleanups = 0;
+    TextRenderer r;
+    Root root(r);
+    root.render(h("app", {}, {errorBoundary(showError, {h(Bomb, {.at = 2})}), h("text", {}, {"footer"})}));
+    root.dispatch(byId(r, "bump"), "onClick");
+    CHECK(has(r, "n=1"));
+    root.dispatch(byId(r, "bump"), "onClick");  // n = 2: Bomb throws while re-rendering
+    CHECK(has(r, "error: boom at 2"));
+    CHECK(has(r, "footer") && !has(r, "n="));
+    CHECK(bombCleanups == 1);  // the broken subtree was unmounted properly
+    CHECK(!r.findByProp("id", "bump"));
+
+    root.dispatch(byId(r, "retry"), "onClick");  // a fresh Bomb, state from 0
+    CHECK(has(r, "n=0") && !has(r, "error:"));
+    root.dispatch(byId(r, "bump"), "onClick");
+    CHECK(has(r, "n=1"));
+}
+
+TEST(a_throwing_fallback_goes_to_the_next_boundary_up) {
+    explode = true;
+    TextRenderer r;
+    Root root(r);
+    auto badFallback = [](const RenderError&) -> Element { throw std::logic_error("fallback broke too"); };
+    root.render(errorBoundary(showError, {h("box", {}, {errorBoundary(badFallback, {h(Bomb, {})})})}));
+    CHECK(has(r, "error: fallback broke too"));
+    explode = false;
+}
+
+TEST(non_std_exceptions_are_caught_too) {
+    TextRenderer r;
+    Root root(r);
+    struct Odd {};
+    root.render(errorBoundary(showError, {h([](const Props&) -> Element { throw Odd{}; })}));
+    CHECK(has(r, "error: unknown error"));
+}
+
+TEST(without_a_boundary_a_failed_mount_leaves_nothing_behind) {
+    explode = true;
+    bombCleanups = 0;
+    TextRenderer r;
+    Root root(r);
+    bool threw = false;
+    try {
+        root.render(h("app", {}, {h("text", {}, {"before"}), h("box", {}, {h(Bomb, {})})}));
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    explode = false;
+    CHECK(threw);
+    root.render(h("app", {}, {h("text", {}, {"recovered"})}));
+    CHECK(has(r, "recovered") && !has(r, "before"));
+    CHECK(r.nodeCount() <= 4);  // root, app, text and its string: the failed nodes are gone
+}
+
+std::function<void()> bumpBomb, bumpDeep;
+
+Element BombHandle(const Props&) {
+    auto [n, setN] = useState(0);
+    bumpBomb = [setN] { setN([](int v) { return v + 1; }); };
+    if (n >= 1) throw std::runtime_error("bomb");
+    return h("text", {}, {"bomb=" + std::to_string(n)});
+}
+
+Element DeepCounter(const Props&) {
+    auto [n, setN] = useState(0);
+    bumpDeep = [setN] { setN([](int v) { return v + 1; }); };
+    return h("text", {}, {"deep=" + std::to_string(n)});
+}
+
+TEST(without_a_boundary_a_failed_update_keeps_the_last_output_and_the_other_updates) {
+    TextRenderer r;
+    Root root(r);
+    root.render(h("app", {}, {h(BombHandle), h("box", {}, {h("box", {}, {h(DeepCounter)})})}));
+    bumpBomb();  // one batch: BombHandle (renders first, throws), then DeepCounter (deeper)
+    bumpDeep();
+    bool threw = false;
+    try {
+        root.flush();
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    CHECK(threw);
+    CHECK(has(r, "bomb=0"));  // the last good output stays
+    root.flush();             // the counter's update wasn't lost with the failed batch
+    CHECK(has(r, "deep=1"));
+    bumpDeep();
+    root.flush();
+    CHECK(has(r, "deep=2"));
+}
+
+// =====================================================================
 // useContext
 // =====================================================================
 

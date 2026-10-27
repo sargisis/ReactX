@@ -128,10 +128,29 @@ void Reconciler::runUpdates() {
 
         // Parents first: re-rendering a parent also re-renders its children.
         std::ranges::sort(batch, {}, &Fiber::depth);
-        for (auto& f : batch) {
+        for (std::size_t k = 0; k < batch.size(); ++k) {
+            auto& f = batch[k];
             if (!f->alive || !f->dirty) continue;
-            renderComponent(*f);
-            sync(nearestHost(*f));
+            try {
+                if (f->kind == ElementKind::Boundary) renderBoundary(*f, f->boundaryChildren);
+                else renderComponent(*f);
+                sync(nearestHost(*f));
+            } catch (...) {
+                // A state update inside a boundary failed: the nearest boundary
+                // that isn't already showing its fallback takes over.
+                Fiber* b = f->parent;
+                while (b && (b->kind != ElementKind::Boundary || b->error)) b = b->parent;
+                if (!b) {
+                    // Nobody catches it. Keep the rest of the batch queued, or
+                    // their setters would never schedule them again.
+                    for (std::size_t rest = k + 1; rest < batch.size(); ++rest)
+                        if (batch[rest]->alive && batch[rest]->dirty) dirty_.push_back(batch[rest]);
+                    throw;
+                }
+                b->error = std::current_exception();
+                showFallback(*b);
+                sync(nearestHost(*b));
+            }
         }
         commit();
     }
@@ -187,31 +206,40 @@ std::shared_ptr<Fiber> Reconciler::mount(Element e, Fiber& parent) {
     f->parent = &parent;
     f->depth = parent.depth + 1;
 
-    switch (f->kind) {
-        case ElementKind::Text:
-            f->node = renderer_.createText(f->type);
-            break;
-        case ElementKind::Host: {
-            f->node = renderer_.createElement(f->type);
-            hosts_[f->node] = f.get();
-            auto children = e.props.takeChildren();
-            applyProps(*f, e.props);
-            f->props = std::move(e.props);
-            reconcileChildren(*f, std::move(children));
-            break;
+    try {
+        switch (f->kind) {
+            case ElementKind::Text:
+                f->node = renderer_.createText(f->type);
+                break;
+            case ElementKind::Host: {
+                f->node = renderer_.createElement(f->type);
+                hosts_[f->node] = f.get();
+                auto children = e.props.takeChildren();
+                applyProps(*f, e.props);
+                f->props = std::move(e.props);
+                reconcileChildren(*f, std::move(children));
+                break;
+            }
+            case ElementKind::Fragment:
+                reconcileChildren(*f, e.props.takeChildren());
+                break;
+            case ElementKind::Provider:
+                f->provided = std::move(e.provided);
+                reconcileChildren(*f, e.props.takeChildren());
+                break;
+            case ElementKind::Component:
+                f->props = std::move(e.props);
+                f->typed = std::move(e.typed);
+                renderComponent(*f);
+                break;
+            case ElementKind::Boundary:
+                f->fallback = std::move(e.fallback);
+                renderBoundary(*f, e.props.takeChildren());
+                break;
         }
-        case ElementKind::Fragment:
-            reconcileChildren(*f, e.props.takeChildren());
-            break;
-        case ElementKind::Provider:
-            f->provided = std::move(e.provided);
-            reconcileChildren(*f, e.props.takeChildren());
-            break;
-        case ElementKind::Component:
-            f->props = std::move(e.props);
-            f->typed = std::move(e.typed);
-            renderComponent(*f);
-            break;
+    } catch (...) {
+        unmount(*f);  // nothing of it may stay registered (hosts_, context readers)
+        throw;
     }
     return f;
 }
@@ -241,6 +269,10 @@ void Reconciler::update(Fiber& f, Element e) {
             reconcileChildren(f, e.props.takeChildren());
             break;
         }
+        case ElementKind::Boundary:
+            f.fallback = std::move(e.fallback);
+            renderBoundary(f, e.props.takeChildren());
+            break;
         case ElementKind::Component:
             // memo: same props and no pending update -> keep the old output.
             if (!f.dirty && f.typed && isTypedMemo(f.typed->component()) && f.typed->equals(*e.typed)) break;
@@ -272,37 +304,81 @@ void Reconciler::reconcileChildren(Fiber& f, std::vector<Element> elements) {
     auto place = [&](std::size_t j, Element& e) {  // reuse old[j] if it can show e
         if (j < old.size() && !used[j] && sameType(*old[j], e)) {
             used[j] = true;
+            f.children.push_back(old[j]);  // first: if update() throws, it is unmounted with the others
             update(*old[j], std::move(e));
-            f.children.push_back(old[j]);
         } else {
             f.children.push_back(mount(std::move(e), f));
         }
     };
 
-    // Most renders keep every child where it was: match position by position
-    // while the keys agree, without building a map.
-    std::size_t i = 0;
-    for (; i < elements.size() && i < old.size() && old[i]->key == elements[i].key; ++i) place(i, elements[i]);
+    try {
+        // Most renders keep every child where it was: match position by position
+        // while the keys agree, without building a map.
+        std::size_t i = 0;
+        for (; i < elements.size() && i < old.size() && old[i]->key == elements[i].key; ++i) place(i, elements[i]);
 
-    if (i < elements.size()) {
-        std::unordered_map<std::string_view, std::size_t> byKey;  // the rest of the old keyed children
-        for (std::size_t j = i; j < old.size(); ++j)
-            if (!old[j]->key.empty()) byKey.try_emplace(old[j]->key, j);  // a duplicate key matches nothing
-        for (; i < elements.size(); ++i) {
-            Element& e = elements[i];
-            std::size_t j = SIZE_MAX;
-            if (e.key.empty()) {
-                if (i < old.size() && old[i]->key.empty()) j = i;
-            } else if (auto it = byKey.find(e.key); it != byKey.end()) {
-                j = it->second;
+        if (i < elements.size()) {
+            std::unordered_map<std::string_view, std::size_t> byKey;  // the rest of the old keyed children
+            for (std::size_t j = i; j < old.size(); ++j)
+                if (!old[j]->key.empty()) byKey.try_emplace(old[j]->key, j);  // a duplicate key matches nothing
+            for (; i < elements.size(); ++i) {
+                Element& e = elements[i];
+                std::size_t j = SIZE_MAX;
+                if (e.key.empty()) {
+                    if (i < old.size() && old[i]->key.empty()) j = i;
+                } else if (auto it = byKey.find(e.key); it != byKey.end()) {
+                    j = it->second;
+                }
+                place(j, e);
             }
-            place(j, e);
         }
+    } catch (...) {
+        // A child threw while rendering. Unmount everything below `f`, so no
+        // half-built fiber stays registered; an errorBoundary above (or the
+        // caller) decides what to show instead.
+        for (std::size_t j = 0; j < old.size(); ++j)
+            if (!used[j]) unmount(*old[j]);
+        for (auto& child : std::exchange(f.children, {})) unmount(*child);
+        throw;
     }
 
     for (std::size_t j = 0; j < old.size(); ++j)
         if (!used[j]) unmount(*old[j]);
     if (f.kind == ElementKind::Host) sync(f);
+}
+
+void Reconciler::renderBoundary(Fiber& b, std::vector<Element> children) {
+    b.dirty = false;
+    b.boundaryChildren = children;  // kept for retry()
+    if (b.error) {
+        showFallback(b);
+        return;
+    }
+    try {
+        reconcileChildren(b, std::move(children));
+    } catch (...) {
+        b.error = std::current_exception();
+        showFallback(b);  // if the fallback throws too, the next boundary up gets it
+    }
+}
+
+void Reconciler::showFallback(Fiber& b) {
+    RenderError error{.message = "unknown error", .exception = b.error, .retry = {}};
+    try {
+        std::rethrow_exception(b.error);
+    } catch (const std::exception& e) {
+        error.message = e.what();
+    } catch (...) {
+    }
+    error.retry = [weak = b.weak_from_this()] {
+        auto boundary = weak.lock();
+        if (!boundary || !boundary->alive || !boundary->error) return;
+        boundary->error = nullptr;
+        boundary->owner->schedule(*boundary);
+    };
+    std::vector<Element> shown;
+    shown.push_back((*b.fallback)(error));
+    reconcileChildren(b, std::move(shown));
 }
 
 void Reconciler::renderComponent(Fiber& f) {

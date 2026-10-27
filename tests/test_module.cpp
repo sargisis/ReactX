@@ -1,5 +1,6 @@
 // Checks that the library works through `import reactx;` (C++20 modules).
 #include <iostream>
+#include <stdexcept>
 #include <string>
 
 // The VS Code C/C++ extension can't parse GCC modules yet: show it the headers.
@@ -66,6 +67,12 @@ int main() {
     check(r.toString().find("\"x!\"") != std::string::npos, "useMemo");
     check(root.dispatch(*r.findByProp("id", "reset"), "onClick"), "useCallback handler");
     check(r.toString().find("value=\"\"") != std::string::npos, "useCallback reset value");
+
+    TextRenderer broken;
+    Root brokenRoot(broken);
+    brokenRoot.render(errorBoundary([](const RenderError& e) { return text("caught " + e.message); },
+                                    {h([](const Props&) -> Element { throw std::runtime_error("x"); })}));
+    check(broken.toString().find("caught x") != std::string::npos, "errorBoundary");
 
     std::cout << (failures ? "module test FAILED\n" : "module test OK\n");
     return failures ? 1 : 0;

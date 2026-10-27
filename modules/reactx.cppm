@@ -40,6 +40,9 @@ using rx::propToString;
 using rx::h;
 using rx::text;
 using rx::fragment;
+using rx::RenderError;
+using rx::ErrorFallback;
+using rx::errorBoundary;
 
 // hooks.hpp
 using rx::Cleanup;

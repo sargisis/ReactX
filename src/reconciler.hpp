@@ -39,6 +39,10 @@ struct Fiber : std::enable_shared_from_this<Fiber> {
     // the weak_ptr guards against a fiber that died without an unmount.
     std::unordered_map<const Fiber*, std::weak_ptr<Fiber>> consumers;
     std::vector<Fiber*> providers;  // the providers this fiber reads (ancestors; usually 0-2)
+
+    std::shared_ptr<const ErrorFallback> fallback;  // Boundary only
+    std::vector<Element> boundaryChildren;          // Boundary only: what retry() renders again
+    std::exception_ptr error;                       // Boundary only: set while it shows the fallback
     bool rendered = false;  // component rendered at least once
     bool dirty = false;
     bool alive = true;
@@ -61,6 +65,8 @@ private:
     void update(Fiber& fiber, Element element);
     void reconcileChildren(Fiber& fiber, std::vector<Element> elements);
     void renderComponent(Fiber& fiber);
+    void renderBoundary(Fiber& boundary, std::vector<Element> children);
+    void showFallback(Fiber& boundary);
     void unmount(Fiber& fiber);
     void applyProps(Fiber& fiber, const Props& next);
     void sync(Fiber& host);

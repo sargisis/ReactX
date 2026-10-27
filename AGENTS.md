@@ -28,6 +28,7 @@ Run what CI runs; a green native build alone proved nothing in the past (v0.3.0 
 4. The web build and `ctest --test-dir build/web`.
 5. For CLI or template changes: `reactx_cli_tests --e2e` with `EMSDK` set.
 6. For anything visible in the browser: open it (`.claude/launch.json` has `web`, `site`, `app`, `pages` previews) and check it, at phone width too.
+7. For changes to the core (`reconciler.cpp`, `hooks.cpp`): compare `reactx_bench` (a Release build) before and after; the randomized tests in `test_reconciler.cpp` compare against a fresh render and count backend moves.
 
 ## Rules
 

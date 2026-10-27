@@ -10,7 +10,7 @@
 
 // The VS Code C/C++ extension can't parse GCC modules yet, so the editor reads
 // the headers while the compiler uses the module.
-#if defined(REACTX_USE_MODULES) && !defined(__INTELLISENSE__)
+#if defined(REACTX_USE_MODULES) && !defined(__INTELLISENSE__) && !defined(__clang__)
 import reactx;
 #else
 #include "reactx/reactx.hpp"

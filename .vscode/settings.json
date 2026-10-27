@@ -3,13 +3,11 @@
     "cmake.useCMakePresets": "always",
     "cmake.configureOnOpen": true,
 
-    // IntelliSense: take flags and include paths from CMake.
-    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
-    "C_Cpp.default.compileCommands": "${workspaceFolder}/build/debug/compile_commands.json",
-    "C_Cpp.default.compilerPath": "/usr/bin/g++-15",
-    "C_Cpp.default.cppStandard": "c++20",
-    "C_Cpp.default.intelliSenseMode": "linux-gcc-x64",
-    "C_Cpp.default.includePath": ["${workspaceFolder}/include", "${workspaceFolder}/src"],
+    // C++ in the editor through clangd (see .clangd): it reads the flags of the
+    // debug build from build/debug/compile_commands.json and understands C++26.
+    // The C/C++ extension's IntelliSense doesn't, and flags correct code.
+    "C_Cpp.intelliSenseEngine": "disabled",
+    "clangd.arguments": ["--query-driver=**/g++*,**/em++", "--header-insertion=never"],
 
     "files.associations": { "*.cppm": "cpp" }
 }

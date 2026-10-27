@@ -1,0 +1,6 @@
+# clangd (the editor's C++ engine) reads the flags of the debug build:
+#   cmake --preset debug -DCMAKE_CXX_COMPILER=g++-16
+CompileFlags:
+  CompilationDatabase: build/debug
+  # GCC-only flags clang doesn't know, and CMake's module maps.
+  Remove: [-fcontracts, -freflection, -fmodules-ts, "-fmodule-mapper=*", "-fdeps-format=*", "@*"]

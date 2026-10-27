@@ -20,17 +20,18 @@ HookSlot nextHook(const std::function<std::unique_ptr<HookBase>()>& make) {
         throw std::logic_error("ReactX: hooks can only be called while rendering a component");
     Fiber& fiber = *currentContext->fiber;
     std::size_t index = currentContext->hookIndex++;
-    if (index == fiber.hooks.size()) {
+    auto& hooks = fiber.compPart->hooks;
+    if (index == hooks.size()) {
         if (fiber.rendered)
             throw std::logic_error("ReactX: component called more hooks than on its previous render");
-        fiber.hooks.push_back(make());
+        hooks.push_back(make());
     }
-    return {fiber.hooks[index].get(), fiber.weak_from_this(), index};
+    return {hooks[index].get(), fiber.weak_from_this(), index};
 }
 
 HookBase* hookAt(Fiber& fiber, std::size_t index) {
-    REACTX_PRE(index < fiber.hooks.size());  // a setter always points at an existing hook
-    return fiber.hooks[index].get();
+    REACTX_PRE(fiber.compPart && index < fiber.compPart->hooks.size());  // a setter points at an existing hook
+    return fiber.compPart->hooks[index].get();
 }
 
 void scheduleUpdate(Fiber& fiber) {
@@ -53,12 +54,13 @@ const ContextValueBase* readContext(const void* id) {
         throw std::logic_error("ReactX: useContext can only be called while rendering a component");
     Fiber& self = *currentContext->fiber;
     for (Fiber* p = self.parent; p; p = p->parent) {
-        if (p->kind != ElementKind::Provider || !p->provided || p->provided->id != id) continue;
-        if (!std::ranges::contains(self.providers, p)) {  // first read: subscribe (unmount unsubscribes)
-            p->consumers.emplace(&self, self.weak_from_this());
-            self.providers.push_back(p);
+        if (p->kind != ElementKind::Provider || !p->rare || !p->rare->provided || p->rare->provided->id != id) continue;
+        auto& providers = self.compPart->providers;
+        if (!std::ranges::contains(providers, p)) {  // first read: subscribe (unmount unsubscribes)
+            p->rare->consumers.emplace(&self, self.weak_from_this());
+            providers.push_back(p);
         }
-        return p->provided.get();
+        return p->rare->provided.get();
     }
     return nullptr;
 }

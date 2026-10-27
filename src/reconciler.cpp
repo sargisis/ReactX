@@ -19,9 +19,9 @@ bool sameType(const Fiber& fiber, const Element& e) {
     switch (e.kind) {
         case ElementKind::Host: return fiber.type == e.type;
         case ElementKind::Component:
-            if (fiber.component != e.component || bool(fiber.typed) != bool(e.typed)) return false;
-            return !e.typed || fiber.typed->component() == e.typed->component();
-        case ElementKind::Provider: return fiber.provided->id == e.provided->id;
+            if (fiber.compPart->component != e.component || bool(fiber.compPart->typed) != bool(e.typed)) return false;
+            return !e.typed || fiber.compPart->typed->component() == e.typed->component();
+        case ElementKind::Provider: return fiber.rare->provided->id == e.provided->id;
         default: return true;
     }
 }
@@ -74,6 +74,8 @@ std::vector<std::size_t> longestIncreasing(const std::vector<std::size_t>& seq) 
     return out;
 }
 
+const std::vector<std::unique_ptr<HookBase>> noHooks;  // for fibers that aren't components
+
 struct BusyGuard {
     bool& flag;
     explicit BusyGuard(bool& f) : flag(f) { flag = true; }
@@ -88,6 +90,7 @@ Reconciler::Reconciler(Renderer& renderer) : renderer_(renderer) {
     root_->type = "#root";
     root_->owner = this;
     root_->node = renderer_.rootNode();
+    root_->hostPart = std::make_unique<Fiber::HostPart>();
 }
 
 Reconciler::~Reconciler() {
@@ -132,14 +135,14 @@ void Reconciler::runUpdates() {
             auto& f = batch[k];
             if (!f->alive || !f->dirty) continue;
             try {
-                if (f->kind == ElementKind::Boundary) renderBoundary(*f, f->boundaryChildren);
+                if (f->kind == ElementKind::Boundary) renderBoundary(*f, f->rare->boundaryChildren);
                 else renderComponent(*f);
                 sync(nearestHost(*f));
             } catch (...) {
                 // A state update inside a boundary failed: the nearest boundary
                 // that isn't already showing its fallback takes over.
                 Fiber* b = f->parent;
-                while (b && (b->kind != ElementKind::Boundary || b->error)) b = b->parent;
+                while (b && (b->kind != ElementKind::Boundary || b->failed())) b = b->parent;
                 if (!b) {
                     // Nobody catches it. Keep the rest of the batch queued, or
                     // their setters would never schedule them again.
@@ -147,7 +150,7 @@ void Reconciler::runUpdates() {
                         if (batch[rest]->alive && batch[rest]->dirty) dirty_.push_back(batch[rest]);
                     throw;
                 }
-                b->error = std::current_exception();
+                b->more().error = std::current_exception();
                 showFallback(*b);
                 sync(nearestHost(*b));
             }
@@ -159,7 +162,7 @@ void Reconciler::runUpdates() {
 bool Reconciler::dispatch(NodeHandle node, const std::string& event, const EventData& data) {
     auto it = hosts_.find(node);
     if (it == hosts_.end()) return false;
-    const PropValue* value = it->second->props.find(event);
+    const PropValue* value = it->second->hostPart->props.find(event);
     if (!value) return false;
 
     // Copy the handler and the data: the handler may unmount this fiber.
@@ -200,7 +203,6 @@ std::shared_ptr<Fiber> Reconciler::mount(Element e, Fiber& parent) {
     auto f = std::make_shared<Fiber>();
     f->kind = e.kind;
     f->type = std::move(e.type);
-    f->component = e.component;
     f->key = std::move(e.key);
     f->owner = this;
     f->parent = &parent;
@@ -214,9 +216,10 @@ std::shared_ptr<Fiber> Reconciler::mount(Element e, Fiber& parent) {
             case ElementKind::Host: {
                 f->node = renderer_.createElement(f->type);
                 hosts_[f->node] = f.get();
+                f->hostPart = std::make_unique<Fiber::HostPart>();
                 auto children = e.props.takeChildren();
                 applyProps(*f, e.props);
-                f->props = std::move(e.props);
+                f->hostPart->props = std::move(e.props);
                 reconcileChildren(*f, std::move(children));
                 break;
             }
@@ -224,16 +227,18 @@ std::shared_ptr<Fiber> Reconciler::mount(Element e, Fiber& parent) {
                 reconcileChildren(*f, e.props.takeChildren());
                 break;
             case ElementKind::Provider:
-                f->provided = std::move(e.provided);
+                f->more().provided = std::move(e.provided);
                 reconcileChildren(*f, e.props.takeChildren());
                 break;
             case ElementKind::Component:
-                f->props = std::move(e.props);
-                f->typed = std::move(e.typed);
+                f->compPart = std::make_unique<Fiber::ComponentPart>();
+                f->compPart->component = e.component;
+                if (!e.typed) f->compPart->props = std::make_unique<Props>(std::move(e.props));
+                f->compPart->typed = std::move(e.typed);
                 renderComponent(*f);
                 break;
             case ElementKind::Boundary:
-                f->fallback = std::move(e.fallback);
+                f->more().fallback = std::move(e.fallback);
                 renderBoundary(*f, e.props.takeChildren());
                 break;
         }
@@ -255,7 +260,7 @@ void Reconciler::update(Fiber& f, Element e) {
         case ElementKind::Host: {
             auto children = e.props.takeChildren();
             applyProps(f, e.props);
-            f.props = std::move(e.props);
+            f.hostPart->props = std::move(e.props);
             reconcileChildren(f, std::move(children));
             break;
         }
@@ -263,22 +268,23 @@ void Reconciler::update(Fiber& f, Element e) {
             reconcileChildren(f, e.props.takeChildren());
             break;
         case ElementKind::Provider: {
-            bool changed = !f.provided->equals(*e.provided);
-            f.provided = std::move(e.provided);
+            bool changed = !f.rare->provided->equals(*e.provided);
+            f.rare->provided = std::move(e.provided);
             if (changed) notifyConsumers(f);
             reconcileChildren(f, e.props.takeChildren());
             break;
         }
         case ElementKind::Boundary:
-            f.fallback = std::move(e.fallback);
+            f.more().fallback = std::move(e.fallback);
             renderBoundary(f, e.props.takeChildren());
             break;
         case ElementKind::Component:
             // memo: same props and no pending update -> keep the old output.
-            if (!f.dirty && f.typed && isTypedMemo(f.typed->component()) && f.typed->equals(*e.typed)) break;
-            if (!f.dirty && !f.typed && isMemo(f.component) && shallowEqual(f.props, e.props)) break;
-            f.props = std::move(e.props);
-            f.typed = std::move(e.typed);
+            auto& c = *f.compPart;
+            if (!f.dirty && c.typed && isTypedMemo(c.typed->component()) && c.typed->equals(*e.typed)) break;
+            if (!f.dirty && !c.typed && isMemo(c.component) && shallowEqual(*c.props, e.props)) break;
+            if (!e.typed) *c.props = std::move(e.props);
+            c.typed = std::move(e.typed);
             renderComponent(f);
             break;
     }
@@ -287,11 +293,11 @@ void Reconciler::update(Fiber& f, Element e) {
 // Re-render every component that read this provider's value. They are
 // scheduled, so a memo() component in between can't block the update.
 void Reconciler::notifyConsumers(Fiber& provider) {
-    std::erase_if(provider.consumers, [](const auto& entry) {
+    std::erase_if(provider.more().consumers, [](const auto& entry) {
         auto c = entry.second.lock();
         return !c || !c->alive;
     });
-    for (auto& [address, weak] : provider.consumers)
+    for (auto& [address, weak] : provider.rare->consumers)
         if (auto c = weak.lock()) schedule(*c);
 }
 
@@ -349,35 +355,35 @@ void Reconciler::reconcileChildren(Fiber& f, std::vector<Element> elements) {
 
 void Reconciler::renderBoundary(Fiber& b, std::vector<Element> children) {
     b.dirty = false;
-    b.boundaryChildren = children;  // kept for retry()
-    if (b.error) {
+    b.more().boundaryChildren = children;  // kept for retry()
+    if (b.failed()) {
         showFallback(b);
         return;
     }
     try {
         reconcileChildren(b, std::move(children));
     } catch (...) {
-        b.error = std::current_exception();
+        b.rare->error = std::current_exception();
         showFallback(b);  // if the fallback throws too, the next boundary up gets it
     }
 }
 
 void Reconciler::showFallback(Fiber& b) {
-    RenderError error{.message = "unknown error", .exception = b.error, .retry = {}};
+    RenderError error{.message = "unknown error", .exception = b.rare->error, .retry = {}};
     try {
-        std::rethrow_exception(b.error);
+        std::rethrow_exception(b.rare->error);
     } catch (const std::exception& e) {
         error.message = e.what();
     } catch (...) {
     }
     error.retry = [weak = b.weak_from_this()] {
         auto boundary = weak.lock();
-        if (!boundary || !boundary->alive || !boundary->error) return;
-        boundary->error = nullptr;
+        if (!boundary || !boundary->alive || !boundary->failed()) return;
+        boundary->rare->error = nullptr;
         boundary->owner->schedule(*boundary);
     };
     std::vector<Element> shown;
-    shown.push_back((*b.fallback)(error));
+    shown.push_back((*b.rare->fallback)(error));
     reconcileChildren(b, std::move(shown));
 }
 
@@ -387,14 +393,14 @@ void Reconciler::renderComponent(Fiber& f) {
     RenderContext* previous = std::exchange(currentContext, &ctx);
     Element out;
     try {
-        out = f.typed ? f.typed->render() : f.component(f.props);
+        out = f.compPart->typed ? f.compPart->typed->render() : f.compPart->component(*f.compPart->props);
     } catch (...) {
         currentContext = previous;
         throw;
     }
     currentContext = previous;
 
-    if (f.rendered && ctx.hookIndex != f.hooks.size())
+    if (f.rendered && ctx.hookIndex != f.compPart->hooks.size())
         throw std::logic_error("ReactX: component called fewer hooks than on its previous render");
     f.rendered = true;
 
@@ -407,9 +413,10 @@ void Reconciler::unmount(Fiber& f) {
     f.alive = false;
     // Providers are ancestors, so they are still alive here. Without this a
     // provider whose value never changes would remember every reader forever.
-    for (Fiber* p : std::exchange(f.providers, {})) p->consumers.erase(&f);
+    if (f.compPart)
+        for (Fiber* p : std::exchange(f.compPart->providers, {})) p->rare->consumers.erase(&f);
     for (auto& child : f.children) unmount(*child);
-    for (auto& hook : f.hooks) {
+    for (auto& hook : f.compPart ? f.compPart->hooks : noHooks) {
         if (auto* effect = dynamic_cast<EffectHook*>(hook.get()); effect && effect->cleanup)
             std::exchange(effect->cleanup, {})();
     }
@@ -420,7 +427,7 @@ void Reconciler::unmount(Fiber& f) {
 }
 
 void Reconciler::applyProps(Fiber& f, const Props& next) {
-    const Props& old = f.props;
+    const Props& old = f.hostPart->props;
     for (const auto& [name, value] : next.values()) {
         if (isHandler(value)) continue;  // handled by the core
         const PropValue* prev = old.find(name);
@@ -447,7 +454,8 @@ void Reconciler::collectNodes(const Fiber& f, std::vector<NodeHandle>& out) cons
 void Reconciler::sync(Fiber& host) {
     std::vector<NodeHandle> wanted;
     collectNodes(host, wanted);
-    if (wanted == host.attached) return;  // the usual case: nothing moved
+    auto& attached = host.hostPart->attached;
+    if (wanted == attached) return;  // the usual case: nothing moved
 
     std::unordered_map<NodeHandle, std::size_t> wantedIndex;
     wantedIndex.reserve(wanted.size());
@@ -456,7 +464,7 @@ void Reconciler::sync(Fiber& host) {
     // Detach what is gone; the rest keeps its backend order.
     std::vector<std::size_t> seq;  // seq[j]: new position of the j-th remaining node
     std::vector<std::size_t> oldPos(wanted.size(), SIZE_MAX);  // by new position; SIZE_MAX = a new node
-    for (NodeHandle n : host.attached) {
+    for (NodeHandle n : attached) {
         auto it = wantedIndex.find(n);
         if (it == wantedIndex.end()) {
             renderer_.removeChild(host.node, n);
@@ -483,7 +491,7 @@ void Reconciler::sync(Fiber& host) {
         }
         renderer_.insertChild(host.node, wanted[i], inFront.before(anchor));
     }
-    host.attached = std::move(wanted);
+    attached = std::move(wanted);
 }
 
 Fiber& Reconciler::nearestHost(Fiber& f) {
@@ -499,7 +507,7 @@ void Reconciler::commit() {
     for (auto& [weak, index] : std::exchange(effects_, {})) {
         auto f = weak.lock();
         if (!f || !f->alive) continue;
-        auto& hook = static_cast<EffectHook&>(*f->hooks[index]);
+        auto& hook = static_cast<EffectHook&>(*f->compPart->hooks[index]);
         if (!hook.pending) continue;
         if (hook.cleanup) std::exchange(hook.cleanup, {})();
         hook.cleanup = std::exchange(hook.pending, {})();

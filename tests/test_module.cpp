@@ -16,6 +16,19 @@ using namespace rx;
 namespace {
 
 const auto Accent = createContext<std::string>("blue");
+const auto Clicks = createStore(0);
+
+// Hooks added after the module first shipped: they must be exported too.
+Element Newer(const Props&) {
+    auto [n, dispatch] = useReducer([](int s, int add) { return s + add; }, 0);
+    useTimeout([] {}, std::nullopt);
+    useInterval([] {}, std::nullopt);
+    useKeyboard([](const KeyEvent&) { return false; });
+    int clicks = useStore(Clicks);
+    bool odd = useStore(Clicks, [](int c) { return c % 2 == 1; });
+    return h("p", {{"id", useId()}, {"onClick", [dispatch] { dispatch(1); }}},
+             {"n=" + std::to_string(n) + " clicks=" + std::to_string(clicks) + (odd ? " odd" : "")});
+}
 
 Element Badge(const Props& p) {
     return h("badge", {{"color", useContext(Accent)}}, {p.get<std::string>("label")});
@@ -67,6 +80,14 @@ int main() {
     check(r.toString().find("\"x!\"") != std::string::npos, "useMemo");
     check(root.dispatch(*r.findByProp("id", "reset"), "onClick"), "useCallback handler");
     check(r.toString().find("value=\"\"") != std::string::npos, "useCallback reset value");
+
+    TextRenderer newer;
+    Root newerRoot(newer);
+    newerRoot.render(h(Newer));
+    Clicks.set(3);
+    newerRoot.flush();
+    check(newer.toString().find("clicks=3 odd") != std::string::npos, "useStore");
+    check(newer.toString().find("id=\"rx-") != std::string::npos, "useId");
 
     TextRenderer broken;
     Root brokenRoot(broken);

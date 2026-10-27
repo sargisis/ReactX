@@ -528,6 +528,113 @@ TEST(without_a_boundary_a_failed_update_keeps_the_last_output_and_the_other_upda
 }
 
 // =====================================================================
+// createStore / useStore, useId
+// =====================================================================
+
+struct CartItem {
+    std::string name;
+    int qty = 1;
+    bool operator==(const CartItem&) const = default;
+};
+const auto Cart = createStore<std::vector<CartItem>>({});
+int listRenders = 0, countRenders = 0, otherRenders = 0;
+
+Element CartList(const Props&) {
+    ++listRenders;
+    std::string names;
+    for (const auto& item : useStore(Cart)) names += item.name + ";";
+    return h("text", {}, {"items=" + names});
+}
+
+Element CartCount(const Props&) {
+    ++countRenders;
+    auto n = useStore(Cart, [](const std::vector<CartItem>& items) { return items.size(); });
+    return h("text", {}, {"count=" + std::to_string(n)});
+}
+
+Element NotReading(const Props&) {
+    ++otherRenders;
+    return h("text", {}, {"other"});
+}
+
+TEST(store_readers_render_on_change_and_selectors_only_when_their_part_changes) {
+    Cart.set({});
+    listRenders = countRenders = otherRenders = 0;
+    TextRenderer r;
+    Root root(r);
+    root.render(h("box", {}, {h(CartList), h(CartCount), h(NotReading)}));
+    CHECK(listRenders == 1 && countRenders == 1 && otherRenders == 1);
+
+    Cart.update([](auto items) {
+        items.push_back({"milk"});
+        return items;
+    });
+    root.flush();
+    CHECK(has(r, "items=milk;") && has(r, "count=1"));
+    CHECK(listRenders == 2 && countRenders == 2 && otherRenders == 1);
+
+    Cart.update([](auto items) {  // same size: the counter doesn't render
+        items[0].qty = 2;
+        return items;
+    });
+    root.flush();
+    CHECK(listRenders == 3 && countRenders == 2);
+
+    Cart.set(Cart.get());  // an equal value changes nothing
+    root.flush();
+    CHECK(listRenders == 3);
+}
+
+TEST(store_readers_unsubscribe_on_unmount) {
+    Cart.set({});
+    listRenders = 0;
+    TextRenderer r;
+    Root root(r);
+    root.render(h("box", {}, {h(CartList)}));
+    root.render(h("box", {}, {}));
+    Cart.update([](auto items) {
+        items.push_back({"tea"});
+        return items;
+    });
+    root.flush();
+    CHECK(listRenders == 1);
+}
+
+TEST(store_change_between_render_and_subscribe_is_not_missed) {
+    Cart.set({});
+    TextRenderer r;
+    Root root(r);
+    struct Sneaky {
+        static Element render(const Props&) {
+            useEffect([] {  // runs before CartList's effect subscribes (siblings: first one first)
+                Cart.update([](auto items) {
+                    items.push_back({"late"});
+                    return items;
+                });
+            }, deps());
+            return h("text", {}, {"sneaky"});
+        }
+    };
+    root.render(h("box", {}, {h(Sneaky::render), h(CartList), h(CartCount)}));
+    CHECK(has(r, "items=late;") && has(r, "count=1"));
+}
+
+TEST(use_id_is_unique_and_stable) {
+    struct Ids {
+        static Element render(const Props&) { return h("label", {{"for", useId()}}, {}); }
+    };
+    TextRenderer r;
+    Root root(r);
+    root.render(h("box", {}, {h(Ids::render), h(Ids::render)}));
+    std::string first = r.toString();
+    root.render(h("box", {}, {h(Ids::render), h(Ids::render)}));
+    CHECK(r.toString() == first);  // the same ids on the next render
+    auto a = first.find("for=\"rx-"), b = first.find("for=\"rx-", a + 1);
+    CHECK(a != std::string::npos && b != std::string::npos);
+    CHECK(first.substr(a, 12) != first.substr(b, 12));
+}
+
+// =====================================================================
 // useContext
 // =====================================================================
 

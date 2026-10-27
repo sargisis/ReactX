@@ -57,6 +57,17 @@ using rx::useLocalStorage;
 using rx::useWindowSize;
 using rx::WindowSize;
 using rx::deps;
+using rx::useReducer;
+using rx::Dispatch;
+using rx::useTimeout;
+using rx::useInterval;
+using rx::useKeyboard;
+using rx::useId;
+
+// store.hpp
+using rx::Store;
+using rx::createStore;
+using rx::useStore;
 
 // context.hpp, memo.hpp
 using rx::Context;

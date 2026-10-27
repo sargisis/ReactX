@@ -438,7 +438,7 @@ AGENTS.md         rules and checks for anyone changing ReactX itself
 - [x] The docs site on GitHub Pages; the `reactx` CLI (`new`, `dev`, `build`, `add`, `remove`, `update`)
 - [x] v0.2–0.4: C++26, contracts, reflection, props structs, sanitizers in CI, the `tag::div` DSL
 - [x] `llms.txt` and `AGENTS.md` for AI assistants
-- [x] `useKeyboard`, `useReducer`, timers, focus and scroll events, SVG
+- [x] v0.5: `useKeyboard`, `useReducer`, timers, focus and scroll events, SVG
 - [ ] A prebuilt `reactx` in GitHub Releases and self-updating `reactx update`; a Docker image and a devcontainer
 - [ ] Libraries for the frontend and for working with C++
 - [ ] Later — desktop windows: SDL3 + Skia/ThorVG

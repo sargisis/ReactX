@@ -4,6 +4,10 @@
 
 ## [Не выпущено]
 
+## [0.5.0] — 2026-10-27
+
+Лицензия MIT / Apache-2.0, новые хуки (`useKeyboard`, `useReducer`, `useTimeout`, `useInterval`), события фокуса и прокрутки, SVG в браузере, `reactx update` и документы для AI-помощников. Приложения обновляются без правок; свой бэкенд, который разбирает `EventData` или значения props через `std::visit`, должен обработать новые `ScrollEvent` / `ScrollHandler`.
+
 ### Добавлено
 
 - **Лицензия**: ReactX распространяется на выбор пользователя по MIT или Apache-2.0 (`LICENSE-MIT`, `LICENSE-APACHE`), как Rust. До этого лицензии не было, и формально использовать код было нельзя.
@@ -100,7 +104,8 @@
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.4.0...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/sargisis/ReactX/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/sargisis/ReactX/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/sargisis/ReactX/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/sargisis/ReactX/compare/v0.1.0...v0.2.0

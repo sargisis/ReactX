@@ -18,6 +18,11 @@ namespace {
 const auto Accent = createContext<std::string>("blue");
 const auto Clicks = createStore(0);
 
+struct TagProps {
+    std::string text{};
+};
+const auto Tag = [](const TagProps& p) -> Element { return h("tag", {}, {p.text}); };  // a lambda component
+
 // Hooks added after the module first shipped: they must be exported too.
 Element Newer(const Props&) {
     auto [n, dispatch] = useReducer([](int s, int add) { return s + add; }, 0);
@@ -94,6 +99,11 @@ int main() {
     brokenRoot.render(errorBoundary([](const RenderError& e) { return text("caught " + e.message); },
                                     {h([](const Props&) -> Element { throw std::runtime_error("x"); })}));
     check(broken.toString().find("caught x") != std::string::npos, "errorBoundary");
+
+    TextRenderer tags;
+    Root tagsRoot(tags);
+    tagsRoot.render(h(Tag, {.text = "lambda " + urlEncode("a b")}));
+    check(tags.toString().find("lambda a%20b") != std::string::npos, "lambda component, urlEncode");
 
     std::cout << (failures ? "module test FAILED\n" : "module test OK\n");
     return failures ? 1 : 0;

@@ -142,6 +142,8 @@ For a terminal: `#include "reactx/terminal.hpp"` and `TerminalApp().run(h(App))`
 - `useId()` — an id unique in the app and the same on every render: for `<label for>` and `aria-*`.
 - **Error boundaries**: `errorBoundary([](const RenderError& e) { return h("p", {}, {e.message}); }, {children})` — when the children throw while rendering (also later, on a state update), the fallback shows instead and the rest of the app keeps working; `e.retry()` tries again. Exceptions in event handlers and effects aren't caught (as in React).
 - **Context**: `createContext<T>(default)`, `ctx.provide(value, {children})`, `useContext(ctx)`; when the value changes, every reader re-renders, even through `memo`.
+- **Lambda components**: `const auto Badge = [](const BadgeProps& p) -> Element { ... };` and `h(Badge, {.label = "new"})` — like a function (no captures: pass data in props).
+- `rx::urlEncode(text)` / `rx::urlDecode` — a value for a query string: `"/api/logs?q=" + rx::urlEncode(q)`.
 - **memo**: `h(memo<Item>, props)` skips re-rendering with the same props. For a props struct — its `operator==`; for `Props` — values with `==`, handlers equal only if they come from the same `useCallback`; elements with children always re-render.
 - **Batching**: `setState` only marks the component; re-rendering happens in `flush()` (on its own after `render`, `dispatch`, `fetch` responses and timers), parents before children.
 

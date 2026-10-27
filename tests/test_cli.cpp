@@ -186,6 +186,11 @@ void quick(const fs::path& tmp) {
     auto unknown = reactx({"frobnicate"}, tmp);
     CHECK(unknown.code == 2 && contains(unknown.out, "unknown command"));
     CHECK(reactx({"help"}, tmp).code == 0);
+    auto addHelp = reactx({"add", "--help"}, tmp);  // help for one command, not "unknown option"
+    CHECK(addHelp.code == 0 && contains(addHelp.out, "--target T") && contains(addHelp.out, "Example:"));
+    CHECK(contains(reactx({"help", "dev"}, tmp).out, "--proxy [PREFIX=]URL"));
+    CHECK(contains(reactx({"build", "-h"}, tmp).out, "--native"));
+    CHECK(reactx({"frobnicate", "--help"}, tmp).code == 2);
     CHECK(contains(reactx({"--version"}, tmp).out, std::string("reactx ") + REACTX_VERSION));
 }
 

@@ -684,6 +684,45 @@ TEST(use_id_is_unique_and_stable) {
 }
 
 // =====================================================================
+// Lambdas as typed components (found by an AI agent writing PulseBoard)
+// =====================================================================
+
+struct BadgeProps {
+    std::string label{};
+    int start = 0;
+    std::string key{};
+};
+const auto Badge = [](const BadgeProps& p) -> Element {
+    auto [clicks, setClicks] = useState(p.start);
+    return h("badge", {{"id", "badge-" + p.label}, {"onClick", [setClicks] { setClicks([](int c) { return c + 1; }); }}},
+             {p.label + "=" + std::to_string(clicks)});
+};
+
+struct PanelProps {
+    std::string title{};
+    std::vector<Element> children{};
+};
+const auto Panel = [](const PanelProps& p) -> Element { return h("panel", {{"title", p.title}}, p.children); };
+
+TEST(a_lambda_works_as_a_typed_component) {
+    TextRenderer r;
+    Root root(r);
+    auto app = [](const std::string& extra) {
+        return h("div", {}, {
+            errorBoundary(showError, {h(Badge, {.label = "a", .start = 5})}),  // the reported case
+            h(Panel, {.title = "p"}, {h(Badge, {.label = extra, .start = 0, .key = extra})}),
+            h(Badge),  // default props
+        });
+    };
+    root.render(app("b"));
+    CHECK(has(r, "a=5") && has(r, "b=0") && has(r, "=0"));
+    root.dispatch(byId(r, "badge-a"), "onClick");
+    root.render(app("b"));  // the same lambda is the same component: state stays
+    CHECK(has(r, "a=6"));
+    CHECK(has(r, "title=\"p\""));
+}
+
+// =====================================================================
 // useContext
 // =====================================================================
 

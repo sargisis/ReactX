@@ -35,6 +35,29 @@ inline std::string urlDecode(std::string_view text, bool plusIsSpace = false) {
     return out;
 }
 
+// Percent-encodes everything but the unreserved characters (A-Z a-z 0-9 - . _ ~),
+// for one query value or path segment: "milk & tea/2" -> "milk%20%26%20tea%2F2".
+// urlDecode gives the text back.
+//   fetch({.url = "/api/logs?q=" + rx::urlEncode(query)}, ...)
+inline std::string urlEncode(std::string_view text) {
+    static constexpr char hex[] = "0123456789ABCDEF";
+    std::string out;
+    out.reserve(text.size());
+    for (char ch : text) {
+        auto c = static_cast<unsigned char>(ch);
+        bool unreserved = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' ||
+                          c == '.' || c == '_' || c == '~';
+        if (unreserved) {
+            out += ch;
+        } else {
+            out += '%';
+            out += hex[c >> 4];
+            out += hex[c & 0xF];
+        }
+    }
+    return out;
+}
+
 // Matches "/todos/:id" against "/todos/7" and fills params ({"id": "7"}).
 // "*" as the last segment matches the rest of the path (params["*"]).
 // Extra or missing slashes don't matter. Parameter values are URL-decoded.

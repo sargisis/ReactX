@@ -91,6 +91,7 @@ using rx::LocalFetch;
 using rx::setLocalFetch;
 using rx::matchPath;
 using rx::urlDecode;
+using rx::urlEncode;
 using rx::queryParam;
 
 // terminal.hpp

@@ -66,7 +66,34 @@ jobs:
       - name: Build
         run: cmake --build build -j
       - name: Test
-        run: ctest --test-dir build --output-on-failure -LE slow
+        run: ctest --test-dir build --output-on-failure -LE "slow|fuzz"
+      # Random inputs to the JSON, HTTP and URL parsers; a new seed every run.
+      - name: Fuzz the input parsers (60 s)
+        run: cd build && ./reactx_fuzz_tests 60
+      - name: Keep the input that crashed the fuzzer
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crash
+          path: build/fuzz-crash.bin
+          if-no-files-found: ignore
+
+  # GCC's static analyzer on the code that reads untrusted input (HTTP, JSON,
+  # URLs, reactx.json): any finding fails the build.
+  analyze:
+    name: Static analysis (gcc -fanalyzer)
+    runs-on: ubuntu-24.04
+    container: gcc:16
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: apt-get update && apt-get install -y --no-install-recommends cmake ninja-build
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DREACTX_ANALYZER=ON
+          -DREACTX_BUILD_EXAMPLES=OFF -DREACTX_BUILD_TESTS=OFF -DREACTX_BUILD_TOOLS=ON
+      - name: Build with the analyzer
+        run: cmake --build build -j 2  # the analyzer needs a lot of memory per file
 
   # Data races in the HTTP server, the CLI's watcher and the tests' threads.
   sanitize-thread:
@@ -126,7 +153,7 @@ jobs:
   deploy:
     name: Publish to the gh-pages branch
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    needs: [native, sanitize-address, sanitize-thread, site]
+    needs: [native, sanitize-address, sanitize-thread, analyze, site]
     runs-on: ubuntu-24.04
     permissions:
       contents: write  # push the gh-pages branch with the built-in token

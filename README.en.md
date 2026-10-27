@@ -476,6 +476,10 @@ AGENTS.md         rules and checks for anyone changing ReactX itself
 
 [llms.txt](llms.txt) — the API, complete programs and common mistakes for anyone writing apps with ReactX (published at https://sargisis.github.io/ReactX/llms.txt). [AGENTS.md](AGENTS.md) — rules and checks for anyone changing ReactX itself. `reactx new` puts an `AGENTS.md` into every project.
 
+## Security
+
+Found a vulnerability? Report it privately, not in a public issue: [SECURITY.md](SECURITY.md) (it also lists what counts as one and how ReactX is checked).
+
 ## License
 
 ReactX is licensed under either of

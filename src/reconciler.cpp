@@ -1,7 +1,9 @@
 #include "reconciler.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <stdexcept>
+#include <unordered_map>
 
 #include "reactx/memo.hpp"
 #include "render_context.hpp"
@@ -11,11 +13,6 @@ namespace rx::detail {
 namespace {
 
 constexpr int kMaxUpdatePasses = 100;
-
-// Children match by key, or by position when they have no key.
-std::string identity(const std::string& key, std::size_t index) {
-    return key.empty() ? "#" + std::to_string(index) : "k:" + key;
-}
 
 bool sameType(const Fiber& fiber, const Element& e) {
     if (fiber.kind != e.kind) return false;
@@ -38,6 +35,43 @@ bool shallowEqual(const Props& a, const Props& b) {
         if (!other || !propEquals(value, *other)) return false;
     }
     return true;
+}
+
+// Counts marked positions before an index in O(log n) (a Fenwick tree).
+class PositionCounter {
+public:
+    explicit PositionCounter(std::size_t n) : tree_(n + 1, 0) {
+        for (std::size_t i = 1; i <= n; ++i) {  // every position starts marked
+            tree_[i] += 1;
+            if (std::size_t parent = i + (i & -i); parent <= n) tree_[parent] += tree_[i];
+        }
+    }
+    void unmark(std::size_t pos) {
+        for (std::size_t i = pos + 1; i < tree_.size(); i += i & -i) --tree_[i];
+    }
+    std::size_t before(std::size_t pos) const {  // marked positions in [0, pos)
+        std::size_t sum = 0;
+        for (std::size_t i = pos; i > 0; i -= i & -i) sum += tree_[i];
+        return sum;
+    }
+
+private:
+    std::vector<std::size_t> tree_;
+};
+
+// Indices (into `seq`) of one longest strictly increasing subsequence.
+std::vector<std::size_t> longestIncreasing(const std::vector<std::size_t>& seq) {
+    std::vector<std::size_t> tails;  // tails[k]: index of the smallest end of a run of length k + 1
+    std::vector<std::size_t> prev(seq.size(), SIZE_MAX);
+    for (std::size_t i = 0; i < seq.size(); ++i) {
+        auto it = std::ranges::lower_bound(tails, seq[i], {}, [&](std::size_t j) { return seq[j]; });
+        if (it != tails.begin()) prev[i] = *(it - 1);
+        if (it == tails.end()) tails.push_back(i);
+        else *it = i;
+    }
+    std::vector<std::size_t> out(tails.size());
+    for (std::size_t k = tails.size(), i = tails.empty() ? SIZE_MAX : tails.back(); k > 0; i = prev[i]) out[--k] = i;
+    return out;
 }
 
 struct BusyGuard {
@@ -94,10 +128,29 @@ void Reconciler::runUpdates() {
 
         // Parents first: re-rendering a parent also re-renders its children.
         std::ranges::sort(batch, {}, &Fiber::depth);
-        for (auto& f : batch) {
+        for (std::size_t k = 0; k < batch.size(); ++k) {
+            auto& f = batch[k];
             if (!f->alive || !f->dirty) continue;
-            renderComponent(*f);
-            sync(nearestHost(*f));
+            try {
+                if (f->kind == ElementKind::Boundary) renderBoundary(*f, f->boundaryChildren);
+                else renderComponent(*f);
+                sync(nearestHost(*f));
+            } catch (...) {
+                // A state update inside a boundary failed: the nearest boundary
+                // that isn't already showing its fallback takes over.
+                Fiber* b = f->parent;
+                while (b && (b->kind != ElementKind::Boundary || b->error)) b = b->parent;
+                if (!b) {
+                    // Nobody catches it. Keep the rest of the batch queued, or
+                    // their setters would never schedule them again.
+                    for (std::size_t rest = k + 1; rest < batch.size(); ++rest)
+                        if (batch[rest]->alive && batch[rest]->dirty) dirty_.push_back(batch[rest]);
+                    throw;
+                }
+                b->error = std::current_exception();
+                showFallback(*b);
+                sync(nearestHost(*b));
+            }
         }
         commit();
     }
@@ -153,31 +206,40 @@ std::shared_ptr<Fiber> Reconciler::mount(Element e, Fiber& parent) {
     f->parent = &parent;
     f->depth = parent.depth + 1;
 
-    switch (f->kind) {
-        case ElementKind::Text:
-            f->node = renderer_.createText(f->type);
-            break;
-        case ElementKind::Host: {
-            f->node = renderer_.createElement(f->type);
-            hosts_[f->node] = f.get();
-            auto children = e.props.takeChildren();
-            applyProps(*f, e.props);
-            f->props = std::move(e.props);
-            reconcileChildren(*f, std::move(children));
-            break;
+    try {
+        switch (f->kind) {
+            case ElementKind::Text:
+                f->node = renderer_.createText(f->type);
+                break;
+            case ElementKind::Host: {
+                f->node = renderer_.createElement(f->type);
+                hosts_[f->node] = f.get();
+                auto children = e.props.takeChildren();
+                applyProps(*f, e.props);
+                f->props = std::move(e.props);
+                reconcileChildren(*f, std::move(children));
+                break;
+            }
+            case ElementKind::Fragment:
+                reconcileChildren(*f, e.props.takeChildren());
+                break;
+            case ElementKind::Provider:
+                f->provided = std::move(e.provided);
+                reconcileChildren(*f, e.props.takeChildren());
+                break;
+            case ElementKind::Component:
+                f->props = std::move(e.props);
+                f->typed = std::move(e.typed);
+                renderComponent(*f);
+                break;
+            case ElementKind::Boundary:
+                f->fallback = std::move(e.fallback);
+                renderBoundary(*f, e.props.takeChildren());
+                break;
         }
-        case ElementKind::Fragment:
-            reconcileChildren(*f, e.props.takeChildren());
-            break;
-        case ElementKind::Provider:
-            f->provided = std::move(e.provided);
-            reconcileChildren(*f, e.props.takeChildren());
-            break;
-        case ElementKind::Component:
-            f->props = std::move(e.props);
-            f->typed = std::move(e.typed);
-            renderComponent(*f);
-            break;
+    } catch (...) {
+        unmount(*f);  // nothing of it may stay registered (hosts_, context readers)
+        throw;
     }
     return f;
 }
@@ -207,6 +269,10 @@ void Reconciler::update(Fiber& f, Element e) {
             reconcileChildren(f, e.props.takeChildren());
             break;
         }
+        case ElementKind::Boundary:
+            f.fallback = std::move(e.fallback);
+            renderBoundary(f, e.props.takeChildren());
+            break;
         case ElementKind::Component:
             // memo: same props and no pending update -> keep the old output.
             if (!f.dirty && f.typed && isTypedMemo(f.typed->component()) && f.typed->equals(*e.typed)) break;
@@ -221,38 +287,98 @@ void Reconciler::update(Fiber& f, Element e) {
 // Re-render every component that read this provider's value. They are
 // scheduled, so a memo() component in between can't block the update.
 void Reconciler::notifyConsumers(Fiber& provider) {
-    std::erase_if(provider.consumers, [](const std::weak_ptr<Fiber>& w) {
-        auto c = w.lock();
+    std::erase_if(provider.consumers, [](const auto& entry) {
+        auto c = entry.second.lock();
         return !c || !c->alive;
     });
-    for (auto& weak : provider.consumers)
+    for (auto& [address, weak] : provider.consumers)
         if (auto c = weak.lock()) schedule(*c);
 }
 
+// Children match by key, or by position when they have no key. Old
+// children that match nothing are unmounted after the new ones rendered.
 void Reconciler::reconcileChildren(Fiber& f, std::vector<Element> elements) {
-    std::unordered_map<std::string, std::shared_ptr<Fiber>> old;
-    for (std::size_t i = 0; i < f.children.size(); ++i) {
-        auto& child = f.children[i];
-        auto [it, inserted] = old.try_emplace(identity(child->key, i), child);
-        if (!inserted) unmount(*child);  // duplicate key
-    }
-    f.children.clear();
-
-    for (std::size_t i = 0; i < elements.size(); ++i) {
-        Element& e = elements[i];
-        auto it = old.find(identity(e.key, i));
-        if (it != old.end() && sameType(*it->second, e)) {
-            auto child = std::move(it->second);
-            old.erase(it);
-            update(*child, std::move(e));
-            f.children.push_back(std::move(child));
+    std::vector<std::shared_ptr<Fiber>> old = std::exchange(f.children, {});
+    f.children.reserve(elements.size());
+    std::vector<bool> used(old.size(), false);
+    auto place = [&](std::size_t j, Element& e) {  // reuse old[j] if it can show e
+        if (j < old.size() && !used[j] && sameType(*old[j], e)) {
+            used[j] = true;
+            f.children.push_back(old[j]);  // first: if update() throws, it is unmounted with the others
+            update(*old[j], std::move(e));
         } else {
             f.children.push_back(mount(std::move(e), f));
         }
+    };
+
+    try {
+        // Most renders keep every child where it was: match position by position
+        // while the keys agree, without building a map.
+        std::size_t i = 0;
+        for (; i < elements.size() && i < old.size() && old[i]->key == elements[i].key; ++i) place(i, elements[i]);
+
+        if (i < elements.size()) {
+            std::unordered_map<std::string_view, std::size_t> byKey;  // the rest of the old keyed children
+            for (std::size_t j = i; j < old.size(); ++j)
+                if (!old[j]->key.empty()) byKey.try_emplace(old[j]->key, j);  // a duplicate key matches nothing
+            for (; i < elements.size(); ++i) {
+                Element& e = elements[i];
+                std::size_t j = SIZE_MAX;
+                if (e.key.empty()) {
+                    if (i < old.size() && old[i]->key.empty()) j = i;
+                } else if (auto it = byKey.find(e.key); it != byKey.end()) {
+                    j = it->second;
+                }
+                place(j, e);
+            }
+        }
+    } catch (...) {
+        // A child threw while rendering. Unmount everything below `f`, so no
+        // half-built fiber stays registered; an errorBoundary above (or the
+        // caller) decides what to show instead.
+        for (std::size_t j = 0; j < old.size(); ++j)
+            if (!used[j]) unmount(*old[j]);
+        for (auto& child : std::exchange(f.children, {})) unmount(*child);
+        throw;
     }
 
-    for (auto& [id, child] : old) unmount(*child);
+    for (std::size_t j = 0; j < old.size(); ++j)
+        if (!used[j]) unmount(*old[j]);
     if (f.kind == ElementKind::Host) sync(f);
+}
+
+void Reconciler::renderBoundary(Fiber& b, std::vector<Element> children) {
+    b.dirty = false;
+    b.boundaryChildren = children;  // kept for retry()
+    if (b.error) {
+        showFallback(b);
+        return;
+    }
+    try {
+        reconcileChildren(b, std::move(children));
+    } catch (...) {
+        b.error = std::current_exception();
+        showFallback(b);  // if the fallback throws too, the next boundary up gets it
+    }
+}
+
+void Reconciler::showFallback(Fiber& b) {
+    RenderError error{.message = "unknown error", .exception = b.error, .retry = {}};
+    try {
+        std::rethrow_exception(b.error);
+    } catch (const std::exception& e) {
+        error.message = e.what();
+    } catch (...) {
+    }
+    error.retry = [weak = b.weak_from_this()] {
+        auto boundary = weak.lock();
+        if (!boundary || !boundary->alive || !boundary->error) return;
+        boundary->error = nullptr;
+        boundary->owner->schedule(*boundary);
+    };
+    std::vector<Element> shown;
+    shown.push_back((*b.fallback)(error));
+    reconcileChildren(b, std::move(shown));
 }
 
 void Reconciler::renderComponent(Fiber& f) {
@@ -279,6 +405,9 @@ void Reconciler::renderComponent(Fiber& f) {
 
 void Reconciler::unmount(Fiber& f) {
     f.alive = false;
+    // Providers are ancestors, so they are still alive here. Without this a
+    // provider whose value never changes would remember every reader forever.
+    for (Fiber* p : std::exchange(f.providers, {})) p->consumers.erase(&f);
     for (auto& child : f.children) unmount(*child);
     for (auto& hook : f.hooks) {
         if (auto* effect = dynamic_cast<EffectHook*>(hook.get()); effect && effect->cleanup)
@@ -311,23 +440,48 @@ void Reconciler::collectNodes(const Fiber& f, std::vector<NodeHandle>& out) cons
     }
 }
 
-// Make the backend children of `host` match the fiber tree.
+// Make the backend children of `host` match the fiber tree with as few
+// moves as possible: nodes on a longest increasing run of their new positions
+// stay where they are, every other node is inserted once. Swapping two rows
+// of a long list moves two nodes, removing rows moves none.
 void Reconciler::sync(Fiber& host) {
     std::vector<NodeHandle> wanted;
     collectNodes(host, wanted);
+    if (wanted == host.attached) return;  // the usual case: nothing moved
 
-    std::vector<NodeHandle> current;
+    std::unordered_map<NodeHandle, std::size_t> wantedIndex;
+    wantedIndex.reserve(wanted.size());
+    for (std::size_t i = 0; i < wanted.size(); ++i) wantedIndex.emplace(wanted[i], i);
+
+    // Detach what is gone; the rest keeps its backend order.
+    std::vector<std::size_t> seq;  // seq[j]: new position of the j-th remaining node
+    std::vector<std::size_t> oldPos(wanted.size(), SIZE_MAX);  // by new position; SIZE_MAX = a new node
     for (NodeHandle n : host.attached) {
-        if (std::ranges::find(wanted, n) == wanted.end()) renderer_.removeChild(host.node, n);
-        else current.push_back(n);
+        auto it = wantedIndex.find(n);
+        if (it == wantedIndex.end()) {
+            renderer_.removeChild(host.node, n);
+            continue;
+        }
+        oldPos[it->second] = seq.size();
+        seq.push_back(it->second);
     }
 
-    for (std::size_t i = 0; i < wanted.size(); ++i) {
-        if (i < current.size() && current[i] == wanted[i]) continue;
-        renderer_.insertChild(host.node, wanted[i], i);
-        auto pos = std::ranges::find(current, wanted[i]);
-        if (pos != current.end()) current.erase(pos);
-        current.insert(current.begin() + static_cast<std::ptrdiff_t>(i), wanted[i]);
+    std::vector<bool> stays(wanted.size(), false);
+    for (std::size_t j : longestIncreasing(seq)) stays[seq[j]] = true;
+
+    // From the end: each node that doesn't stay goes right before the part
+    // already in place. Its index = the old nodes still in front of that part,
+    // i.e. those with a smaller new position, standing before the first
+    // staying node of that part.
+    PositionCounter inFront(seq.size());
+    std::size_t anchor = seq.size();  // old position of the first staying node after i (none: the end)
+    for (std::size_t i = wanted.size(); i-- > 0;) {
+        if (oldPos[i] != SIZE_MAX) inFront.unmark(oldPos[i]);
+        if (stays[i]) {
+            anchor = oldPos[i];
+            continue;
+        }
+        renderer_.insertChild(host.node, wanted[i], inFront.before(anchor));
     }
     host.attached = std::move(wanted);
 }

@@ -10,6 +10,12 @@
 #include <emscripten.h>
 
 #include "reactx/dom.hpp"
+#else
+#include <chrono>
+#include <mutex>
+#include <thread>
+
+#include "reactx/http.hpp"
 #endif
 
 namespace rx {
@@ -20,6 +26,45 @@ LocalFetch& localFetch() {
     static LocalFetch handler;
     return handler;
 }
+
+#ifndef __EMSCRIPTEN__
+// Native requests run on a thread of their own; the answer waits here until
+// the UI thread picks it up (a timer polls it, so it arrives on Root::flush()
+// like every other state change). The thread touches nothing else, so a
+// program may exit while a request is still out.
+struct NativeRequest {
+    std::mutex mutex;
+    std::optional<FetchResponse> answer;
+};
+
+void pollAnswer(std::shared_ptr<NativeRequest> request, std::function<void(const FetchResponse&)> done) {
+    using namespace std::chrono_literals;
+    detail::setTimer(10ms, [request, done = std::move(done)]() mutable {
+        std::optional<FetchResponse> answer;
+        {
+            std::scoped_lock lock(request->mutex);
+            answer = std::exchange(request->answer, std::nullopt);
+        }
+        if (answer) done(*answer);
+        else pollAnswer(std::move(request), std::move(done));
+    });
+}
+
+// "http://host:port/path?q" -> the server and "/path?q".
+std::expected<std::pair<net::Upstream, std::string>, std::string> splitUrl(const std::string& url) {
+    if (url.starts_with("https://")) return std::unexpected("https isn't supported in the terminal build, use http://");
+    if (!url.starts_with("http://"))
+        return std::unexpected("the terminal build needs a full URL like http://127.0.0.1:8090" + url + " (or setLocalFetch)");
+    auto rest = std::string_view(url).substr(7);
+    auto cut = rest.find_first_of("/?#");
+    std::string target = cut == std::string_view::npos ? "/" : std::string(rest.substr(cut));
+    if (auto hash = target.find('#'); hash != std::string::npos) target.resize(hash);
+    if (target.empty() || target.front() == '?') target.insert(0, "/");
+    auto upstream = net::parseUpstream("http://" + std::string(rest.substr(0, cut)));
+    if (!upstream) return std::unexpected(upstream.error());
+    return std::pair{*upstream, target};
+}
+#endif
 
 #ifdef __EMSCRIPTEN__
 std::map<int, std::function<void(const FetchResponse&)>>& pending() {
@@ -84,8 +129,27 @@ void fetch(FetchRequest request, std::function<void(const FetchResponse&)> done)
     }
     rx_fetch_js(id, request.method.c_str(), request.url.c_str(), request.body.c_str(), request.contentType.c_str());
 #else
-    if (local) done(*local);
-    else done(FetchResponse{.status = 0, .body = {}, .error = "no network in the terminal build (use setLocalFetch)"});
+    if (local) {
+        done(*local);
+        return;
+    }
+    auto where = splitUrl(request.url);
+    if (!where) {
+        done(FetchResponse{.status = 0, .body = {}, .error = where.error()});
+        return;
+    }
+    net::Request out{.method = request.method, .body = request.body, .target = where->second};
+    if (!request.body.empty() || request.method != "GET") out.headers.emplace("content-type", request.contentType);
+    out.headers.emplace("accept", "application/json, text/plain, */*");
+    auto shared = std::make_shared<NativeRequest>();
+    std::thread([shared, out = std::move(out), upstream = where->first] {
+        auto reply = net::forward(out, upstream);
+        FetchResponse answer = reply ? FetchResponse{.status = reply->status, .body = std::move(reply->body), .error = {}}
+                                     : FetchResponse{.status = 0, .body = {}, .error = reply.error().message};
+        std::scoped_lock lock(shared->mutex);
+        shared->answer = std::move(answer);
+    }).detach();
+    pollAnswer(std::move(shared), std::move(done));
 #endif
 }
 

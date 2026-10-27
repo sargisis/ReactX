@@ -54,11 +54,10 @@ const ContextValueBase* readContext(const void* id) {
     Fiber& self = *currentContext->fiber;
     for (Fiber* p = self.parent; p; p = p->parent) {
         if (p->kind != ElementKind::Provider || !p->provided || p->provided->id != id) continue;
-        auto me = self.weak_from_this();
-        bool subscribed = std::ranges::any_of(p->consumers, [&](const std::weak_ptr<Fiber>& w) {
-            return !w.owner_before(me) && !me.owner_before(w);  // same fiber
-        });
-        if (!subscribed) p->consumers.push_back(std::move(me));
+        if (!std::ranges::contains(self.providers, p)) {  // first read: subscribe (unmount unsubscribes)
+            p->consumers.emplace(&self, self.weak_from_this());
+            self.providers.push_back(p);
+        }
         return p->provided.get();
     }
     return nullptr;

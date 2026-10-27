@@ -1,7 +1,10 @@
 // Edge cases of the reconciler and the hooks: useState, useEffect (cleanup
 // order), useContext, memo. Every test counts renders / effect runs, so a
 // change in behaviour shows up as a number, not as a vague diff.
+#include <algorithm>
 #include <functional>
+#include <random>
+#include <sstream>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -321,6 +324,363 @@ TEST(nested_effects_all_clean_up_when_the_parent_goes) {
         cleans += e.ends_with(":clean1");
     }
     CHECK(runs == 2 && cleans == 2);
+}
+
+// =====================================================================
+// Keyed lists: the backend gets the right order with the fewest moves
+// =====================================================================
+
+// Length of the longest strictly increasing subsequence (the slow, obvious way).
+std::size_t lisLength(const std::vector<int>& v) {
+    std::vector<std::size_t> best(v.size(), 1);
+    std::size_t out = 0;
+    for (std::size_t i = 0; i < v.size(); ++i) {
+        for (std::size_t j = 0; j < i; ++j)
+            if (v[j] < v[i]) best[i] = std::max(best[i], best[j] + 1);
+        out = std::max(out, best[i]);
+    }
+    return out;
+}
+
+Element keyedList(const std::vector<int>& ids) {
+    std::vector<Element> items;
+    for (int id : ids) items.push_back(h("i", {{"key", std::to_string(id)}}, {std::to_string(id)}));
+    return h("list", {{"id", "list"}}, std::move(items));
+}
+
+TEST(keyed_lists_reorder_with_the_fewest_moves) {
+    std::mt19937 rng(7);
+    for (int round = 0; round < 400; ++round) {
+        std::vector<int> pool(40);
+        for (int i = 0; i < 40; ++i) pool[static_cast<std::size_t>(i)] = i;
+        auto pick = [&] {
+            std::ranges::shuffle(pool, rng);
+            std::vector<int> ids(pool.begin(), pool.begin() + std::uniform_int_distribution<int>(0, 30)(rng));
+            if (rng() % 3 == 0) std::ranges::sort(ids);  // often mostly in order, like real lists
+            return ids;
+        };
+        std::vector<int> before = pick(), after = pick();
+        if (rng() % 2) {  // or a small edit of `before`
+            after = before;
+            if (!after.empty() && rng() % 2) after.erase(after.begin() + static_cast<long>(rng() % after.size()));
+            if (after.size() > 1) std::swap(after[rng() % after.size()], after[rng() % after.size()]);
+            if (rng() % 2) after.insert(after.begin() + static_cast<long>(rng() % (after.size() + 1)), 100 + round);
+        }
+
+        std::ostringstream log;
+        TextRenderer r(&log);
+        Root root(r);
+        root.render(keyedList(before));
+        std::string list = "#" + std::to_string(byId(r, "list"));
+        log.str("");
+        root.render(keyedList(after));
+
+        TextRenderer fresh;  // the same list mounted from scratch
+        Root freshRoot(fresh);
+        freshRoot.render(keyedList(after));
+        CHECK(r.toString() == fresh.toString());
+
+        // Inserts into the list: every new item once, plus the fewest moves
+        // of kept items (all but a longest run that is already in order).
+        std::vector<int> keptNewPositions;
+        std::size_t added = 0;
+        for (int id : after)
+            if (std::ranges::find(before, id) == before.end()) ++added;
+        for (int id : before)
+            if (auto it = std::ranges::find(after, id); it != after.end())
+                keptNewPositions.push_back(static_cast<int>(it - after.begin()));
+        std::size_t inserts = 0;
+        std::istringstream lines(log.str());
+        for (std::string line; std::getline(lines, line);)
+            if (line.find("] insert ") != std::string::npos && line.find(" into " + list + " ") != std::string::npos) ++inserts;
+        CHECK(inserts == added + keptNewPositions.size() - lisLength(keptNewPositions));
+        if (failures) {
+            std::cerr << "  round " << round << " inserts " << inserts << " added " << added << " kept "
+                      << keptNewPositions.size() << " lis " << lisLength(keptNewPositions) << "\n" << log.str().substr(0, 600);
+            return;
+        }
+    }
+}
+
+// Random trees: rendering one over another gives what rendering it from
+// scratch gives (mixes keyed and unkeyed children, fragments, text and
+// components, with types changing under the same key).
+Element Wrap(const Props& p) {
+    auto [n, setN] = useState(0);  // state that must not leak into another instance
+    (void)setN;
+    return h("w", {{"tag", p.get<std::string>("tag", "")}}, {"n=" + std::to_string(n)});
+}
+
+Element randomTree(std::mt19937& rng, int depth) {
+    auto pick = [&](int n) { return static_cast<int>(rng() % static_cast<unsigned>(n)); };
+    std::vector<Element> children;
+    int count = depth > 3 ? 0 : pick(5);
+    std::vector<int> keys = {0, 1, 2, 3, 4, 5};
+    std::ranges::shuffle(keys, rng);
+    for (int i = 0; i < count; ++i) {
+        std::string key = pick(3) ? std::to_string(keys[static_cast<std::size_t>(i)]) : "";  // some unkeyed
+        switch (pick(4)) {
+            case 0: children.push_back(h("t", {{"key", key}}, {"text" + std::to_string(pick(3))})); break;
+            case 1: children.push_back(h(Wrap, {{"key", key}, {"tag", std::to_string(pick(3))}})); break;
+            case 2: children.push_back(fragment({randomTree(rng, depth + 1), "frag"}, key)); break;
+            default: {
+                Element e = randomTree(rng, depth + 1);
+                e.key = key;
+                children.push_back(std::move(e));
+            }
+        }
+    }
+    return h(pick(2) ? "a" : "b", {{"v", static_cast<std::int64_t>(pick(3))}}, std::move(children));
+}
+
+TEST(random_trees_render_over_each_other_like_from_scratch) {
+    std::mt19937 rng(2026);
+    TextRenderer r;
+    Root root(r);
+    for (int round = 0; round < 1500; ++round) {
+        Element tree = randomTree(rng, 0);
+        root.render(tree);
+        TextRenderer fresh;
+        Root freshRoot(fresh);
+        freshRoot.render(tree);
+        CHECK(r.toString() == fresh.toString());
+        if (failures) {
+            std::cerr << "  round " << round << "\n";
+            return;
+        }
+    }
+}
+
+// =====================================================================
+// errorBoundary: a component that throws doesn't take the app down
+// =====================================================================
+
+bool explode = false;
+int bombCleanups = 0;
+
+struct BombProps {
+    int at = 1;  // throws once the counter reaches this
+};
+
+Element Bomb(const BombProps& p) {
+    auto [n, setN] = useState(0);
+    useEffect([] { return [] { ++bombCleanups; }; }, deps());
+    if (explode || n >= p.at) throw std::runtime_error("boom at " + std::to_string(n));
+    return h("box", {}, {h("button", {{"id", "bump"}, {"onClick", [setN] { setN([](int v) { return v + 1; }); }}}, {"bump"}),
+                         h("text", {}, {"n=" + std::to_string(n)})});
+}
+
+Element showError(const RenderError& e) {
+    return h("box", {{"id", "fallback"}},
+             {h("text", {}, {"error: " + e.message}), h("button", {{"id", "retry"}, {"onClick", e.retry}}, {"retry"})});
+}
+
+TEST(boundary_shows_the_fallback_when_the_first_render_throws) {
+    explode = true;
+    TextRenderer r;
+    Root root(r);
+    root.render(h("app", {}, {h("text", {}, {"header"}), errorBoundary(showError, {h(Bomb, {.at = 1})})}));
+    CHECK(has(r, "header"));
+    CHECK(has(r, "error: boom at 0"));
+    explode = false;
+}
+
+TEST(boundary_catches_a_throw_on_a_state_update_and_retry_recovers) {
+    bombCleanups = 0;
+    TextRenderer r;
+    Root root(r);
+    root.render(h("app", {}, {errorBoundary(showError, {h(Bomb, {.at = 2})}), h("text", {}, {"footer"})}));
+    root.dispatch(byId(r, "bump"), "onClick");
+    CHECK(has(r, "n=1"));
+    root.dispatch(byId(r, "bump"), "onClick");  // n = 2: Bomb throws while re-rendering
+    CHECK(has(r, "error: boom at 2"));
+    CHECK(has(r, "footer") && !has(r, "n="));
+    CHECK(bombCleanups == 1);  // the broken subtree was unmounted properly
+    CHECK(!r.findByProp("id", "bump"));
+
+    root.dispatch(byId(r, "retry"), "onClick");  // a fresh Bomb, state from 0
+    CHECK(has(r, "n=0") && !has(r, "error:"));
+    root.dispatch(byId(r, "bump"), "onClick");
+    CHECK(has(r, "n=1"));
+}
+
+TEST(a_throwing_fallback_goes_to_the_next_boundary_up) {
+    explode = true;
+    TextRenderer r;
+    Root root(r);
+    auto badFallback = [](const RenderError&) -> Element { throw std::logic_error("fallback broke too"); };
+    root.render(errorBoundary(showError, {h("box", {}, {errorBoundary(badFallback, {h(Bomb, {})})})}));
+    CHECK(has(r, "error: fallback broke too"));
+    explode = false;
+}
+
+TEST(non_std_exceptions_are_caught_too) {
+    TextRenderer r;
+    Root root(r);
+    struct Odd {};
+    root.render(errorBoundary(showError, {h([](const Props&) -> Element { throw Odd{}; })}));
+    CHECK(has(r, "error: unknown error"));
+}
+
+TEST(without_a_boundary_a_failed_mount_leaves_nothing_behind) {
+    explode = true;
+    bombCleanups = 0;
+    TextRenderer r;
+    Root root(r);
+    bool threw = false;
+    try {
+        root.render(h("app", {}, {h("text", {}, {"before"}), h("box", {}, {h(Bomb, {})})}));
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    explode = false;
+    CHECK(threw);
+    root.render(h("app", {}, {h("text", {}, {"recovered"})}));
+    CHECK(has(r, "recovered") && !has(r, "before"));
+    CHECK(r.nodeCount() <= 4);  // root, app, text and its string: the failed nodes are gone
+}
+
+std::function<void()> bumpBomb, bumpDeep;
+
+Element BombHandle(const Props&) {
+    auto [n, setN] = useState(0);
+    bumpBomb = [setN] { setN([](int v) { return v + 1; }); };
+    if (n >= 1) throw std::runtime_error("bomb");
+    return h("text", {}, {"bomb=" + std::to_string(n)});
+}
+
+Element DeepCounter(const Props&) {
+    auto [n, setN] = useState(0);
+    bumpDeep = [setN] { setN([](int v) { return v + 1; }); };
+    return h("text", {}, {"deep=" + std::to_string(n)});
+}
+
+TEST(without_a_boundary_a_failed_update_keeps_the_last_output_and_the_other_updates) {
+    TextRenderer r;
+    Root root(r);
+    root.render(h("app", {}, {h(BombHandle), h("box", {}, {h("box", {}, {h(DeepCounter)})})}));
+    bumpBomb();  // one batch: BombHandle (renders first, throws), then DeepCounter (deeper)
+    bumpDeep();
+    bool threw = false;
+    try {
+        root.flush();
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    CHECK(threw);
+    CHECK(has(r, "bomb=0"));  // the last good output stays
+    root.flush();             // the counter's update wasn't lost with the failed batch
+    CHECK(has(r, "deep=1"));
+    bumpDeep();
+    root.flush();
+    CHECK(has(r, "deep=2"));
+}
+
+// =====================================================================
+// createStore / useStore, useId
+// =====================================================================
+
+struct CartItem {
+    std::string name;
+    int qty = 1;
+    bool operator==(const CartItem&) const = default;
+};
+const auto Cart = createStore<std::vector<CartItem>>({});
+int listRenders = 0, countRenders = 0, otherRenders = 0;
+
+Element CartList(const Props&) {
+    ++listRenders;
+    std::string names;
+    for (const auto& item : useStore(Cart)) names += item.name + ";";
+    return h("text", {}, {"items=" + names});
+}
+
+Element CartCount(const Props&) {
+    ++countRenders;
+    auto n = useStore(Cart, [](const std::vector<CartItem>& items) { return items.size(); });
+    return h("text", {}, {"count=" + std::to_string(n)});
+}
+
+Element NotReading(const Props&) {
+    ++otherRenders;
+    return h("text", {}, {"other"});
+}
+
+TEST(store_readers_render_on_change_and_selectors_only_when_their_part_changes) {
+    Cart.set({});
+    listRenders = countRenders = otherRenders = 0;
+    TextRenderer r;
+    Root root(r);
+    root.render(h("box", {}, {h(CartList), h(CartCount), h(NotReading)}));
+    CHECK(listRenders == 1 && countRenders == 1 && otherRenders == 1);
+
+    Cart.update([](auto items) {
+        items.push_back({"milk"});
+        return items;
+    });
+    root.flush();
+    CHECK(has(r, "items=milk;") && has(r, "count=1"));
+    CHECK(listRenders == 2 && countRenders == 2 && otherRenders == 1);
+
+    Cart.update([](auto items) {  // same size: the counter doesn't render
+        items[0].qty = 2;
+        return items;
+    });
+    root.flush();
+    CHECK(listRenders == 3 && countRenders == 2);
+
+    Cart.set(Cart.get());  // an equal value changes nothing
+    root.flush();
+    CHECK(listRenders == 3);
+}
+
+TEST(store_readers_unsubscribe_on_unmount) {
+    Cart.set({});
+    listRenders = 0;
+    TextRenderer r;
+    Root root(r);
+    root.render(h("box", {}, {h(CartList)}));
+    root.render(h("box", {}, {}));
+    Cart.update([](auto items) {
+        items.push_back({"tea"});
+        return items;
+    });
+    root.flush();
+    CHECK(listRenders == 1);
+}
+
+TEST(store_change_between_render_and_subscribe_is_not_missed) {
+    Cart.set({});
+    TextRenderer r;
+    Root root(r);
+    struct Sneaky {
+        static Element render(const Props&) {
+            useEffect([] {  // runs before CartList's effect subscribes (siblings: first one first)
+                Cart.update([](auto items) {
+                    items.push_back({"late"});
+                    return items;
+                });
+            }, deps());
+            return h("text", {}, {"sneaky"});
+        }
+    };
+    root.render(h("box", {}, {h(Sneaky::render), h(CartList), h(CartCount)}));
+    CHECK(has(r, "items=late;") && has(r, "count=1"));
+}
+
+TEST(use_id_is_unique_and_stable) {
+    struct Ids {
+        static Element render(const Props&) { return h("label", {{"for", useId()}}, {}); }
+    };
+    TextRenderer r;
+    Root root(r);
+    root.render(h("box", {}, {h(Ids::render), h(Ids::render)}));
+    std::string first = r.toString();
+    root.render(h("box", {}, {h(Ids::render), h(Ids::render)}));
+    CHECK(r.toString() == first);  // the same ids on the next render
+    auto a = first.find("for=\"rx-"), b = first.find("for=\"rx-", a + 1);
+    CHECK(a != std::string::npos && b != std::string::npos);
+    CHECK(first.substr(a, 12) != first.substr(b, 12));
 }
 
 // =====================================================================

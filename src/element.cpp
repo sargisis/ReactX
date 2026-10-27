@@ -1,5 +1,7 @@
 #include "reactx/element.hpp"
 
+#include "reactx/contract.hpp"
+
 #include <concepts>
 #include <format>
 
@@ -96,6 +98,16 @@ Element h(Component component, PropList props, std::vector<Element> children) {
 }
 
 Element text(std::string content) { return Element(std::move(content)); }
+
+Element errorBoundary(ErrorFallback fallback, std::vector<Element> children, std::string key) {
+    REACTX_PRE(static_cast<bool>(fallback));
+    Element e;
+    e.kind = ElementKind::Boundary;
+    e.key = std::move(key);
+    e.fallback = std::make_shared<const ErrorFallback>(std::move(fallback));
+    e.props.setChildren(std::move(children));
+    return e;
+}
 
 Element fragment(std::vector<Element> children, std::string key) {
     Element e;

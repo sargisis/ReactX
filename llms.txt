@@ -66,13 +66,16 @@ int main() {
 - `WindowSize s = useWindowSize();` — browser window (px) or terminal (cells); re-renders on resize.
 - `auto [state, dispatch] = useReducer([](const State& s, Action a) { ...; return next; }, State{});` — `dispatch(action)`; the newest reducer is used.
 - `useTimeout(fn, std::optional(5s))` once, `useInterval(fn, 1s)` repeatedly; `std::nullopt` switches off; unmounting cancels.
+- Shared state outside the tree (like Zustand): `const auto Cart = createStore<std::vector<Item>>({});` at namespace scope; `Cart.set(v)` / `Cart.update([](auto items) { items.push_back(x); return items; })` on the UI thread (handlers, effects, fetch callbacks); `const auto& items = useStore(Cart);` re-renders on every change, `auto n = useStore(Cart, [](const auto& c) { return c.size(); });` only when that part changes.
+- `std::string id = useId();` — app-unique and stable across renders, for `<label for>` / `aria-*`.
+- `errorBoundary([](const RenderError& e) { return h("p", {}, {e.message}); }, {children})` — if the children throw while rendering (on mount or a later update) the fallback shows instead; `e.retry()` renders them again. Not for exceptions in event handlers or effects.
 - `useKeyboard([](const KeyEvent& k) { if (k.ctrl && k.key == "z") { undo(); return true; } return false; });` — app-wide shortcuts, wherever the focus is; runs before the focused element's `onKey`, `true` consumes the key. Keys that type text don't reach it while a text field has focus.
 
 ## Events
 
 Handler props: `onClick` (`Callback = std::function<void()>`), `onInput` / `onChange` (`InputHandler`, gets the text; a checkbox's onChange gets "true"/"false"), `onKey` (`KeyHandler`, gets `KeyEvent{.key, .ctrl, .alt, .shift}`; keys like "Enter", "Escape", "Up", "a"), `onSubmit` (forms), `onFocus` / `onBlur` (`Callback`; browser, and terminal focus moves), `onScroll` (`ScrollHandler`, gets `ScrollEvent{.top, .left, .scrollHeight, .scrollWidth, .clientHeight, .clientWidth}` with `nearBottom(margin = 100)`; browser only, doesn't bubble). Other events bubble to ancestors. There are no mouse move, hover or drag events.
 
-Controlled input: `h("input", {{"value", text}, {"onInput", [setText](const std::string& t) { setText(t); }}})`.
+Controlled input: `h("input", {{"value", text}, {"onInput", [setText](const std::string& t) { setText(t); }}})`. `checked` and a `<select>`'s `value` are controlled too: if the handler doesn't change the state, the page goes back to it. `href` / `src` with a `javascript:` URL are blocked.
 
 ## Browser specifics
 
@@ -92,7 +95,7 @@ Tags: `box` (flex container, column by default), `text` (wraps; `wrap=false` tru
 
 ## Data (`reactx/fetch.hpp`, `reactx/json.hpp`)
 
-- `FetchState f = useFetch("/api/todos");` → `f.loading`, `f.ok()`, `f.tryJson()` (`std::expected`), `f.errorText()`, `f.reload()`. `fetch({.method = "POST", .url = "/api/todos", .body = json.dump()}, [](const FetchResponse& r) { ... })`. `setLocalFetch(handler)` answers requests inside the app (no server).
+- `FetchState f = useFetch("/api/todos");` → `f.loading`, `f.ok()`, `f.tryJson()` (`std::expected`), `f.errorText()`, `f.reload()`. `fetch({.method = "POST", .url = "/api/todos", .body = json.dump()}, [](const FetchResponse& r) { ... })`. `setLocalFetch(handler)` answers requests inside the app (no server). Terminal build: a full `http://host:port/...` URL (no https); the answer arrives on the UI thread at the next flush.
 - JSON: `auto v = json::tryParse(text);` (`std::expected<Value, Error>`), `v["title"].asString()`, `v.get<int>("count", 0)`, `json::object({{"id", 1}})`, `json::array({...})`, `v.dump(2)`.
 - Natively with reflection (link `reactx::reflection` in CMake): `json::to(myStruct)`, `json::from<MyStruct>(value)` → `std::expected<MyStruct, json::Error>` with a path in the error.
 

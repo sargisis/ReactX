@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -177,6 +178,68 @@ TEST(local_fetch_runs_the_api_in_process) {
     fetch({.method = "GET", .url = "https://example.com/"}, [&other](const FetchResponse& r) { other = r; });
     CHECK(other.status == 0 && !other.error.empty());  // not handled locally, no network here
     setLocalFetch({});
+}
+
+// The terminal build talks HTTP itself: the answer arrives on Root::flush().
+std::string apiBase;
+Element RemoteList(const Props&) {
+    auto todos = useFetch(apiBase + "/api/todos");
+    if (todos.loading) return h("p", {}, {"loading"});
+    if (!todos.ok()) return h("p", {}, {"error: " + todos.errorText()});
+    return h("p", {}, {std::to_string(todos.json().size()) + " todos"});
+}
+
+// Flushes until `ready` (the answers come from other threads), at most ~5 s.
+template <class F>
+bool flushUntil(Root& root, F ready) {
+    for (int i = 0; i < 500 && !ready(); ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        root.flush();
+    }
+    return ready();
+}
+
+TEST(fetch_in_the_terminal_build_uses_the_network) {
+    Api api;
+    apiBase = "http://127.0.0.1:" + std::to_string(api.port());
+    TextRenderer screen;
+    Root root(screen);
+    root.render(h(RemoteList));
+    CHECK(screen.toString().find("loading") != std::string::npos);  // asynchronous, like in the browser
+    CHECK(flushUntil(root, [&] { return screen.toString().find("3 todos") != std::string::npos; }));
+
+    FetchResponse created;
+    fetch({.method = "POST", .url = apiBase + "/api/todos", .body = R"({"title": "over http"})"},
+          [&created](const FetchResponse& r) { created = r; });
+    CHECK(flushUntil(root, [&] { return created.status != 0; }));
+    CHECK(created.status == 201 && created.json()["title"].asString() == "over http");
+
+    FetchResponse missing;
+    fetch({.method = "GET", .url = apiBase + "/api/todos/999?x=1#frag"}, [&missing](const FetchResponse& r) { missing = r; });
+    CHECK(flushUntil(root, [&] { return missing.status != 0; }));
+    CHECK(missing.status == 404 && !missing.ok() && missing.error.empty());
+}
+
+TEST(fetch_in_the_terminal_build_reports_what_is_wrong) {
+    FetchResponse relative, secure;
+    fetch({.method = "GET", .url = "/api/todos"}, [&](const FetchResponse& r) { relative = r; });
+    fetch({.method = "GET", .url = "https://example.com/"}, [&](const FetchResponse& r) { secure = r; });
+    CHECK(relative.status == 0 && relative.error.find("full URL") != std::string::npos);  // right away
+    CHECK(secure.status == 0 && secure.error.find("https") != std::string::npos);
+
+    int closedPort = 0;
+    {
+        Api gone;
+        closedPort = gone.port();
+    }
+    TextRenderer screen;
+    Root root(screen);
+    FetchResponse refused;
+    bool answered = false;
+    fetch({.method = "GET", .url = "http://127.0.0.1:" + std::to_string(closedPort) + "/"},
+          [&](const FetchResponse& r) { refused = r, answered = true; });
+    CHECK(flushUntil(root, [&] { return answered; }));
+    CHECK(refused.status == 0 && refused.error.find("can't connect") != std::string::npos);
 }
 
 TEST(parallel_posts_get_unique_ids) {

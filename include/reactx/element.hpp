@@ -3,6 +3,7 @@
 #include <bit>
 #include <concepts>
 #include <cstdint>
+#include <exception>
 #include <flat_map>
 #include <functional>
 #include <initializer_list>
@@ -143,7 +144,15 @@ private:
     std::vector<Element> children_;
 };
 
-enum class ElementKind { Host, Text, Component, Fragment, Provider };
+enum class ElementKind { Host, Text, Component, Fragment, Provider, Boundary };
+
+// What went wrong while rendering the children of an errorBoundary.
+struct RenderError {
+    std::string message;             // what() of the exception ("unknown error" if it isn't a std::exception)
+    std::exception_ptr exception{};  // std::rethrow_exception it to look closer
+    std::function<void()> retry{};   // forget the error and render the children again
+};
+using ErrorFallback = std::function<Element(const RenderError&)>;
 
 // Immutable description of UI, like a React element.
 struct Element {
@@ -154,6 +163,7 @@ struct Element {
     std::string key;
     std::shared_ptr<const detail::ContextValueBase> provided;  // Provider only
     std::shared_ptr<const detail::TypedProps> typed;           // typed Component only
+    std::shared_ptr<const ErrorFallback> fallback;             // Boundary only
 
     Element() = default;
     Element(const char* text);  // implicit: lets you write {"Hello"} as a child
@@ -180,6 +190,14 @@ template <class P>
 Element h(TypedComponent<P> component, P props, std::vector<Element> children);
 Element text(std::string content);
 Element fragment(std::vector<Element> children, std::string key = {});
+
+// Shows fallback(error) instead of `children` when rendering them throws —
+// on the first render or on a later state update inside them — like a React
+// error boundary. The rest of the app keeps working; error.retry() renders
+// the children again. Exceptions in event handlers and effects aren't caught.
+//   errorBoundary([](const RenderError& e) { return h("p", {}, {"Broken: " + e.message}); },
+//                 {h(Chart, {.data = rows})})
+Element errorBoundary(ErrorFallback fallback, std::vector<Element> children, std::string key = {});
 
 // ---- template implementation ----
 

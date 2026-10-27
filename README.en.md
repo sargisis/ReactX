@@ -102,7 +102,7 @@ For a terminal: `#include "reactx/terminal.hpp"` and `TerminalApp().run(h(App))`
 | | |
 |---|---|
 | **Core** | `h()` elements, fragments, keys; function components; props structs; a reconciler that reuses nodes; batched updates |
-| **Hooks** | `useState`, `useEffect`, `useRef`, `useMemo`, `useCallback`, `useContext`, `useReducer`, `useTimeout`, `useInterval`, `useKeyboard`, `useDebounce`, `useLocalStorage`, `useWindowSize`, `memo<C>` |
+| **Hooks** | `useState`, `useEffect`, `useRef`, `useMemo`, `useCallback`, `useContext`, `useReducer`, `useStore`, `useId`, `useTimeout`, `useInterval`, `useKeyboard`, `useDebounce`, `useLocalStorage`, `useWindowSize`, `memo<C>`, `errorBoundary` |
 | **Events** | `onClick`, `onInput`, `onChange`, `onKey`, `onSubmit`, `onFocus`, `onBlur`, `onScroll`; bubbling like in React |
 | **Terminal** | ANSI drawing of changed lines only, Flexbox on Yoga, borders, colors, focus, Unicode/ASCII by locale |
 | **Browser** | WebAssembly + DOM, controlled inputs, SVG, event delegation |
@@ -122,6 +122,9 @@ For a terminal: `#include "reactx/terminal.hpp"` and `TerminalApp().run(h(App))`
 - `useTimeout(fn, std::optional(5s))`, `useInterval(fn, 1s)` — timers on the UI thread; `std::nullopt` switches them off, unmounting cancels them.
 - `useKeyboard(handler)` — keyboard shortcuts for the whole app, wherever the focus is: runs before the element's `onKey`, `return true` consumes the key; while a text field has focus, keys that type text don't reach it.
 - `useDebounce(value, 300ms)`, `useLocalStorage("key", default)` (`localStorage` in the browser, memory natively), `useWindowSize()`.
+- **Shared state** (like Zustand): `const auto Cart = createStore<std::vector<Item>>({});`, `Cart.set(v)` / `Cart.update([](auto items) { ...; return items; })` anywhere on the UI thread; `useStore(Cart)` re-renders on every change, `useStore(Cart, [](const auto& c) { return c.size(); })` only when the selected part changes.
+- `useId()` — an id unique in the app and the same on every render: for `<label for>` and `aria-*`.
+- **Error boundaries**: `errorBoundary([](const RenderError& e) { return h("p", {}, {e.message}); }, {children})` — when the children throw while rendering (also later, on a state update), the fallback shows instead and the rest of the app keeps working; `e.retry()` tries again. Exceptions in event handlers and effects aren't caught (as in React).
 - **Context**: `createContext<T>(default)`, `ctx.provide(value, {children})`, `useContext(ctx)`; when the value changes, every reader re-renders, even through `memo`.
 - **memo**: `h(memo<Item>, props)` skips re-rendering with the same props. For a props struct — its `operator==`; for `Props` — values with `==`, handlers equal only if they come from the same `useCallback`; elements with children always re-render.
 - **Batching**: `setState` only marks the component; re-rendering happens in `flush()` (on its own after `render`, `dispatch`, `fetch` responses and timers), parents before children.
@@ -270,6 +273,8 @@ if (auto list = todos.tryJson()) for (const auto& t : list->asArray()) ...
 fetch({.method = "POST", .url = "/api/todos", .body = json::object({{"title", "Milk"}}).dump()},
       [](const FetchResponse& r) { ... });
 ```
+
+In the terminal build `fetch` and `useFetch` use the network too (since v0.7): give a full `http://` URL; the request runs on its own thread and the answer arrives on the UI thread at the next `flush()` (`TerminalApp` does it). No HTTPS there.
 
 `setLocalFetch` is a "server inside the app": requests go to a C++ handler first, no network needed (static sites without a backend, API tests).
 
@@ -445,7 +450,7 @@ AGENTS.md         rules and checks for anyone changing ReactX itself
 - Terminal: every character counts as 1 column (emoji and CJK can shift a line); the `input` cursor is always at the end; no scrolling — what doesn't fit is cut off; POSIX only (Linux/macOS).
 - `rx::ui`: switching tabs with arrows and "select on focus" aren't done yet; long lists don't scroll.
 - Browser: `import reactx;` is off in the web build; no mouse events except clicks (hover, drag); `onScroll` only on a scrolling element; the page is built in the browser (no server-side rendering).
-- `useFetch` in the terminal build only reaches `setLocalFetch` (there is no HTTP client there).
+- `useFetch` / `fetch` in the terminal build: `http://` with a full URL only (`http://127.0.0.1:8090/api/todos`), no HTTPS.
 - Reflection (`json::to` / `from`) works in native builds only.
 - The terminal layout is recomputed fully on every re-render.
 - `memo` doesn't compare children; hooks can't be called in a loop with a varying number of iterations (like in React) — list items need their own component.
@@ -461,6 +466,7 @@ AGENTS.md         rules and checks for anyone changing ReactX itself
 - [x] v0.2–0.4: C++26, contracts, reflection, props structs, sanitizers in CI, the `tag::div` DSL
 - [x] `llms.txt` and `AGENTS.md` for AI assistants
 - [x] v0.5: `useKeyboard`, `useReducer`, timers, focus and scroll events, SVG
+- [x] v0.7: `errorBoundary`, `createStore` / `useStore`, `useId`, network in the terminal, a faster core
 - [x] v0.6: a prebuilt `reactx` in GitHub Releases, a Docker image and a devcontainer; `reactx dev --proxy`
 - [ ] A self-updating `reactx`
 - [ ] Libraries for the frontend and for working with C++

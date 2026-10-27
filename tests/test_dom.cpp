@@ -69,6 +69,8 @@ Element App(const Props&) {
         h("input", {{"type", "checkbox"}, {"id", "agree"}, {"checked", agree},
                     {"onChange", [setAgree, agree] { setAgree(!agree); }}}),
         h("button", {{"id", "upper"}, {"onClick", [setUpper] { setUpper(true); }}}, {"upper"}),
+        // Controlled and never changed by its handler: clicks are undone.
+        h("input", {{"type", "checkbox"}, {"id", "locked"}, {"checked", true}, {"onChange", [] {}}}),
         h("form", {{"id", "form"}, {"onSubmit", [setSubmits] { setSubmits([](int s) { return s + 1; }); }}}, {
             h("button", {{"type", "submit"}}, {"go"}),
         }),
@@ -77,6 +79,10 @@ Element App(const Props&) {
         h("button", {{"id", "reverse"}, {"onClick", [setOrder] { setOrder(std::string("cba")); }}}, {"reverse"}),
         h("button", {{"id", "drop"}, {"onClick", [setOrder] { setOrder(std::string("ac")); }}}, {"drop"}),
         h("ul", {{"id", "list"}}, std::move(items)),
+        // Links built from user input: a javascript: URL must never reach the page.
+        h("a", {{"id", "evil"}, {"href", " \x01Java\tScript:alert(1)"}}, {"evil"}),
+        h("a", {{"id", "fine"}, {"href", "/javascript:notes"}}, {"fine"}),
+        h("img", {{"id", "pic"}, {"src", "javascript:alert(2)"}}),
     });
 }
 
@@ -128,6 +134,10 @@ int main() {
     CHECK(!has("style="));
     CHECK(js("String(document.querySelector('#out').disabled)") == "false");
 
+    std::cout << "a checked prop is controlled: an ignored click is undone\n";
+    js("rxTest.toggle('locked')");
+    CHECK(js("String(document.getElementById('locked').checked)") == "true");
+
     std::cout << "form submit does not reload the page\n";
     CHECK(js("rxTest.submit('form')") == "prevented");
     CHECK(has("submits=1"));
@@ -139,6 +149,11 @@ int main() {
     CHECK(js("String(document.querySelector('#item-a') === globalThis.firstA)") == "true");  // moved, not recreated
     js("rxTest.click('drop')");
     CHECK(has("<ul id=\"list\"><li id=\"item-a\">a</li><li id=\"item-c\">c</li></ul>"));
+
+    std::cout << "javascript: URLs are blocked, others kept\n";
+    CHECK(js("document.getElementById('evil').getAttribute('href')") == "about:blank#blocked");
+    CHECK(js("document.getElementById('pic').getAttribute('src')") == "about:blank#blocked");
+    CHECK(js("document.getElementById('fine').getAttribute('href')") == "/javascript:notes");
 
     std::cout << (failures ? "FAILED: " + std::to_string(failures) : std::string("OK, all tests passed")) << '\n';
     return failures ? 1 : 0;

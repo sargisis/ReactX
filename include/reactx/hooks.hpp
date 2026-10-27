@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <format>
@@ -196,6 +197,15 @@ T& useRef(T initial = T{}) {
     auto slot = detail::nextHook(
         [&] { return std::make_unique<detail::RefHook<T>>(std::move(initial)); });
     return detail::checkedHook<detail::RefHook<T>>(slot.hook).value;
+}
+
+// An id unique in the app and the same on every render ("rx-7"), for
+// h("label", {{"for", id}}) and aria-* attributes.
+inline std::string useId() {
+    static std::atomic<std::uint64_t> next{0};
+    auto& id = useRef<std::string>();
+    if (id.empty()) id = "rx-" + std::to_string(++next);
+    return id;
 }
 
 // Dependency list for useEffect: rx::deps(a, b). rx::deps() means "run once".

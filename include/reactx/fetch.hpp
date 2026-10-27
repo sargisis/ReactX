@@ -11,8 +11,10 @@
 //   rx::fetch({.method = "POST", .url = "/api/todos", .body = R"({"title":"Milk"})"},
 //             [](const rx::FetchResponse& r) { ... });
 //
-// The network is used in the browser build; in the terminal build requests
-// only reach a setLocalFetch() handler (otherwise they fail with an error).
+// In the browser this is the page's fetch(). In the terminal build a request
+// needs a full http:// URL ("http://127.0.0.1:8090/api/todos"; no https);
+// it runs on its own thread and the answer arrives on the UI thread at the
+// next Root::flush() (TerminalApp flushes on its own).
 
 #include <expected>
 #include <functional>

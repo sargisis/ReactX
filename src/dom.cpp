@@ -21,9 +21,37 @@ namespace {
 EM_JS(void, rx_js_init, (), {
     if (Module.rxNodes) return;
     Module.rxNodes = new Map();
+    // Attributes that hold a URL, and React's test for a javascript: URL
+    // (browsers skip leading control characters and spaces, and tabs or
+    // newlines inside the scheme). No regex: EM_JS code goes through the
+    // C preprocessor, where backslashes are risky.
+    Module.rxUrlAttrs = new Set(["href", "src", "action", "formaction", "xlink:href", "poster", "cite"]);
+    Module.rxIsJsUrl = function(s) {
+        let i = 0;
+        while (i < s.length && s.charCodeAt(i) <= 32) i++;
+        const want = "javascript:";
+        let k = 0;
+        for (; i < s.length && k < want.length; i++) {
+            const c = s.charCodeAt(i);
+            if (c === 9 || c === 10 || c === 13) continue;
+            if (s[i].toLowerCase() !== want[k]) return false;
+            k++;
+        }
+        return k === want.length;
+    };
+    // A <select> can only take a value its options have: set it again as they arrive.
+    Module.rxSyncSelect = function(el) {
+        const sel = el && el.tagName === "OPTGROUP" ? el.parentNode : el;
+        if (sel && sel.tagName === "SELECT" && sel.__rxValue !== undefined && sel.value !== sel.__rxValue) sel.value = sel.__rxValue;
+    };
     Module.rxSetProp = function(el, name, kind, str, num) {
         if (name === "className") name = "class";
         if (name === "htmlFor") name = "for";
+        if (kind === 3 && Module.rxUrlAttrs.has(name) && Module.rxIsJsUrl(str)) {
+            // Text from users must not run as code when clicked: block it, like React.
+            console.error("ReactX blocked a javascript: URL in " + name + ": " + str);
+            str = "about:blank#blocked";
+        }
         if (name === "style") { el.style.cssText = kind === 3 ? str : ""; return; }
         if (name === "value") {
             const v = kind === 3 ? str : kind === 2 ? String(num) : "";
@@ -31,6 +59,7 @@ EM_JS(void, rx_js_init, (), {
             if (el.value !== v) el.value = v;
             return;
         }
+        if (name === "checked") el.__rxChecked = kind === 1 && num !== 0;  // controlled, like value
         if (name === "checked" || name === "disabled" || name === "selected") { el[name] = kind === 1 && num !== 0; return; }
         if (kind === 1) {  // boolean attribute
             if (num !== 0) el.setAttribute(name, ""); else el.removeAttribute(name);
@@ -81,7 +110,7 @@ EM_JS(void, rx_js_remove_prop, (double id, const char* name), {
     const n = UTF8ToString(name);
     if (n === "style") el.style.cssText = "";
     else if (n === "value") { delete el.__rxValue; el.value = ""; }
-    else if (n === "checked" || n === "disabled" || n === "selected") el[n] = false;
+    else if (n === "checked" || n === "disabled" || n === "selected") { el[n] = false; if (n === "checked") delete el.__rxChecked; }
     else el.removeAttribute(n === "className" ? "class" : n === "htmlFor" ? "for" : n);
 });
 
@@ -100,6 +129,7 @@ EM_JS(void, rx_js_insert, (double parentId, double childId, int index), {
     const fresh = !child.parentNode;
     if (child.parentNode === parent) parent.removeChild(child);
     parent.insertBefore(child, parent.childNodes[index] || null);
+    Module.rxSyncSelect(parent);
     // data-rx-trap (dialogs): move focus inside when it appears, remember where it was.
     if (fresh && child.getAttribute && child.getAttribute("data-rx-trap") !== null) {
         child.__rxPrevFocus = document.activeElement;
@@ -154,6 +184,16 @@ EM_JS(void, rx_js_listen, (int app, double rootId), {
     const resync = function(el) {
         if (el && el.__rxValue !== undefined && el.value !== el.__rxValue) el.value = el.__rxValue;
     };
+    // A checkbox or radio with a `checked` prop shows the C++ state: if
+    // onChange didn't change it, the click is undone (a radio also unchecked
+    // the others of its group).
+    const resyncChecked = function(el) {
+        const group = el.type === "radio" && el.name
+            ? Array.from(root.querySelectorAll("input")).filter(function(r) { return r.type === "radio" && r.name === el.name; })
+            : [el];
+        for (const r of group)
+            if (r.__rxChecked !== undefined && r.checked !== r.__rxChecked) r.checked = r.__rxChecked;
+    };
     root.addEventListener("click", function(e) {
         // Router links: stay on the page (unless the user wants a new tab).
         for (let el = e.target; el && el !== root; el = el.parentNode) {
@@ -165,10 +205,18 @@ EM_JS(void, rx_js_listen, (int app, double rootId), {
         }
         send(e, "onClick", "");
     });
-    root.addEventListener("input", function(e) { send(e, "onInput", e.target.value ?? ""); resync(e.target); });
+    // A <select> fires input and then change: keep the user's choice until
+    // onChange has seen it, and only then snap back to the C++ value.
+    root.addEventListener("input", function(e) {
+        send(e, "onInput", e.target.value ?? "");
+        if (e.target.tagName !== "SELECT") resync(e.target);
+    });
     root.addEventListener("change", function(e) {
         const t = e.target;
-        send(e, "onChange", t.type === "checkbox" || t.type === "radio" ? (t.checked ? "true" : "false") : (t.value ?? ""));
+        const box = t.type === "checkbox" || t.type === "radio";
+        send(e, "onChange", box ? (t.checked ? "true" : "false") : (t.value ?? ""));
+        if (t.tagName === "SELECT") resync(t);
+        if (box) resyncChecked(t);
     });
     // No preventDefault: typing must keep working even if a parent has onKey.
     root.addEventListener("keydown", function(e) {

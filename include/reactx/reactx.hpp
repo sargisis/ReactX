@@ -8,3 +8,4 @@
 #include "reactx/memo.hpp"
 #include "reactx/renderer.hpp"
 #include "reactx/root.hpp"
+#include "reactx/store.hpp"

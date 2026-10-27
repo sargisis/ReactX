@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20...3.31)
 # The ReactX version — the only place it is written (Semantic Versioning:
 # MAJOR.MINOR.PATCH; release tags are vMAJOR.MINOR.PATCH, see CHANGELOG.md).
-project(ReactX VERSION 0.6.0 LANGUAGES CXX)
+project(ReactX VERSION 0.7.0 LANGUAGES CXX)
 
 # C++26: GCC 16+ natively, Emscripten 6+ for the web. We use the parts of
 # C++23/C++26 each standard library ships, and nothing it doesn't
@@ -288,7 +288,7 @@ add_library(reactx
   src/ui_helpers.cpp
 )
 target_include_directories(reactx PUBLIC include ${PROJECT_BINARY_DIR}/generated)
-target_link_libraries(reactx PUBLIC reactx_std PRIVATE ${REACTX_YOGA_TARGET})
+target_link_libraries(reactx PUBLIC reactx_std PRIVATE ${REACTX_YOGA_TARGET} reactx_net)  # reactx_net: fetch() over HTTP
 add_library(reactx::reactx ALIAS reactx)
 include(${PROJECT_SOURCE_DIR}/cmake/ReactXApp.cmake)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -363,6 +363,10 @@ add_test(NAME reactx_parse_tests COMMAND reactx_parse_tests)
 add_executable(reactx_tests tests/test_core.cpp)
 target_link_libraries(reactx_tests PRIVATE reactx)
 add_test(NAME reactx_tests COMMAND reactx_tests)
+
+# Timings of the core on big lists (not a test): ./build/release/reactx_bench [rows]
+add_executable(reactx_bench tests/bench_reconciler.cpp)
+target_link_libraries(reactx_bench PRIVATE reactx)
 
 add_executable(reactx_reconciler_tests tests/test_reconciler.cpp)
 target_link_libraries(reactx_reconciler_tests PRIVATE reactx)

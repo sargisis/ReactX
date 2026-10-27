@@ -8,12 +8,22 @@ name: Release
 on:
   push:
     tags: ["v*.*.*"]
+  # Publish (or re-publish) an existing tag with this version of the workflow:
+  #   gh workflow run release.yml -f tag=v0.7.0
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "An existing tag, e.g. v0.7.0"
+        required: true
 
 permissions:
   contents: read
 
+env:
+  TAG: ${{ github.event.inputs.tag || github.ref_name }}
+
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -24,14 +34,16 @@ jobs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ env.TAG }}
 
       - name: The tag matches CMakeLists.txt
         id: version
         run: |
-          tag="${GITHUB_REF_NAME#v}"
+          tag="${TAG#v}"
           project=$(sed -nE 's/^project\(ReactX VERSION ([0-9.]+).*/\1/p' CMakeLists.txt)
           if [ "$tag" != "$project" ]; then
-            echo "::error::tag $GITHUB_REF_NAME, but CMakeLists.txt says $project"
+            echo "::error::tag $TAG, but CMakeLists.txt says $project"
             exit 1
           fi
           echo "version=$tag" >> "$GITHUB_OUTPUT"
@@ -65,6 +77,8 @@ jobs:
     container: gcc:16
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ env.TAG }}
 
       - name: Install tools
         run: apt-get update && apt-get install -y --no-install-recommends cmake ninja-build
@@ -105,6 +119,8 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ env.TAG }}
 
       - uses: docker/setup-buildx-action@v3
 
@@ -127,6 +143,8 @@ jobs:
           echo "tags=$tags" >> "$GITHUB_OUTPUT"
 
       - uses: docker/build-push-action@v6
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: false  # no extra artifact in the release run
         with:
           context: .
           push: true
@@ -143,17 +161,29 @@ jobs:
     permissions:
       contents: write
     steps:
+      # Only ours: docker/build-push-action uploads its own build record
+      # (*.dockerbuild), which download-artifact can't extract.
       - uses: actions/download-artifact@v4
         with:
+          name: notes
           path: artifacts
-          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: binaries
+          path: artifacts
 
       - name: Create the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           prerelease=""
-          case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease" ;; esac
-          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag $prerelease \
-            --title "ReactX $GITHUB_REF_NAME" --notes-file artifacts/notes.md \
-            artifacts/*.tar.gz artifacts/*.sha256
+          case "$TAG" in *-*) prerelease="--prerelease" ;; esac
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            # Run again for an existing release: replace the files and the notes.
+            gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber artifacts/*.tar.gz artifacts/*.sha256
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file artifacts/notes.md
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag $prerelease \
+              --title "ReactX $TAG" --notes-file artifacts/notes.md \
+              artifacts/*.tar.gz artifacts/*.sha256
+          fi

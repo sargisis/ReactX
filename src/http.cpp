@@ -20,6 +20,7 @@
 #include <format>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <mutex>
 #include <print>
 #include <stdexcept>
@@ -271,13 +272,85 @@ std::optional<std::string> unchunk(std::string_view data) {
         if (sizeText.empty() || ec != std::errc{} || end != sizeText.data() + sizeText.size()) return std::nullopt;
         data.remove_prefix(lineEnd + 2);
         if (size == 0) return out;  // trailers, if any, are dropped
-        if (data.size() < size + 2) return std::nullopt;
+        if (size > data.size() || data.size() - size < 2) return std::nullopt;  // no overflow on huge sizes
         out.append(data.substr(0, size));
         data.remove_prefix(size + 2);
     }
 }
 
 }  // namespace
+
+namespace {
+
+// Size of the whole reply (head + body) as its head tells it, or nullopt when
+// the body runs until the connection closes (or is chunked).
+std::optional<std::size_t> replySize(std::string_view data, bool headRequest) {
+    std::size_t headEnd = data.find("\r\n\r\n");
+    if (headEnd == std::string_view::npos) return std::nullopt;
+    std::string_view head = data.substr(0, headEnd);
+    int status = head.size() >= 12 ? parseNumber<int>(head.substr(9, 3)).value_or(0) : 0;
+    if (headRequest || status == 204 || status == 304 || (status >= 100 && status < 200)) return headEnd + 4;
+    std::string lowerHead = lower(head);
+    if (lowerHead.find("\r\ntransfer-encoding:") != std::string::npos) return std::nullopt;
+    auto at = lowerHead.find("\r\ncontent-length:");
+    if (at == std::string::npos) return std::nullopt;
+    auto valueStart = at + 17;
+    auto valueEnd = lowerHead.find("\r\n", valueStart);
+    auto length = parseNumber<std::size_t>(trim(head.substr(valueStart, valueEnd - valueStart)));
+    if (!length) return std::nullopt;
+    if (*length > std::numeric_limits<std::size_t>::max() - headEnd - 4) return std::numeric_limits<std::size_t>::max();
+    return headEnd + 4 + *length;
+}
+
+}  // namespace
+
+std::expected<Response, HttpError> parseResponse(std::string_view data, bool headRequest) {
+    auto bad = [](std::string why) { return std::unexpected(HttpError{502, std::move(why)}); };
+    std::size_t headEnd = data.find("\r\n\r\n");
+    if (headEnd == std::string_view::npos) return bad("closed the connection without an answer");
+
+    std::string_view head = data.substr(0, headEnd + 2);
+    auto lineEnd = head.find("\r\n");
+    std::string_view statusLine = head.substr(0, lineEnd);
+    if (!statusLine.starts_with("HTTP/1.") || statusLine.size() < 12) return bad("didn't answer with HTTP/1.x");
+    auto status = parseNumber<int>(statusLine.substr(9, 3));
+    if (!status || *status < 100 || *status > 599) return bad("bad status line");
+
+    Response r;
+    r.status = *status;
+    r.contentType.clear();
+    bool chunked = false;
+    std::string_view rest = head.substr(lineEnd + 2);
+    while (!rest.empty()) {
+        auto end = rest.find("\r\n");
+        std::string_view line = rest.substr(0, end);
+        rest = end == std::string_view::npos ? std::string_view{} : rest.substr(end + 2);
+        auto colon = line.find(':');
+        if (colon == std::string_view::npos || colon == 0) continue;
+        std::string name = lower(trim(line.substr(0, colon)));
+        std::string value(trim(line.substr(colon + 1)));
+        if (name == "transfer-encoding") chunked = lower(value).find("chunked") != std::string::npos;
+        if (name == "content-type") r.contentType = std::move(value);
+        else if (!hopByHop(name)) r.headers.emplace_back(std::string(trim(line.substr(0, colon))), std::move(value));
+    }
+    if (r.contentType.empty()) r.contentType = "application/octet-stream";
+
+    std::optional<std::size_t> size = replySize(data, headRequest);
+    std::string_view body = data.substr(headEnd + 4);
+    if (size && *size == headEnd + 4) return r;  // HEAD, 204, 304, 1xx: no body
+    if (chunked) {
+        auto decoded = unchunk(body);
+        if (!decoded) return bad("a broken chunked reply");
+        r.body = std::move(*decoded);
+        return r;
+    }
+    if (size) {
+        if (data.size() < *size) return bad("closed the connection mid-reply");
+        body = body.substr(0, *size - headEnd - 4);
+    }
+    r.body = std::string(body);
+    return r;
+}
 
 std::expected<Upstream, std::string> parseUpstream(std::string_view url) {
     if (url.starts_with("https://")) return std::unexpected("https isn't supported, use http:// (a local backend)");
@@ -333,9 +406,9 @@ std::expected<Response, HttpError> forward(const Request& req, const Upstream& u
     // Read the reply: until the body is complete (Content-Length) or the upstream closes.
     std::string data;
     char buf[16384];
-    std::size_t headEnd = std::string::npos;
-    std::optional<std::size_t> wanted;  // whole reply size, once Content-Length is known
-    bool noBody = req.method == "HEAD";
+    std::optional<std::size_t> wanted;  // whole reply size, once the head says it
+    bool headKnown = false;
+    bool headRequest = req.method == "HEAD";
     while (!wanted || data.size() < *wanted) {
         ssize_t n = ::recv(sock.fd, buf, sizeof buf, 0);
         if (n < 0 && errno == EINTR) continue;
@@ -344,63 +417,15 @@ std::expected<Response, HttpError> forward(const Request& req, const Upstream& u
         if (n <= 0) break;
         data.append(buf, static_cast<std::size_t>(n));
         if (data.size() > kMaxUpstreamReply) return gateway(502, std::format("the reply from {} is over 64 MB", where));
-        if (headEnd == std::string::npos && (headEnd = data.find("\r\n\r\n")) != std::string::npos) {
-            auto head = std::string_view(data).substr(0, headEnd);
-            std::string lowerHead = lower(head);
-            int status = 0;
-            if (head.size() >= 12) status = parseNumber<int>(head.substr(9, 3)).value_or(0);
-            if (noBody || status == 204 || status == 304 || (status >= 100 && status < 200)) wanted = headEnd + 4;
-            else if (auto at = lowerHead.find("\r\ncontent-length:"); at != std::string::npos &&
-                                                                    lowerHead.find("\r\ntransfer-encoding:") == std::string::npos) {
-                auto valueStart = at + 17;
-                auto valueEnd = lowerHead.find("\r\n", valueStart);
-                if (auto length = parseNumber<std::size_t>(trim(head.substr(valueStart, valueEnd - valueStart))))
-                    wanted = headEnd + 4 + *length;
-            }
+        if (!headKnown && data.find("\r\n\r\n") != std::string::npos) {
+            headKnown = true;
+            wanted = replySize(data, headRequest);
+            if (wanted && *wanted > kMaxUpstreamReply) return gateway(502, std::format("the reply from {} is over 64 MB", where));
         }
     }
-    if (headEnd == std::string::npos) return gateway(502, std::format("{} closed the connection without an answer", where));
-
-    // Status line and headers.
-    std::string_view head = std::string_view(data).substr(0, headEnd + 2);
-    auto lineEnd = head.find("\r\n");
-    std::string_view statusLine = head.substr(0, lineEnd);
-    if (!statusLine.starts_with("HTTP/1.") || statusLine.size() < 12)
-        return gateway(502, std::format("{} didn't answer with HTTP/1.x", where));
-    auto status = parseNumber<int>(statusLine.substr(9, 3));
-    if (!status || *status < 100 || *status > 599) return gateway(502, std::format("bad status line from {}", where));
-
-    Response r;
-    r.status = *status;
-    r.contentType.clear();
-    bool chunked = false;
-    std::string_view rest = head.substr(lineEnd + 2);
-    while (!rest.empty()) {
-        auto end = rest.find("\r\n");
-        std::string_view line = rest.substr(0, end);
-        rest = end == std::string_view::npos ? std::string_view{} : rest.substr(end + 2);
-        auto colon = line.find(':');
-        if (colon == std::string_view::npos || colon == 0) continue;
-        std::string name = lower(trim(line.substr(0, colon)));
-        std::string value(trim(line.substr(colon + 1)));
-        if (name == "transfer-encoding") chunked = lower(value).find("chunked") != std::string::npos;
-        if (name == "content-type") r.contentType = std::move(value);
-        else if (!hopByHop(name)) r.headers.emplace_back(std::string(trim(line.substr(0, colon))), std::move(value));
-    }
-    if (r.contentType.empty()) r.contentType = "application/octet-stream";
-
-    std::string_view body = std::string_view(data).substr(headEnd + 4);
-    if (wanted && !noBody) body = body.substr(0, *wanted - headEnd - 4);
-    if (noBody) body = {};
-    if (chunked && !noBody) {
-        auto decoded = unchunk(body);
-        if (!decoded) return gateway(502, std::format("a broken chunked reply from {}", where));
-        r.body = std::move(*decoded);
-    } else {
-        if (wanted && data.size() < *wanted) return gateway(502, std::format("{} closed the connection mid-reply", where));
-        r.body = std::string(body);
-    }
-    return r;
+    auto reply = parseResponse(data, headRequest);
+    if (!reply) return gateway(502, std::format("{}: {}", where, reply.error().message));
+    return std::move(*reply);
 }
 
 // ---- server ----

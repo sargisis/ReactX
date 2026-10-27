@@ -16,33 +16,53 @@ class Reconciler;
 
 // A mounted element. Lives between renders and holds hook state and the
 // backend node (for host and text elements).
+//
+// Only what every kind needs is stored inline; host elements and components
+// keep their own data in a part allocated for them. A text node (a third of
+// a typical tree) is then about half the size it would be otherwise.
 struct Fiber : std::enable_shared_from_this<Fiber> {
     ElementKind kind = ElementKind::Fragment;
-    std::string type;
-    Component component = nullptr;
-    Props props;
-    std::shared_ptr<const TypedProps> typed;  // typed component: its struct of props
+    std::string type;  // host tag ("box") or the text of a text node
     std::string key;
 
     Reconciler* owner = nullptr;
     Fiber* parent = nullptr;
     int depth = 0;
     std::vector<std::shared_ptr<Fiber>> children;
+    NodeHandle node = 0;  // host and text only
 
-    NodeHandle node = 0;              // host and text only
-    std::vector<NodeHandle> attached;  // host only: children currently in the backend
+    struct HostPart {
+        Props props;
+        std::vector<NodeHandle> attached;  // children currently in the backend
+    };
+    struct ComponentPart {
+        Component component = nullptr;
+        std::unique_ptr<Props> props;             // a component taking Props (typed ones keep theirs in `typed`)
+        std::shared_ptr<const TypedProps> typed;  // typed component: its struct of props
+        std::vector<std::unique_ptr<HookBase>> hooks;
+        std::vector<Fiber*> providers;  // the providers it reads (ancestors; usually 0-2)
+    };
+    std::unique_ptr<HostPart> hostPart;     // Host only
+    std::unique_ptr<ComponentPart> compPart;  // Component only
 
-    std::vector<std::unique_ptr<HookBase>> hooks;
-
-    std::shared_ptr<const ContextValueBase> provided;  // Provider only
-    // Provider only: who read it. Keyed by address for O(1) (un)subscribe;
-    // the weak_ptr guards against a fiber that died without an unmount.
-    std::unordered_map<const Fiber*, std::weak_ptr<Fiber>> consumers;
-    std::vector<Fiber*> providers;  // the providers this fiber reads (ancestors; usually 0-2)
-
-    std::shared_ptr<const ErrorFallback> fallback;  // Boundary only
-    std::vector<Element> boundaryChildren;          // Boundary only: what retry() renders again
-    std::exception_ptr error;                       // Boundary only: set while it shows the fallback
+    // What only context providers and error boundaries need. Kept out of the
+    // other fibers (most of them: text, host elements, components), which
+    // would otherwise each carry ~120 unused bytes.
+    struct Rare {
+        std::shared_ptr<const ContextValueBase> provided;  // Provider
+        // Provider: who read it. Keyed by address for O(1) (un)subscribe;
+        // the weak_ptr guards against a fiber that died without an unmount.
+        std::unordered_map<const Fiber*, std::weak_ptr<Fiber>> consumers;
+        std::shared_ptr<const ErrorFallback> fallback;  // Boundary
+        std::vector<Element> boundaryChildren;          // Boundary: what retry() renders again
+        std::exception_ptr error;                       // Boundary: set while it shows the fallback
+    };
+    std::unique_ptr<Rare> rare;  // Provider and Boundary only
+    Rare& more() {
+        if (!rare) rare = std::make_unique<Rare>();
+        return *rare;
+    }
+    bool failed() const { return rare && rare->error; }  // a boundary showing its fallback
     bool rendered = false;  // component rendered at least once
     bool dirty = false;
     bool alive = true;

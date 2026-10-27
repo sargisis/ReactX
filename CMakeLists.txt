@@ -333,6 +333,18 @@ if(REACTX_BUILD_TOOLS)
   install(TARGETS reactx_cli reactx_serve RUNTIME DESTINATION bin)
 endif()
 
+# GCC's static analyzer (-fanalyzer) on the code that reads untrusted input:
+# HTTP requests and replies, JSON, URLs, reactx.json. Findings are errors;
+# CI builds with -DREACTX_ANALYZER=ON. Not on the UI code: GCC 16's C++
+# support there reports static initializers of inline variables (ui.hpp)
+# as leaks and uninitialized reads.
+option(REACTX_ANALYZER "Run gcc -fanalyzer on the input parsers and tools, findings are errors" OFF)
+if(REACTX_ANALYZER)
+  set_source_files_properties(src/http.cpp src/json.cpp src/router.cpp src/fetch.cpp tools/reactx.cpp tools/serve.cpp
+    TARGET_DIRECTORY reactx reactx_net
+    PROPERTIES COMPILE_OPTIONS "-fanalyzer;-Werror")
+endif()
+
 if(NOT REACTX_BUILD_EXAMPLES AND NOT REACTX_BUILD_TESTS)
   return()
 endif()
@@ -387,6 +399,12 @@ add_test(NAME reactx_json_tests COMMAND reactx_json_tests)
 add_executable(reactx_todo_api_tests tests/test_todo_api.cpp)
 target_link_libraries(reactx_todo_api_tests PRIVATE reactx reactx_net)
 add_test(NAME reactx_todo_api_tests COMMAND reactx_todo_api_tests)
+
+# Fuzzing of the input parsers; most useful in the ASan + UBSan build.
+add_executable(reactx_fuzz_tests tests/fuzz_parsers.cpp)
+target_link_libraries(reactx_fuzz_tests PRIVATE reactx reactx_net)
+add_test(NAME reactx_fuzz_tests COMMAND reactx_fuzz_tests 20)
+set_tests_properties(reactx_fuzz_tests PROPERTIES LABELS fuzz TIMEOUT 120)
 
 add_executable(reactx_http_tests tests/test_http.cpp)
 target_link_libraries(reactx_http_tests PRIVATE reactx_net)

@@ -164,6 +164,10 @@ std::expected<Request, HttpError> parseRequestHead(std::string_view head);
 // Length of the body from Content-Length (0 without it): 400 if it isn't a
 // number, 413 if it is over `limit` bytes.
 std::expected<std::size_t, HttpError> bodyLength(const Request& request, std::size_t limit);
+// Parses a whole HTTP/1.x response as a server sent it (status, headers,
+// Content-Length, chunked or read-to-close body). `headRequest`: the answer
+// to a HEAD request, which has no body. A broken one gives HttpError{502, why}.
+std::expected<Response, HttpError> parseResponse(std::string_view raw, bool headRequest = false);
 // Serializes a response (headers + body; no body for HEAD requests).
 std::string serializeResponse(const Response& response, bool headOnly = false);
 

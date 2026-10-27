@@ -6,6 +6,9 @@
 #include <chrono>
 #include <cstdio>
 #include <fstream>
+#if defined(__GLIBC__)
+#include <malloc.h>
+#endif
 #include <functional>
 #include <numeric>
 #include <print>
@@ -67,6 +70,15 @@ std::vector<int> range(int from, int to) {
     return v;
 }
 
+// Bytes the program holds on the heap right now (glibc), 0 elsewhere.
+std::size_t heapBytes() {
+#if defined(__GLIBC__)
+    return mallinfo2().uordblks;
+#else
+    return 0;
+#endif
+}
+
 // Resident memory in KB (Linux), 0 elsewhere.
 long rssKb() {
     std::ifstream statm("/proc/self/statm");
@@ -96,7 +108,9 @@ int main(int argc, char** argv) {
     Root root(r);
     auto ids = range(0, n);
 
+    std::size_t heapBefore = heapBytes();
     report("mount", millis([&] { root.render(h(List, {.ids = ids})); }), r);
+    std::size_t heapRows = heapBytes() - heapBefore;
 
     // Each case starts from the plain list `ids` (not timed), then renders `next`.
     auto change = [&](const char* what, std::vector<int> next, int selected = -1) {
@@ -139,6 +153,7 @@ int main(int argc, char** argv) {
     });
     std::println("\n{} rounds of {} new rows under one provider: {:.2f} ms, memory +{} KB", rounds, batch, churn,
                  rssKb() - before);
+    std::println("heap held by the mounted list: {} bytes per row (component + <li> + text)", heapRows / ids.size());
     root.render(h("empty"));
     return 0;
 }

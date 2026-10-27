@@ -21,9 +21,37 @@ namespace {
 EM_JS(void, rx_js_init, (), {
     if (Module.rxNodes) return;
     Module.rxNodes = new Map();
+    // Attributes that hold a URL, and React's test for a javascript: URL
+    // (browsers skip leading control characters and spaces, and tabs or
+    // newlines inside the scheme). No regex: EM_JS code goes through the
+    // C preprocessor, where backslashes are risky.
+    Module.rxUrlAttrs = new Set(["href", "src", "action", "formaction", "xlink:href", "poster", "cite"]);
+    Module.rxIsJsUrl = function(s) {
+        let i = 0;
+        while (i < s.length && s.charCodeAt(i) <= 32) i++;
+        const want = "javascript:";
+        let k = 0;
+        for (; i < s.length && k < want.length; i++) {
+            const c = s.charCodeAt(i);
+            if (c === 9 || c === 10 || c === 13) continue;
+            if (s[i].toLowerCase() !== want[k]) return false;
+            k++;
+        }
+        return k === want.length;
+    };
+    // A <select> can only take a value its options have: set it again as they arrive.
+    Module.rxSyncSelect = function(el) {
+        const sel = el && el.tagName === "OPTGROUP" ? el.parentNode : el;
+        if (sel && sel.tagName === "SELECT" && sel.__rxValue !== undefined && sel.value !== sel.__rxValue) sel.value = sel.__rxValue;
+    };
     Module.rxSetProp = function(el, name, kind, str, num) {
         if (name === "className") name = "class";
         if (name === "htmlFor") name = "for";
+        if (kind === 3 && Module.rxUrlAttrs.has(name) && Module.rxIsJsUrl(str)) {
+            // Text from users must not run as code when clicked: block it, like React.
+            console.error("ReactX blocked a javascript: URL in " + name + ": " + str);
+            str = "about:blank#blocked";
+        }
         if (name === "style") { el.style.cssText = kind === 3 ? str : ""; return; }
         if (name === "value") {
             const v = kind === 3 ? str : kind === 2 ? String(num) : "";
@@ -100,6 +128,7 @@ EM_JS(void, rx_js_insert, (double parentId, double childId, int index), {
     const fresh = !child.parentNode;
     if (child.parentNode === parent) parent.removeChild(child);
     parent.insertBefore(child, parent.childNodes[index] || null);
+    Module.rxSyncSelect(parent);
     // data-rx-trap (dialogs): move focus inside when it appears, remember where it was.
     if (fresh && child.getAttribute && child.getAttribute("data-rx-trap") !== null) {
         child.__rxPrevFocus = document.activeElement;
@@ -165,10 +194,16 @@ EM_JS(void, rx_js_listen, (int app, double rootId), {
         }
         send(e, "onClick", "");
     });
-    root.addEventListener("input", function(e) { send(e, "onInput", e.target.value ?? ""); resync(e.target); });
+    // A <select> fires input and then change: keep the user's choice until
+    // onChange has seen it, and only then snap back to the C++ value.
+    root.addEventListener("input", function(e) {
+        send(e, "onInput", e.target.value ?? "");
+        if (e.target.tagName !== "SELECT") resync(e.target);
+    });
     root.addEventListener("change", function(e) {
         const t = e.target;
         send(e, "onChange", t.type === "checkbox" || t.type === "radio" ? (t.checked ? "true" : "false") : (t.value ?? ""));
+        if (t.tagName === "SELECT") resync(t);
     });
     // No preventDefault: typing must keep working even if a parent has onKey.
     root.addEventListener("keydown", function(e) {

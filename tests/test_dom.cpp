@@ -77,6 +77,10 @@ Element App(const Props&) {
         h("button", {{"id", "reverse"}, {"onClick", [setOrder] { setOrder(std::string("cba")); }}}, {"reverse"}),
         h("button", {{"id", "drop"}, {"onClick", [setOrder] { setOrder(std::string("ac")); }}}, {"drop"}),
         h("ul", {{"id", "list"}}, std::move(items)),
+        // Links built from user input: a javascript: URL must never reach the page.
+        h("a", {{"id", "evil"}, {"href", " \x01Java\tScript:alert(1)"}}, {"evil"}),
+        h("a", {{"id", "fine"}, {"href", "/javascript:notes"}}, {"fine"}),
+        h("img", {{"id", "pic"}, {"src", "javascript:alert(2)"}}),
     });
 }
 
@@ -139,6 +143,11 @@ int main() {
     CHECK(js("String(document.querySelector('#item-a') === globalThis.firstA)") == "true");  // moved, not recreated
     js("rxTest.click('drop')");
     CHECK(has("<ul id=\"list\"><li id=\"item-a\">a</li><li id=\"item-c\">c</li></ul>"));
+
+    std::cout << "javascript: URLs are blocked, others kept\n";
+    CHECK(js("document.getElementById('evil').getAttribute('href')") == "about:blank#blocked");
+    CHECK(js("document.getElementById('pic').getAttribute('src')") == "about:blank#blocked");
+    CHECK(js("document.getElementById('fine').getAttribute('href')") == "/javascript:notes");
 
     std::cout << (failures ? "FAILED: " + std::to_string(failures) : std::string("OK, all tests passed")) << '\n';
     return failures ? 1 : 0;

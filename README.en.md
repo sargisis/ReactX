@@ -461,7 +461,7 @@ AGENTS.md         rules and checks for anyone changing ReactX itself
 - [x] v0.2–0.4: C++26, contracts, reflection, props structs, sanitizers in CI, the `tag::div` DSL
 - [x] `llms.txt` and `AGENTS.md` for AI assistants
 - [x] v0.5: `useKeyboard`, `useReducer`, timers, focus and scroll events, SVG
-- [x] A prebuilt `reactx` in GitHub Releases, a Docker image and a devcontainer; `reactx dev --proxy`
+- [x] v0.6: a prebuilt `reactx` in GitHub Releases, a Docker image and a devcontainer; `reactx dev --proxy`
 - [ ] A self-updating `reactx`
 - [ ] Libraries for the frontend and for working with C++
 - [ ] Later — desktop windows: SDL3 + Skia/ThorVG

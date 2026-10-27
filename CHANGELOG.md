@@ -4,6 +4,10 @@
 
 ## [Не выпущено]
 
+## [0.6.0] — 2026-10-27
+
+ReactX без установки компиляторов: готовый `reactx` в GitHub Releases, Docker-образ и devcontainer; `reactx dev --proxy` для своего бэкенда и `--host` для контейнеров. Несовместимых изменений нет.
+
 ### Добавлено
 
 - **Готовый `reactx` в GitHub Releases**: при пуше тега `vX.Y.Z` workflow `release.yml` проверяет, что тег совпадает с версией в `CMakeLists.txt`, собирает статические `reactx` и `reactx_serve` для Linux x86-64 (работают на любом дистрибутиве), создаёт релиз с разделом из CHANGELOG и публикует Docker-образ. Для веб-проектов теперь достаточно Emscripten, CMake и Ninja — GCC 16 нужен только терминальным.
@@ -120,7 +124,8 @@
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.5.0...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/sargisis/ReactX/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/sargisis/ReactX/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/sargisis/ReactX/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/sargisis/ReactX/compare/v0.2.0...v0.3.0

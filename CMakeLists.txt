@@ -288,7 +288,7 @@ add_library(reactx
   src/ui_helpers.cpp
 )
 target_include_directories(reactx PUBLIC include ${PROJECT_BINARY_DIR}/generated)
-target_link_libraries(reactx PUBLIC reactx_std PRIVATE ${REACTX_YOGA_TARGET})
+target_link_libraries(reactx PUBLIC reactx_std PRIVATE ${REACTX_YOGA_TARGET} reactx_net)  # reactx_net: fetch() over HTTP
 add_library(reactx::reactx ALIAS reactx)
 include(${PROJECT_SOURCE_DIR}/cmake/ReactXApp.cmake)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")

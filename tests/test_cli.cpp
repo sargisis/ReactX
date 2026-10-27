@@ -22,6 +22,7 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 
+#include "reactx/http.hpp"
 #include "reactx/json.hpp"
 #include "reactx/version.hpp"
 
@@ -125,6 +126,10 @@ void quick(const fs::path& tmp) {
     CHECK(contains(read(tmp / "tui/src/main.cpp"), "TerminalApp app;"));
     auto tuiAgents = read(tmp / "tui/AGENTS.md");  // terminal flavour: no browser rules
     CHECK(contains(tuiAgents, "reactx/terminal.hpp") && !contains(tuiAgents, "keydown") && !contains(tuiAgents, "{{"));
+    auto container = rx::json::parse(read(tmp / "tui/.devcontainer/devcontainer.json"));  // this release's image
+    CHECK(container["image"].asString() == std::string("ghcr.io/sargisis/reactx:") + REACTX_VERSION);
+    CHECK(container["name"].asString() == "tui");
+    CHECK(!fs::exists(app / ".devcontainer"));  // --local: the image has no local sources
 
     std::cout << "new: bad names and existing folders\n";
     CHECK(reactx({"new", "1abc"}, tmp).code != 0);
@@ -158,6 +163,16 @@ void quick(const fs::path& tmp) {
     CHECK(contains(reactx({"remove", "x"}, app).out, "reactx.json: field \"dependencies\": expected an object"));
     std::ofstream(app / "reactx.json") << R"({"name": "app", "dependencies": {"fmt": {"git": "https://x"}}})";
     CHECK(contains(reactx({"remove", "x"}, app).out, "reactx.json: field \"dependencies\": \"fmt\": missing field \"rev\""));
+
+    std::cout << "dev: bad proxy rules stop it before building\n";
+    std::ofstream(app / "reactx.json") << R"({"name": "app", "web": {"proxy": {"api": "http://127.0.0.1:5000"}}})";
+    auto noSlash = reactx({"dev"}, app);
+    CHECK(noSlash.code != 0 && contains(noSlash.out, "proxy prefix \"api\" must start with /"));
+    std::ofstream(app / "reactx.json") << R"({"name": "app", "web": {"proxy": {"/api": "https://example.com"}}})";
+    CHECK(contains(reactx({"dev"}, app).out, "https isn't supported"));
+    std::ofstream(app / "reactx.json") << R"({"name": "app"})";
+    CHECK(contains(reactx({"dev", "--proxy", "/graphql=localhost:4000"}, app).out, "isn't a URL like http://"));
+    CHECK(contains(reactx({"dev", "--proxy", "http://h:70000"}, app).out, "bad port"));
 
     std::cout << "errors and help\n";
     auto outside = reactx({"build"}, tmp);
@@ -281,7 +296,11 @@ void endToEnd(const fs::path& tmp) {
     CHECK(wb.code == 0);
     for (const char* f : {"index.html", "index.js", "index.wasm", "404.html", "style.css"}) CHECK(fs::exists(web / "build/web/dist" / f));
 
-    std::cout << "e2e: dev serves, rebuilds after an edit, survives a broken edit\n";
+    std::cout << "e2e: dev serves, proxies /api, rebuilds after an edit, survives a broken edit\n";
+    rx::net::HttpServer backend("127.0.0.1", 0);  // the app's own API server (Flask, ...)
+    backend.get("/api/ping", [](const rx::net::Request& q) { return rx::net::Response::text("pong " + q.query); });
+    backend.start();
+    std::jthread backendThread([&] { backend.run(); });
     int port = 18000 + ::getpid() % 2000;
     pid_t dev = ::fork();
     if (dev == 0) {
@@ -290,11 +309,13 @@ void endToEnd(const fs::path& tmp) {
         ::dup2(null, 2);
         if (::chdir(web.c_str()) != 0) ::_exit(127);
         std::string p = std::to_string(port);
-        ::execl(REACTX_CLI, REACTX_CLI, "dev", "--port", p.c_str(), static_cast<char*>(nullptr));
+        std::string api = "http://127.0.0.1:" + std::to_string(backend.port());
+        ::execl(REACTX_CLI, REACTX_CLI, "dev", "--port", p.c_str(), "--proxy", api.c_str(), static_cast<char*>(nullptr));
         ::_exit(127);
     }
     CHECK(waitFor([&] { return httpGet(port, "/__reactx/version") == "1"; }, 120s));
     CHECK(contains(httpGet(port, "/"), "__reactx/version"));        // the reload script
+    CHECK(httpGet(port, "/api/ping?x=1") == "pong x=1");               // --proxy
     CHECK(contains(httpGet(port, "/some/route"), "<div id=app>") ||  // SPA fallback (minified HTML)
           contains(httpGet(port, "/some/route"), "<div id=\"app\">"));
 
@@ -315,6 +336,7 @@ void endToEnd(const fs::path& tmp) {
     int status = 0;
     ::waitpid(dev, &status, 0);
     CHECK(WIFEXITED(status) && WEXITSTATUS(status) == 0);  // Ctrl+C stops it cleanly
+    backend.stop();
 }
 
 }  // namespace

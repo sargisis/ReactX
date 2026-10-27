@@ -392,7 +392,7 @@ if(REACTX_BUILD_TOOLS)
   # The reactx CLI as a real program. The end-to-end run (new -> build -> dev)
   # compiles projects and downloads Yoga: label "slow" (ctest -LE slow skips it).
   add_executable(reactx_cli_tests tests/test_cli.cpp)
-  target_link_libraries(reactx_cli_tests PRIVATE reactx)
+  target_link_libraries(reactx_cli_tests PRIVATE reactx reactx_net)  # a backend for the --proxy test
   target_compile_definitions(reactx_cli_tests PRIVATE REACTX_CLI="$<TARGET_FILE:reactx_cli>"
                                                       REACTX_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
   add_dependencies(reactx_cli_tests reactx_cli)

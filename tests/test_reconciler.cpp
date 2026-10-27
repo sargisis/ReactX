@@ -402,6 +402,55 @@ TEST(keyed_lists_reorder_with_the_fewest_moves) {
     }
 }
 
+// Random trees: rendering one over another gives what rendering it from
+// scratch gives (mixes keyed and unkeyed children, fragments, text and
+// components, with types changing under the same key).
+Element Wrap(const Props& p) {
+    auto [n, setN] = useState(0);  // state that must not leak into another instance
+    (void)setN;
+    return h("w", {{"tag", p.get<std::string>("tag", "")}}, {"n=" + std::to_string(n)});
+}
+
+Element randomTree(std::mt19937& rng, int depth) {
+    auto pick = [&](int n) { return static_cast<int>(rng() % static_cast<unsigned>(n)); };
+    std::vector<Element> children;
+    int count = depth > 3 ? 0 : pick(5);
+    std::vector<int> keys = {0, 1, 2, 3, 4, 5};
+    std::ranges::shuffle(keys, rng);
+    for (int i = 0; i < count; ++i) {
+        std::string key = pick(3) ? std::to_string(keys[static_cast<std::size_t>(i)]) : "";  // some unkeyed
+        switch (pick(4)) {
+            case 0: children.push_back(h("t", {{"key", key}}, {"text" + std::to_string(pick(3))})); break;
+            case 1: children.push_back(h(Wrap, {{"key", key}, {"tag", std::to_string(pick(3))}})); break;
+            case 2: children.push_back(fragment({randomTree(rng, depth + 1), "frag"}, key)); break;
+            default: {
+                Element e = randomTree(rng, depth + 1);
+                e.key = key;
+                children.push_back(std::move(e));
+            }
+        }
+    }
+    return h(pick(2) ? "a" : "b", {{"v", static_cast<std::int64_t>(pick(3))}}, std::move(children));
+}
+
+TEST(random_trees_render_over_each_other_like_from_scratch) {
+    std::mt19937 rng(2026);
+    TextRenderer r;
+    Root root(r);
+    for (int round = 0; round < 1500; ++round) {
+        Element tree = randomTree(rng, 0);
+        root.render(tree);
+        TextRenderer fresh;
+        Root freshRoot(fresh);
+        freshRoot.render(tree);
+        CHECK(r.toString() == fresh.toString());
+        if (failures) {
+            std::cerr << "  round " << round << "\n";
+            return;
+        }
+    }
+}
+
 // =====================================================================
 // errorBoundary: a component that throws doesn't take the app down
 // =====================================================================

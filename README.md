@@ -436,7 +436,7 @@ AGENTS.md         правила и проверки для тех, кто ме�
 - [x] Сайт с документацией на GitHub Pages; CLI `reactx` (`new`, `dev`, `build`, `add`, `remove`, `update`)
 - [x] v0.2–0.4: C++26, контракты, рефлексия, props-структуры, санитайзеры в CI, DSL `tag::div`
 - [x] `llms.txt` и `AGENTS.md` для AI-помощников
-- [x] `useKeyboard`, `useReducer`, таймеры, события фокуса и прокрутки, SVG
+- [x] v0.5: `useKeyboard`, `useReducer`, таймеры, события фокуса и прокрутки, SVG
 - [ ] Готовый `reactx` в GitHub Releases и самообновление `reactx update`; Docker-образ и devcontainer
 - [ ] Свои библиотеки для фронтенда и для работы с C++
 - [ ] Позже — окна на рабочем столе: SDL3 + Skia/ThorVG

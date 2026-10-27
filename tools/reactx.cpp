@@ -480,6 +480,32 @@ h1 { margin: 0; }
 
 constexpr std::string_view kGitignore = "build/\n";
 
+// The editor: clangd reads the build's own flags from compile_commands.json
+// (written by CMake on the first `reactx build` / `reactx dev`). The VS Code
+// C/C++ extension's IntelliSense doesn't know C++26 and GCC 16, and reports
+// errors in correct code; clangd parses it as the compiler does.
+constexpr std::string_view kClangd = R"yaml(# clangd (the editor's C++ engine) reads the flags of the real build.
+# compile_commands.json appears there after the first `reactx build` or `reactx dev`.
+CompileFlags:
+  CompilationDatabase: {{builddir}}
+  # GCC-only flags clang doesn't know, and CMake's module maps.
+  Remove: [-fcontracts, -freflection, -fmodules-ts, "-fmodule-mapper=*", "-fdeps-format=*", "@*"]
+)yaml";
+
+constexpr std::string_view kVscodeSettings = R"json({
+  // C++ in the editor through clangd, which understands C++26 like the
+  // compiler; the C/C++ extension's IntelliSense would flag correct code.
+  "C_Cpp.intelliSenseEngine": "disabled",{{clangd_path}}
+  "clangd.arguments": ["--query-driver=**/em++,**/g++*,**/c++", "--header-insertion=never"],
+  "cmake.configureOnOpen": false
+}
+)json";
+
+constexpr std::string_view kVscodeExtensions = R"json({
+  "recommendations": ["llvm-vs-code-extensions.vscode-clangd"]
+}
+)json";
+
 // VS Code "Reopen in Container" / Codespaces: GCC 16, Emscripten and this
 // release's reactx, from the image the release workflow publishes.
 constexpr std::string_view kDevcontainer = R"json({
@@ -580,6 +606,9 @@ int cmdNew(const std::vector<std::string>& args) {
 
     std::map<std::string, std::string> vars{
         {"name", name}, {"target", cmakeName(name)}, {"version", std::string(kVersion)},
+        {"builddir", terminal ? "build/native" : "build/web"},
+        // Web projects have Emscripten, which ships a clangd that knows the wasm target.
+        {"clangd_path", terminal ? "" : "\n  \"clangd.path\": \"${env:EMSDK}/upstream/bin/clangd\","},
         {"output", terminal ? "build/native/" + cmakeName(name) : "build/web/dist/ (static files for any host)"},
         {"kind", terminal ? "terminal" : "web"},
         {"backend", terminal ? "plus `reactx/terminal.hpp` for `TerminalApp`" : "plus `reactx/dom.hpp` for `mountDom`"},
@@ -596,6 +625,9 @@ int cmdNew(const std::vector<std::string>& args) {
     writeOrFail(dir / ".gitignore", kGitignore);
     writeOrFail(dir / "README.md", fill(std::string(kReadme), vars));
     writeOrFail(dir / "AGENTS.md", fill(std::string(kAgents), vars));
+    writeOrFail(dir / ".clangd", fill(std::string(kClangd), vars));
+    writeOrFail(dir / ".vscode/settings.json", fill(std::string(kVscodeSettings), vars));
+    writeOrFail(dir / ".vscode/extensions.json", kVscodeExtensions);
     if (!local) writeOrFail(dir / ".devcontainer/devcontainer.json", fill(std::string(kDevcontainer), vars));  // the image has no local sources
 
     std::println("Created {} ({} app)\n\n  cd {}\n  reactx dev", name, terminal ? "terminal" : "web", name);

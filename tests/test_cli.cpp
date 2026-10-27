@@ -103,8 +103,12 @@ void quick(const fs::path& tmp) {
     CHECK(contains(made.out, "Created my-app (web app)"));
     fs::path app = tmp / "my-app";
     for (const char* f : {"reactx.json", "CMakeLists.txt", "CMakePresets.json", "src/main.cpp", "public/style.css", ".gitignore",
-                          "README.md", "AGENTS.md"})
+                          "README.md", "AGENTS.md", ".clangd", ".vscode/settings.json", ".vscode/extensions.json"})
         CHECK(fs::exists(app / f));
+    // The editor reads the web build's flags through clangd, not IntelliSense.
+    CHECK(contains(read(app / ".clangd"), "CompilationDatabase: build/web") && contains(read(app / ".clangd"), "-fcontracts"));
+    CHECK(contains(read(app / ".vscode/settings.json"), "\"C_Cpp.intelliSenseEngine\": \"disabled\""));
+    CHECK(contains(read(app / ".vscode/settings.json"), "${env:EMSDK}/upstream/bin/clangd"));
     auto agents = read(app / "AGENTS.md");  // notes for AI agents: filled in, web rules, the API link
     CHECK(contains(agents, "# my-app — notes for coding agents") && contains(agents, "reactx/dom.hpp"));
     CHECK(contains(agents, "llms.txt") && contains(agents, "keydown") && !contains(agents, "{{"));
@@ -126,6 +130,8 @@ void quick(const fs::path& tmp) {
     CHECK(contains(read(tmp / "tui/src/main.cpp"), "TerminalApp app;"));
     auto tuiAgents = read(tmp / "tui/AGENTS.md");  // terminal flavour: no browser rules
     CHECK(contains(tuiAgents, "reactx/terminal.hpp") && !contains(tuiAgents, "keydown") && !contains(tuiAgents, "{{"));
+    CHECK(contains(read(tmp / "tui/.clangd"), "CompilationDatabase: build/native"));
+    CHECK(!contains(read(tmp / "tui/.vscode/settings.json"), "clangd.path"));  // any clangd: no Emscripten needed
     auto container = rx::json::parse(read(tmp / "tui/.devcontainer/devcontainer.json"));  // this release's image
     CHECK(container["image"].asString() == std::string("ghcr.io/sargisis/reactx:") + REACTX_VERSION);
     CHECK(container["name"].asString() == "tui");

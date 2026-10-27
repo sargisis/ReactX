@@ -62,6 +62,11 @@ inline const std::vector<Page>& pages() {
                                           "(«Reopen in Container») и GitHub Codespaces откроют проект сразу со всеми инструментами.",
                  "docker run --rm -it -u \"$(id -u):$(id -g)\" -v \"$PWD:/app\" -p 8090:8090 ghcr.io/sargisis/reactx\n"
                  "reactx new my-app && cd my-app && reactx dev --host 0.0.0.0"},
+                {"Редактор", "Ошибки в редакторе показывает clangd: он понимает C++26 как компилятор и берёт флаги из настоящей "
+                             "сборки. IntelliSense расширения C/C++ от Microsoft C++26 не знает и подчёркивает правильный код. "
+                             "reactx new кладёт в проект .clangd и .vscode/: поставьте расширение clangd и один раз выполните "
+                             "reactx build. Веб-проекты используют clangd из Emscripten — ставить ничего не нужно.",
+                 "code --install-extension llvm-vs-code-extensions.vscode-clangd\nreactx build   # пишет compile_commands.json для clangd"},
                 {"Новый проект", "reactx new создаёт папку с reactx.json (манифест, как package.json), CMakeLists.txt, "
                                  "CMakePresets.json и src/main.cpp. ReactX подключается с GitHub по тегу релиза "
                                  "(например, v0.8.0), а не по ветке, поэтому проект не сломается от новых изменений; --local — из исходников, "

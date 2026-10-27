@@ -3,8 +3,8 @@
 #include <stdexcept>
 #include <string>
 
-// The VS Code C/C++ extension can't parse GCC modules yet: show it the headers.
-#ifdef __INTELLISENSE__
+// Editors (clangd, the VS Code C/C++ extension) can't read GCC's module files: show them the headers.
+#if defined(__INTELLISENSE__) || defined(__clang__)
 #include "reactx/reactx.hpp"
 #include "reactx/text_renderer.hpp"
 #else

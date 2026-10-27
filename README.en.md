@@ -63,6 +63,12 @@ reactx update                       # move to the newest ReactX release
 reactx dev --proxy http://127.0.0.1:5000   # /api goes to your backend (Flask, Django, Express, ...)
 ```
 
+### The editor
+
+Errors in the editor come from **clangd**: it understands C++26 like the compiler and takes the flags of the real build. The Microsoft C/C++ extension's IntelliSense doesn't know C++26 and GCC 16, and underlines correct code.
+
+`reactx new` puts a `.clangd` and a `.vscode/` into the project: install the **clangd** extension (VS Code suggests it), run `reactx build` once, and the editor shows what the build shows. Web projects use Emscripten's own clangd (`$EMSDK/upstream/bin/clangd`), nothing to install. For a project made before v0.8.1, copy `.clangd` and `.vscode/` from a new one (`reactx new tmp`).
+
 ## What the code looks like
 
 ```cpp

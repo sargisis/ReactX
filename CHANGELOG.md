@@ -4,6 +4,10 @@
 
 ## [Не выпущено]
 
+## [0.8.1] — 2026-10-27
+
+Находки ИИ-агентов, писавших на ReactX большие проекты: лямбда-компоненты, `rx::urlEncode`, `reactx <команда> --help`, понятная ошибка вместо падения линковки на `mountDom`, редактор через clangd без ложных ошибок. Приложения обновляются без правок.
+
 ### Добавлено
 
 - **Лямбда как компонент с props-структурой**: `const auto Card = [](const CardProps& p) -> Element { ... };` и `h(Card, {.title = "x"})`, `h(Card)`, `h(Card, {...}, {дети})` — как с функцией; та же лямбда — тот же компонент (состояние сохраняется). Раньше шаблон `h()` не выводил тип props из лямбды и выдавал длинную ошибку про `TypedComponent<P>`.
@@ -184,7 +188,8 @@ ReactX без установки компиляторов: готовый `react
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.8.0...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/sargisis/ReactX/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/sargisis/ReactX/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/sargisis/ReactX/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/sargisis/ReactX/compare/v0.5.0...v0.6.0

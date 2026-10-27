@@ -102,6 +102,7 @@ Tags: `box` (flex container, column by default), `text` (wraps; `wrap=false` tru
 rx::net::HttpServer server("127.0.0.1", 8090);
 server.get("/api/todos/:id", [](const rx::net::Request& r) { return rx::net::Response::json(...); });  // r.pathParam("id"), r.param("q"), r.body
 server.serveDirectory("build/web/dist", /*spaFallback=*/true);
+server.proxy("/api", *rx::net::parseUpstream("http://127.0.0.1:5000"));   // forward /api/... to another backend
 if (auto ok = server.tryStart(); !ok) std::println("{}", ok.error());
 server.run();
 ```
@@ -128,7 +129,7 @@ assert(r.toString().find("Count: 2") != std::string::npos);
 
 ## CLI
 
-`reactx new <name> [--terminal]`, `reactx dev [--port N]` (C++ dev server, rebuild + page reload on save), `reactx build` (web: `build/web/dist`), `reactx add <name> <git-url> --rev <tag> --target <cmake-target>`, `reactx remove <name>`, `reactx update [--check] [--to vX.Y.Z]`. Everything about a project is in `reactx.json`.
+`reactx new <name> [--terminal]`, `reactx dev [--port N] [--host 0.0.0.0] [--proxy [PREFIX=]URL]` (C++ dev server, rebuild + page reload on save; `--proxy http://127.0.0.1:5000` forwards `/api` to a Flask/Django/Express backend, also `"web": {"proxy": {"/api": "http://..."}}` in `reactx.json`), `reactx build` (web: `build/web/dist`), `reactx add <name> <git-url> --rev <tag> --target <cmake-target>`, `reactx remove <name>`, `reactx update [--check] [--to vX.Y.Z]`. Everything about a project is in `reactx.json`. No GCC 16 or Emscripten? The image `ghcr.io/sargisis/reactx` has everything, and every project from `reactx new` has a `.devcontainer/` for it (inside a container run `reactx dev --host 0.0.0.0`).
 
 ## Docs
 

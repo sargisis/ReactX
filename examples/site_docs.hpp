@@ -85,6 +85,10 @@ inline const std::vector<Page>& pages() {
                  "reactx dev --proxy /graphql=http://127.0.0.1:4000    # свой префикс\n\n"
                  "# или в reactx.json:\n"
                  "\"web\": { \"base\": \"/\", \"proxy\": { \"/api\": \"http://127.0.0.1:5000\" } }"},
+                {"Браузер и терминал", "reactx build --native собирает те же компоненты для терминала. mountDom есть только в "
+                                       "браузерной сборке (нативно — понятная ошибка компиляции), поэтому main выбирает точку входа.",
+                 "int main() {\n#ifdef __EMSCRIPTEN__\n    mountDom(h(App));\n#else\n    TerminalApp app;   // reactx/terminal.hpp\n"
+                 "    app.run(h(App));\n#endif\n}"},
                 {"reactx build", "Сборка для публикации: build/web/dist — обычные файлы для любого статического хостинга "
                                  "(404.html уже лежит рядом с index.html для маршрутов). Для терминального проекта — "
                                  "build/native/<имя>.", "reactx build"},

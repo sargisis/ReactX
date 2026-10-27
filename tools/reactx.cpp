@@ -916,7 +916,7 @@ int usage(std::FILE* out, int code) {
            "  reactx dev [--port N] [--native]           build, serve, rebuild and reload on changes\n"
            "      [--host 0.0.0.0]                       listen on all interfaces (Docker, phone on Wi-Fi)\n"
            "      [--proxy [PREFIX=]URL]                 forward PREFIX (default /api) to a backend\n"
-           "  reactx build [--native]                    build (web: build/web/dist)\n"
+           "  reactx build [--native]                    build (web: build/web/dist; --native: GCC, main without mountDom)\n"
            "  reactx add <name> <git-url> [--rev R] [--target T]   add a dependency\n"
            "  reactx remove <name>                       remove a dependency\n"
            "  reactx update [--check] [--to vX.Y.Z]      move to the newest ReactX release\n"

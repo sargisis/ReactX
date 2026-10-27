@@ -54,7 +54,17 @@ reactx new my-app && cd my-app      # a web project (or --terminal)
 reactx dev                          # a C++ server; rebuilds and reloads the page on every save
 ```
 
-Open http://127.0.0.1:8090/ and edit `src/main.cpp`. Next:
+Open http://127.0.0.1:8090/ and edit `src/main.cpp`. `reactx build --native` builds the same components for the terminal; then `main` picks the entry point: `mountDom` exists only in the browser (natively it's a clear compile error), the terminal uses `TerminalApp`:
+
+```cpp
+#ifdef __EMSCRIPTEN__
+    mountDom(h(App));
+#else
+    TerminalApp app;  app.run(h(App));   // #include "reactx/terminal.hpp"
+#endif
+```
+
+Next:
 
 ```sh
 reactx build                        # build/web/dist — files for any static host

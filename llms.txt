@@ -85,6 +85,28 @@ Any HTML tag; `className`, `style` (a CSS string), `id`, any attribute. SVG work
 
 Tags: `box` (flex container, column by default), `text` (wraps; `wrap=false` truncates), `input` (`value`, `placeholder`), `button`. Flexbox props like CSS in cells: `direction`, `justifyContent`, `alignItems`, `flexGrow`, `width`/`height` (number or "50%"), `padding`, `margin`, `gap`, `position`, `overflow`. Look: `border`, `title`, `color`, `bg`, `bold`, `dim`, `underline`. Colors: black red green yellow blue magenta cyan white gray, `bright-<color>`. `input`, `button` and `focusable=true` take focus; Tab/arrows move it, Enter clicks. `trapFocus=true` keeps Tab inside (modals).
 
+## One project, browser and terminal
+
+`mountDom` (`reactx/dom.hpp`) exists only in the browser build; natively it is a compile error that says so. `reactx build` / `reactx dev` build a web project for the browser; `--native` builds the same sources with GCC, which needs a native `main`. Components are shared as they are; only `main` differs:
+
+```cpp
+#ifdef __EMSCRIPTEN__
+#include "reactx/dom.hpp"
+#else
+#include "reactx/terminal.hpp"
+#endif
+int main() {
+#ifdef __EMSCRIPTEN__
+    mountDom(h(App));
+#else
+    TerminalApp app;
+    app.run(h(App));
+#endif
+}
+```
+
+A server (`rx::net::HttpServer`) is native-only: keep it in its own CMake target, not in the app's `main`.
+
 ## Ready components (`reactx/ui.hpp`, same code in terminal and browser)
 
 `ui::button({.label, .onClick, .variant = ui::Variant::Primary|Danger|Success, .disabled})`, `ui::input({.value, .onChange, .onSubmit, .placeholder, .label})`, `ui::checkbox({.label, .checked, .onToggle})`, `ui::tabs({.tabs = {{.label, .content}}})`, `ui::modal({.title, .open, .onClose, .children})`, `ui::list({.title, .items})` with `ui::listItem({.label, .detail, .selected, .onSelect})`. Theme: `ui::themeProvider(ui::Theme{.accent = "blue"}, {children})`.

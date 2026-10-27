@@ -4,6 +4,10 @@
 
 ## [Не выпущено]
 
+## [0.8.0] — 2026-10-27
+
+Меньше памяти (−28% на узел), закрыт DoS в `reactx dev --proxy`, фаззинг и статический анализ на каждый push, SECURITY.md. Приложения обновляются без правок.
+
 ### Добавлено
 
 - **SECURITY.md**: как сообщить об уязвимости, что ею считается (модель угроз) и как проект проверяется.
@@ -168,7 +172,8 @@ ReactX без установки компиляторов: готовый `react
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.7.0...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/sargisis/ReactX/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/sargisis/ReactX/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/sargisis/ReactX/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/sargisis/ReactX/compare/v0.4.0...v0.5.0

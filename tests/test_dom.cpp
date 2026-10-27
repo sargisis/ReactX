@@ -69,6 +69,8 @@ Element App(const Props&) {
         h("input", {{"type", "checkbox"}, {"id", "agree"}, {"checked", agree},
                     {"onChange", [setAgree, agree] { setAgree(!agree); }}}),
         h("button", {{"id", "upper"}, {"onClick", [setUpper] { setUpper(true); }}}, {"upper"}),
+        // Controlled and never changed by its handler: clicks are undone.
+        h("input", {{"type", "checkbox"}, {"id", "locked"}, {"checked", true}, {"onChange", [] {}}}),
         h("form", {{"id", "form"}, {"onSubmit", [setSubmits] { setSubmits([](int s) { return s + 1; }); }}}, {
             h("button", {{"type", "submit"}}, {"go"}),
         }),
@@ -131,6 +133,10 @@ int main() {
     CHECK(has("agree=no"));
     CHECK(!has("style="));
     CHECK(js("String(document.querySelector('#out').disabled)") == "false");
+
+    std::cout << "a checked prop is controlled: an ignored click is undone\n";
+    js("rxTest.toggle('locked')");
+    CHECK(js("String(document.getElementById('locked').checked)") == "true");
 
     std::cout << "form submit does not reload the page\n";
     CHECK(js("rxTest.submit('form')") == "prevented");

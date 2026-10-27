@@ -59,6 +59,7 @@ EM_JS(void, rx_js_init, (), {
             if (el.value !== v) el.value = v;
             return;
         }
+        if (name === "checked") el.__rxChecked = kind === 1 && num !== 0;  // controlled, like value
         if (name === "checked" || name === "disabled" || name === "selected") { el[name] = kind === 1 && num !== 0; return; }
         if (kind === 1) {  // boolean attribute
             if (num !== 0) el.setAttribute(name, ""); else el.removeAttribute(name);
@@ -109,7 +110,7 @@ EM_JS(void, rx_js_remove_prop, (double id, const char* name), {
     const n = UTF8ToString(name);
     if (n === "style") el.style.cssText = "";
     else if (n === "value") { delete el.__rxValue; el.value = ""; }
-    else if (n === "checked" || n === "disabled" || n === "selected") el[n] = false;
+    else if (n === "checked" || n === "disabled" || n === "selected") { el[n] = false; if (n === "checked") delete el.__rxChecked; }
     else el.removeAttribute(n === "className" ? "class" : n === "htmlFor" ? "for" : n);
 });
 
@@ -183,6 +184,16 @@ EM_JS(void, rx_js_listen, (int app, double rootId), {
     const resync = function(el) {
         if (el && el.__rxValue !== undefined && el.value !== el.__rxValue) el.value = el.__rxValue;
     };
+    // A checkbox or radio with a `checked` prop shows the C++ state: if
+    // onChange didn't change it, the click is undone (a radio also unchecked
+    // the others of its group).
+    const resyncChecked = function(el) {
+        const group = el.type === "radio" && el.name
+            ? Array.from(root.querySelectorAll("input")).filter(function(r) { return r.type === "radio" && r.name === el.name; })
+            : [el];
+        for (const r of group)
+            if (r.__rxChecked !== undefined && r.checked !== r.__rxChecked) r.checked = r.__rxChecked;
+    };
     root.addEventListener("click", function(e) {
         // Router links: stay on the page (unless the user wants a new tab).
         for (let el = e.target; el && el !== root; el = el.parentNode) {
@@ -202,8 +213,10 @@ EM_JS(void, rx_js_listen, (int app, double rootId), {
     });
     root.addEventListener("change", function(e) {
         const t = e.target;
-        send(e, "onChange", t.type === "checkbox" || t.type === "radio" ? (t.checked ? "true" : "false") : (t.value ?? ""));
+        const box = t.type === "checkbox" || t.type === "radio";
+        send(e, "onChange", box ? (t.checked ? "true" : "false") : (t.value ?? ""));
         if (t.tagName === "SELECT") resync(t);
+        if (box) resyncChecked(t);
     });
     // No preventDefault: typing must keep working even if a parent has onKey.
     root.addEventListener("keydown", function(e) {

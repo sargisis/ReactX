@@ -756,12 +756,28 @@ int cmdDev(const std::vector<std::string>& args) {
     if (!build(root, "web")) fail("build failed (fix the error and run reactx dev again)");
 
     std::atomic<int> version{1};
+    // "web": {"base": "/pulseboard/"}: the page asks for /pulseboard/style.css etc.,
+    // like on GitHub Pages, so the files are served under that path too.
+    std::string base = manifest.web && manifest.web->base ? *manifest.web->base : "/";
+    if (!base.starts_with('/')) base.insert(0, "/");
+    if (!base.ends_with('/')) base += '/';
+
     rx::net::HttpServer server(host, port);
-    server.get("/__reactx/version", [&version](const rx::net::Request&) {
+    rx::net::Handler versionHandler = [&version](const rx::net::Request&) {
         auto r = rx::net::Response::text(std::to_string(version.load()));
         r.headers.emplace_back("Cache-Control", "no-store");
         return r;
-    });
+    };
+    server.get("/__reactx/version", versionHandler);  // the reload script asks relative to <base href>
+    if (base != "/") {
+        server.get(base + "__reactx/version", versionHandler);
+        server.setUrlPrefix(base);
+        server.get("/", [base](const rx::net::Request&) {  // the bare address goes to the app
+            rx::net::Response r = rx::net::Response::text("see " + base + "\n", 302);
+            r.headers.emplace_back("Location", base);
+            return r;
+        });
+    }
     for (const auto& [prefix, upstream] : proxies) server.proxy(prefix, upstream);
     server.serveDirectory(root / "build/web/dist", /*spaFallback=*/true);
     if (auto started = server.tryStart(); !started) fail(started.error());
@@ -789,7 +805,7 @@ int cmdDev(const std::vector<std::string>& args) {
 
     for (const auto& [prefix, upstream] : proxies)
         std::println("reactx: {} -> http://{}:{}{}", prefix, upstream.host, upstream.port, upstream.path);
-    std::println("reactx: http://{}:{}/  (Ctrl+C to stop)", host == "0.0.0.0" ? "127.0.0.1" : host, server.port());
+    std::println("reactx: http://{}:{}{}  (Ctrl+C to stop)", host == "0.0.0.0" ? "127.0.0.1" : host, server.port(), base);
     std::fflush(stdout);
     server.run();
     devServer = nullptr;

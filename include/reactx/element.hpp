@@ -188,6 +188,41 @@ Element h(TypedComponent<P> component);
 template <class P>
     requires(!std::same_as<P, Props>) && requires(P p) { p.children = std::vector<Element>{}; }
 Element h(TypedComponent<P> component, P props, std::vector<Element> children);
+
+namespace detail {
+// The props struct a captureless lambda takes: [](const CardProps&) -> Element.
+template <class Call>
+struct LambdaPropsOf {};
+template <class C, class P>
+struct LambdaPropsOf<Element (C::*)(const P&) const> {
+    using type = P;
+};
+template <class F>
+using LambdaProps = typename LambdaPropsOf<decltype(&F::operator())>::type;
+// A lambda usable as a typed component (not one taking Props: that's a Component).
+template <class F>
+concept TypedLambda = requires { typename LambdaProps<F>; } && !std::same_as<LambdaProps<F>, Props> &&
+                      std::convertible_to<F, TypedComponent<LambdaProps<F>>>;
+}  // namespace detail
+
+// A captureless lambda as a typed component, the same as a function:
+//   const auto Badge = [](const BadgeProps& p) -> Element { ... };
+//   h(Badge, {.label = "new"})
+template <detail::TypedLambda F>
+Element h(F component, detail::LambdaProps<F> props) {
+    return h(static_cast<TypedComponent<detail::LambdaProps<F>>>(component), std::move(props));
+}
+template <detail::TypedLambda F>
+    requires std::default_initializable<detail::LambdaProps<F>>
+Element h(F component) {
+    return h(static_cast<TypedComponent<detail::LambdaProps<F>>>(component));
+}
+template <detail::TypedLambda F>
+    requires requires(detail::LambdaProps<F> p) { p.children = std::vector<Element>{}; }
+Element h(F component, detail::LambdaProps<F> props, std::vector<Element> children) {
+    return h(static_cast<TypedComponent<detail::LambdaProps<F>>>(component), std::move(props), std::move(children));
+}
+
 Element text(std::string content);
 Element fragment(std::vector<Element> children, std::string key = {});
 

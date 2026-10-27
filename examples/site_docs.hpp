@@ -182,6 +182,11 @@ inline const std::vector<Page>& pages() {
                  "Element Card(const CardProps& p) {\n"
                  "    return h(\"div\", {{\"className\", \"card\"}}, p.children);\n}\n\n"
                  "h(Card, {.title = \"Hi\"}, {h(\"p\", {}, {\"текст\"})})"},
+                {"Лямбда-компонент", "Лямбда без захватов — такой же компонент, как функция: тип props берётся из её "
+                                     "параметра. Данные передавайте через props, а не захватом.",
+                 "const auto Badge = [](const BadgeProps& p) -> Element {\n"
+                 "    return h(\"span\", {{\"className\", \"badge\"}}, {p.label});\n};\n\n"
+                 "h(Badge, {.label = \"new\"})"},
                 {"Props по строкам", "Старый способ тоже работает: Element(const Props&), props.get<T>(имя, запасное), "
                                      "props.children().",
                  "Element Hello(const Props& p) {\n"

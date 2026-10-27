@@ -50,7 +50,7 @@ int main() {
 ## Elements and components
 
 - `h("tag", {{"prop", value}, ...}, {children...})` — a host element. Prop values: `bool`, numbers, `std::string`, handlers. A string child is a text node. `"key"` in props is the list key.
-- Components are plain functions. Preferred: a props struct — `Element Card(const CardProps&)`, called as `h(Card, {.title = "Hi"})` (C++20 designated initializers; a typo is a compile error). A `key` field becomes the element key; a `children` field (`std::vector<Element>`) receives children: `h(Card, {.title = "Hi"}, {h("p", {}, {"body"})})`. `h(Card)` uses default props. Give every field a default (`{}`), or `-Wextra` warns about omitted fields.
+- Components are plain functions. Preferred: a props struct — `Element Card(const CardProps&)`, called as `h(Card, {.title = "Hi"})` (C++20 designated initializers; a typo is a compile error). A `key` field becomes the element key; a `children` field (`std::vector<Element>`) receives children: `h(Card, {.title = "Hi"}, {h("p", {}, {"body"})})`. `h(Card)` uses default props. Give every field a default (`{}`), or `-Wextra` warns about omitted fields. A captureless lambda works the same way: `const auto Card = [](const CardProps& p) -> Element { ... };` then `h(Card, {.title = "Hi"})` (a lambda with captures can't be a component: pass the data in props).
 - Older style, still supported: `Element Card(const Props& p)` with `p.get<std::string>("title", "fallback")`, `p.children()`, called as `h(Card, {{"title", "Hi"}})`.
 - `fragment({children...})`, `text("...")`. DSL (optional, `using namespace rx::dsl;`): `tag::div.cls("card").id("x")("text", tag::button.onClick(f)("OK"))`, custom tags `"my-tag"_tag`.
 - `memo<Card>` skips re-rendering when props are equal (props struct: its `operator==`; `Props`: values with `==`, handlers equal only if from the same `useCallback`).
@@ -73,7 +73,7 @@ int main() {
 
 ## Events
 
-Handler props: `onClick` (`Callback = std::function<void()>`), `onInput` / `onChange` (`InputHandler`, gets the text; a checkbox's onChange gets "true"/"false"), `onKey` (`KeyHandler`, gets `KeyEvent{.key, .ctrl, .alt, .shift}`; keys like "Enter", "Escape", "Up", "a"), `onSubmit` (forms), `onFocus` / `onBlur` (`Callback`; browser, and terminal focus moves), `onScroll` (`ScrollHandler`, gets `ScrollEvent{.top, .left, .scrollHeight, .scrollWidth, .clientHeight, .clientWidth}` with `nearBottom(margin = 100)`; browser only, doesn't bubble). Other events bubble to ancestors. There are no mouse move, hover or drag events.
+Handler props: `onClick` (`Callback = std::function<void()>`), `onInput` / `onChange` (`InputHandler`, gets the text; a checkbox's onChange gets "true"/"false"), `onKey` (`KeyHandler`, gets `KeyEvent{.key, .ctrl, .alt, .shift}`; keys like "Enter", "Escape", "Up", "a"), `onSubmit` (forms), `onFocus` / `onBlur` (`Callback`; browser, and terminal focus moves), `onScroll` (`ScrollHandler`, gets `ScrollEvent{.top, .left, .scrollHeight, .scrollWidth, .clientHeight, .clientWidth}` with `nearBottom(margin = 100)`; browser only, doesn't bubble). The fields are `top` / `left`, not the DOM's `scrollTop` / `scrollLeft`. Other events bubble to ancestors. There are no mouse move, hover or drag events.
 
 Controlled input: `h("input", {{"value", text}, {"onInput", [setText](const std::string& t) { setText(t); }}})`. `checked` and a `<select>`'s `value` are controlled too: if the handler doesn't change the state, the page goes back to it. `href` / `src` with a `javascript:` URL are blocked.
 
@@ -117,7 +117,7 @@ A server (`rx::net::HttpServer`) is native-only: keep it in its own CMake target
 
 ## Data (`reactx/fetch.hpp`, `reactx/json.hpp`)
 
-- `FetchState f = useFetch("/api/todos");` → `f.loading`, `f.ok()`, `f.tryJson()` (`std::expected`), `f.errorText()`, `f.reload()`. `fetch({.method = "POST", .url = "/api/todos", .body = json.dump()}, [](const FetchResponse& r) { ... })`. `setLocalFetch(handler)` answers requests inside the app (no server). Terminal build: a full `http://host:port/...` URL (no https); the answer arrives on the UI thread at the next flush.
+- `FetchState f = useFetch("/api/todos");` → `f.loading`, `f.ok()`, `f.tryJson()` (`std::expected`), `f.errorText()`, `f.reload()`. `fetch({.method = "POST", .url = "/api/todos", .body = json.dump()}, [](const FetchResponse& r) { ... })`. `setLocalFetch(handler)` answers requests inside the app (no server). Build query strings with `rx::urlEncode` (`reactx/path.hpp`): `"/api/logs?q=" + rx::urlEncode(text)`; `rx::urlDecode` / `rx::queryParam` read them. Terminal build: a full `http://host:port/...` URL (no https); the answer arrives on the UI thread at the next flush.
 - JSON: `auto v = json::tryParse(text);` (`std::expected<Value, Error>`), `v["title"].asString()`, `v.get<int>("count", 0)`, `json::object({{"id", 1}})`, `json::array({...})`, `v.dump(2)`.
 - Natively with reflection (link `reactx::reflection` in CMake): `json::to(myStruct)`, `json::from<MyStruct>(value)` → `std::expected<MyStruct, json::Error>` with a path in the error.
 
@@ -154,7 +154,7 @@ assert(r.toString().find("Count: 2") != std::string::npos);
 
 ## CLI
 
-`reactx new <name> [--terminal]`, `reactx dev [--port N] [--host 0.0.0.0] [--proxy [PREFIX=]URL]` (C++ dev server, rebuild + page reload on save; `--proxy http://127.0.0.1:5000` forwards `/api` to a Flask/Django/Express backend, also `"web": {"proxy": {"/api": "http://..."}}` in `reactx.json`), `reactx build` (web: `build/web/dist`), `reactx add <name> <git-url> --rev <tag> --target <cmake-target>`, `reactx remove <name>`, `reactx update [--check] [--to vX.Y.Z]`. Everything about a project is in `reactx.json`. No GCC 16 or Emscripten? The image `ghcr.io/sargisis/reactx` has everything, and every project from `reactx new` has a `.devcontainer/` for it (inside a container run `reactx dev --host 0.0.0.0`).
+`reactx new <name> [--terminal]`, `reactx dev [--port N] [--host 0.0.0.0] [--proxy [PREFIX=]URL]` (C++ dev server, rebuild + page reload on save; `--proxy http://127.0.0.1:5000` forwards `/api` to a Flask/Django/Express backend, also `"web": {"proxy": {"/api": "http://..."}}` in `reactx.json`), `reactx build` (web: `build/web/dist`), `reactx add <name> <git-url> --rev <tag> --target <cmake-target>`, `reactx remove <name>`, `reactx update [--check] [--to vX.Y.Z]`. `reactx <command> --help` explains one command. Everything about a project is in `reactx.json`. No GCC 16 or Emscripten? The image `ghcr.io/sargisis/reactx` has everything, and every project from `reactx new` has a `.devcontainer/` for it (inside a container run `reactx dev --host 0.0.0.0`).
 
 ## Docs
 

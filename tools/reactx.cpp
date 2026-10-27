@@ -920,17 +920,64 @@ int usage(std::FILE* out, int code) {
            "  reactx add <name> <git-url> [--rev R] [--target T]   add a dependency\n"
            "  reactx remove <name>                       remove a dependency\n"
            "  reactx update [--check] [--to vX.Y.Z]      move to the newest ReactX release\n"
-           "  reactx help | --version\n", kVersion);
+           "  reactx help | --version\n"
+           "\n<command> --help (or reactx help <command>) explains one command.\n", kVersion);
     return code;
 }
 
 }  // namespace
+
+// `reactx <command> --help` / `reactx help <command>`: what one command does
+// and its options. Empty for a command that doesn't exist.
+std::string_view commandHelp(std::string_view command) {
+    if (command == "new")
+        return "reactx new <name> [--terminal] [--local]\n\n"
+               "Creates the folder <name> with reactx.json, CMakeLists.txt, CMakePresets.json, src/main.cpp,\n"
+               "editor settings (.clangd, .vscode/) and AGENTS.md. ReactX comes from GitHub at this CLI's release tag.\n\n"
+               "  --terminal   a terminal app (TerminalApp) instead of a web app\n"
+               "  --local      use the ReactX sources this CLI was built from (for working on ReactX)\n";
+    if (command == "dev")
+        return "reactx dev [--port N] [--host H] [--proxy [PREFIX=]URL]... [--native]\n\n"
+               "Builds the web app, serves it and rebuilds + reloads the page on every save.\n\n"
+               "  --port N                 port of the dev server (8090)\n"
+               "  --host H                 address to listen on (127.0.0.1; 0.0.0.0 for containers and other devices)\n"
+               "  --proxy [PREFIX=]URL     forward PREFIX (/api) to a backend: --proxy http://127.0.0.1:5000\n"
+               "                           (or \"web\": {\"proxy\": {\"/api\": \"http://...\"}} in reactx.json)\n"
+               "  --native                 build and run the native (terminal) version instead\n";
+    if (command == "build")
+        return "reactx build [--native]\n\n"
+               "Builds for publishing: web apps into build/web/dist (static files for any host),\n"
+               "terminal apps into build/native/<name>.\n\n"
+               "  --native   build a web project's sources with GCC; its main() must not call mountDom\n"
+               "             (use #ifdef __EMSCRIPTEN__ ... #else TerminalApp ... #endif)\n";
+    if (command == "add")
+        return "reactx add <name> <git-url> [--rev R] [--target T]\n\n"
+               "Adds (or updates) a dependency in reactx.json; CMake fetches it on the next build.\n\n"
+               "  --rev R      tag, branch or commit to use (a tag keeps builds reproducible)\n"
+               "  --target T   CMake target to link the app with, e.g. fmt::fmt\n\n"
+               "Example: reactx add fmt https://github.com/fmtlib/fmt.git --rev 11.0.2 --target fmt::fmt\n";
+    if (command == "remove") return "reactx remove <name>\n\nRemoves a dependency from reactx.json.\n";
+    if (command == "update")
+        return "reactx update [--check] [--to vX.Y.Z]\n\n"
+               "Moves the project to the newest ReactX release (by SemVer, skipping -rc) and writes it to reactx.json;\n"
+               "the next build fetches it. A new MINOR while MAJOR is 0 may need changes: read the CHANGELOG.\n\n"
+               "  --check       only say whether a newer release exists\n"
+               "  --to vX.Y.Z   a specific version (also older)\n";
+    return {};
+}
 
 int main(int argc, char** argv) {
     std::vector<std::string> args(argv + 1, argv + argc);
     if (args.empty()) return usage(stderr, 2);
     std::string command = args.front();
     args.erase(args.begin());
+    // `reactx add --help`, `reactx help add`
+    bool wantsHelp = std::ranges::any_of(args, [](const std::string& a) { return a == "--help" || a == "-h"; });
+    if (command == "help" && !args.empty()) std::swap(command, args.front()), wantsHelp = true;
+    if (wantsHelp && !commandHelp(command).empty()) {
+        std::print("{}", commandHelp(command));
+        return 0;
+    }
     try {
         if (command == "new") return cmdNew(args);
         if (command == "dev") return cmdDev(args);

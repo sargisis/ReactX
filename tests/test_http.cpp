@@ -165,6 +165,13 @@ TEST(url_decode) {
     CHECK(urlDecode("a+b") == "a+b");
     CHECK(urlDecode("a+b", true) == "a b");
     CHECK(urlDecode("%D0%BF%D1%80%D0%B8") == "при");
+    // urlEncode: one query value or path segment; urlDecode gives it back.
+    CHECK(rx::urlEncode("milk & tea/2") == "milk%20%26%20tea%2F2");
+    CHECK(rx::urlEncode("a-b.c_d~E9") == "a-b.c_d~E9");
+    CHECK(rx::urlEncode("при") == "%D0%BF%D1%80%D0%B8");
+    CHECK(rx::urlEncode("") == "");
+    for (const std::string& s : std::vector<std::string>{"q=1&x=%zz", "a+b c", std::string("\0\xff/?#", 6), "при вет"})
+        CHECK(urlDecode(rx::urlEncode(s), true) == s);
 }
 
 // ---- over TCP ----

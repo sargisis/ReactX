@@ -186,7 +186,7 @@ inline const std::vector<Page>& pages() {
             },
         },
         {
-            "hooks", "Хуки", "useState, useEffect, useReducer, useMemo, таймеры, клавиши, хранилище.",
+            "hooks", "Хуки", "useState, useEffect, useReducer, useStore, useMemo, таймеры, клавиши, хранилище.",
             {
                 {"useState", "Возвращает значение и setter. Setter принимает новое значение или функцию от старого. "
                              "Равное значение не вызывает перерисовку.",
@@ -225,6 +225,24 @@ inline const std::vector<Page>& pages() {
                  "    if (k.ctrl && k.key == \"z\") { undo(); return true; }\n"
                  "    return false;\n"
                  "});"},
+                {"createStore и useStore", "Состояние вне дерева, общее для любых компонентов: корзина, пользователь, настройки "
+                                           "(как Zustand). useStore(store) перерисовывает при каждом изменении; с функцией-селектором — "
+                                           "только когда меняется выбранная часть. Менять — в потоке интерфейса: в обработчиках, эффектах, "
+                                           "ответах fetch.",
+                 "const auto Cart = createStore<std::vector<Item>>({});\n\n"
+                 "Cart.update([](auto items) { items.push_back(milk); return items; });\n"
+                 "const auto& items = useStore(Cart);\n"
+                 "auto count = useStore(Cart, [](const auto& items) { return items.size(); });"},
+                {"useId", "Id, уникальный в приложении и одинаковый при каждой отрисовке: связать подпись с полем, aria-атрибуты.",
+                 "std::string id = useId();\n"
+                 "h(\"label\", {{\"for\", id}}, {\"Имя\"}), h(\"input\", {{\"id\", id}})"},
+                {"errorBoundary", "Если дети бросили исключение при отрисовке — сразу или позже, при обновлении состояния, — "
+                                  "вместо них показывается запасной вариант, а остальное приложение работает. retry() пробует снова. "
+                                  "Исключения в обработчиках событий и эффектах не ловятся, как в React.",
+                 "errorBoundary([](const RenderError& e) {\n"
+                 "    return h(\"div\", {}, {\"Ошибка: \" + e.message,\n"
+                 "                           h(\"button\", {{\"onClick\", e.retry}}, {\"Ещё раз\"})});\n"
+                 "}, {h(Chart, {.rows = rows})})"},
                 {"Правило хуков", "Как в React: хуки вызываются в одном и том же порядке при каждой отрисовке, "
                                   "не в условиях и не в циклах с переменным числом шагов.", ""},
             },
@@ -330,6 +348,9 @@ inline const std::vector<Page>& pages() {
                  "if (todos.loading) return h(\"p\", {}, {\"Загрузка...\"});\n"
                  "if (!todos.ok()) return h(\"p\", {}, {todos.errorText()});\n"
                  "for (const auto& t : todos.json().asArray()) ..."},
+                {"В терминале", "Терминальные приложения тоже ходят в сеть: нужен полный URL с http:// (HTTPS нет). Запрос идёт "
+                                "в своём потоке, ответ приходит в потоке интерфейса — TerminalApp перерисует экран сам.",
+                 "auto weather = useFetch(\"http://127.0.0.1:8091/api/todos\");"},
                 {"fetch", "Любой метод и тело; ответ приходит в колбэк.",
                  "fetch({.method = \"POST\", .url = \"/api/todos\", .body = json::object({{\"title\", \"Молоко\"}}).dump()},\n"
                  "      [](const FetchResponse& r) { if (r.ok()) ... });"},

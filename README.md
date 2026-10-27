@@ -52,7 +52,17 @@ reactx new my-app && cd my-app      # веб-проект (или --terminal)
 reactx dev                          # сервер на C++, пересборка и обновление страницы при сохранении
 ```
 
-Откройте http://127.0.0.1:8090/ и правьте `src/main.cpp`. Дальше:
+Откройте http://127.0.0.1:8090/ и правьте `src/main.cpp`. `reactx build --native` собирает те же компоненты для терминала — тогда `main` выбирает точку входа: `mountDom` есть только в браузере (нативно это понятная ошибка компиляции), в терминале — `TerminalApp`:
+
+```cpp
+#ifdef __EMSCRIPTEN__
+    mountDom(h(App));
+#else
+    TerminalApp app;  app.run(h(App));   // #include "reactx/terminal.hpp"
+#endif
+```
+
+Дальше:
 
 ```sh
 reactx build                        # build/web/dist — файлы для любого хостинга

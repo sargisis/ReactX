@@ -63,6 +63,7 @@ private:
     NodeHandle root_;
 };
 
+#if defined(__EMSCRIPTEN__)
 // Mounts `element` into the page element matching `container` and keeps it
 // running after main() returns (a web page has no main loop). Returns the Root,
 // e.g. to call render() again later.
@@ -71,5 +72,18 @@ Root& mountDom(Element element, const std::string& container = "#app");
 // Re-renders every mounted app whose state changed outside of a DOM event
 // (a fetch answer, the Back button, a timer). The router and useFetch call it.
 void flushDom();
+#else
+// A native build has no page. Saying so here turns a linker error about a
+// missing rx::mountDom into this message at the call. One main() for both:
+//   #ifdef __EMSCRIPTEN__
+//       mountDom(h(App));
+//   #else
+//       TerminalApp app;  app.run(h(App));
+//   #endif
+Root& mountDom(Element element, const std::string& container = "#app") = delete(
+    "mountDom works only in the browser build (Emscripten): run `reactx build` without --native, "
+    "or put it under #ifdef __EMSCRIPTEN__ and use TerminalApp (reactx/terminal.hpp) natively");
+void flushDom() = delete("flushDom works only in the browser build (Emscripten)");
+#endif
 
 }  // namespace rx

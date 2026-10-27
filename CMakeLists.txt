@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20...3.31)
 # The ReactX version — the only place it is written (Semantic Versioning:
 # MAJOR.MINOR.PATCH; release tags are vMAJOR.MINOR.PATCH, see CHANGELOG.md).
-project(ReactX VERSION 0.8.0 LANGUAGES CXX)
+project(ReactX VERSION 0.8.1 LANGUAGES CXX)
 
 # C++26: GCC 16+ natively, Emscripten 6+ for the web. We use the parts of
 # C++23/C++26 each standard library ships, and nothing it doesn't

@@ -441,6 +441,22 @@ TEST(forward_without_content_length_reads_to_the_end) {
     CHECK(r && r->headers.size() == 1 && r->headers[0].second == "b");
 }
 
+TEST(parse_response_handles_lengths_chunks_and_hostile_sizes) {
+    auto ok = parseResponse("HTTP/1.1 200 OK\r\nContent-Length: 5\r\nX-A: b\r\n\r\nhelloEXTRA");
+    CHECK(ok && ok->body == "hello" && ok->contentType == "application/octet-stream" && ok->headers.size() == 1);
+    CHECK(parseResponse("HTTP/1.1 204 No Content\r\n\r\nignored")->body.empty());
+    CHECK(parseResponse("HTTP/1.1 200 OK\r\nContent-Length: 9\r\n\r\nabc", true)->body.empty());  // HEAD
+    auto cut = parseResponse("HTTP/1.1 200 OK\r\nContent-Length: 9\r\n\r\nabc");
+    CHECK(!cut && cut.error().status == 502);
+    // A Content-Length that overflows size_t is a cut reply, not a short complete one.
+    CHECK(!parseResponse("HTTP/1.1 200 OK\r\nContent-Length: 18446744073709551615\r\n\r\nabc"));
+    // A chunk size near SIZE_MAX used to make the decoder copy the reply again and again.
+    CHECK(!parseResponse("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\nffffffffffffffff\r\n" + std::string(100000, 'x')));
+    CHECK(!parseResponse("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\nfffffffffffffffe\r\nab"));
+    CHECK(!parseResponse("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nab"));  // cut
+    CHECK(!parseResponse("HTTP/1.1 999 Odd\r\n\r\n") && !parseResponse("SSH-2.0\r\n\r\n") && !parseResponse("HTTP/1.1 200"));
+}
+
 TEST(forward_rejects_garbage_and_times_out) {
     OneShotServer garbage("SSH-2.0-OpenSSH\r\n\r\n");
     auto bad = forward({.method = "GET", .path = "/"}, {"127.0.0.1", garbage.port, ""});

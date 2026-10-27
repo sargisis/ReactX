@@ -467,6 +467,7 @@ AGENTS.md         правила и проверки для тех, кто ме�
 - [x] v0.2–0.4: C++26, контракты, рефлексия, props-структуры, санитайзеры в CI, DSL `tag::div`
 - [x] `llms.txt` и `AGENTS.md` для AI-помощников
 - [x] v0.5: `useKeyboard`, `useReducer`, таймеры, события фокуса и прокрутки, SVG
+- [x] v0.7: `errorBoundary`, `createStore` / `useStore`, `useId`, сеть в терминале, быстрее ядро
 - [x] v0.6: готовый `reactx` в GitHub Releases, Docker-образ и devcontainer; `reactx dev --proxy`
 - [ ] Самообновление `reactx`
 - [ ] Свои библиотеки для фронтенда и для работы с C++

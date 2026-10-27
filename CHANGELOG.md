@@ -4,6 +4,10 @@
 
 ## [Не выпущено]
 
+## [0.7.0] — 2026-10-27
+
+Границы ошибок, общее состояние (`createStore` / `useStore`), `useId`, сеть в терминальных приложениях; ядро быстрее на больших списках и с минимумом перестановок узлов; исправлены утечка памяти в контексте, порча дерева после исключения, `<select>` и `javascript:`-ссылки в браузере. Приложения обновляются без правок; в браузере `checked` теперь управляемый (как в React).
+
 ### Добавлено
 
 - **`errorBoundary(fallback, children)`** — граница ошибок, как в React: если дети бросили исключение при отрисовке (при монтировании или позже, при обновлении состояния), вместо них показывается `fallback(RenderError)`, а остальное приложение работает. `RenderError` — `message`, `exception` и `retry()`, чтобы попробовать снова. Если бросил сам запасной вариант, ошибку ловит следующая граница выше.
@@ -147,7 +151,8 @@ ReactX без установки компиляторов: готовый `react
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.6.0...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/sargisis/ReactX/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/sargisis/ReactX/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/sargisis/ReactX/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/sargisis/ReactX/compare/v0.3.0...v0.4.0

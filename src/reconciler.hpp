@@ -35,7 +35,10 @@ struct Fiber : std::enable_shared_from_this<Fiber> {
     std::vector<std::unique_ptr<HookBase>> hooks;
 
     std::shared_ptr<const ContextValueBase> provided;  // Provider only
-    std::vector<std::weak_ptr<Fiber>> consumers;         // Provider only: who read it
+    // Provider only: who read it. Keyed by address for O(1) (un)subscribe;
+    // the weak_ptr guards against a fiber that died without an unmount.
+    std::unordered_map<const Fiber*, std::weak_ptr<Fiber>> consumers;
+    std::vector<Fiber*> providers;  // the providers this fiber reads (ancestors; usually 0-2)
     bool rendered = false;  // component rendered at least once
     bool dirty = false;
     bool alive = true;

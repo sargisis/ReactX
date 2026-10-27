@@ -1,7 +1,10 @@
 // Edge cases of the reconciler and the hooks: useState, useEffect (cleanup
 // order), useContext, memo. Every test counts renders / effect runs, so a
 // change in behaviour shows up as a number, not as a vague diff.
+#include <algorithm>
 #include <functional>
+#include <random>
+#include <sstream>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -321,6 +324,82 @@ TEST(nested_effects_all_clean_up_when_the_parent_goes) {
         cleans += e.ends_with(":clean1");
     }
     CHECK(runs == 2 && cleans == 2);
+}
+
+// =====================================================================
+// Keyed lists: the backend gets the right order with the fewest moves
+// =====================================================================
+
+// Length of the longest strictly increasing subsequence (the slow, obvious way).
+std::size_t lisLength(const std::vector<int>& v) {
+    std::vector<std::size_t> best(v.size(), 1);
+    std::size_t out = 0;
+    for (std::size_t i = 0; i < v.size(); ++i) {
+        for (std::size_t j = 0; j < i; ++j)
+            if (v[j] < v[i]) best[i] = std::max(best[i], best[j] + 1);
+        out = std::max(out, best[i]);
+    }
+    return out;
+}
+
+Element keyedList(const std::vector<int>& ids) {
+    std::vector<Element> items;
+    for (int id : ids) items.push_back(h("i", {{"key", std::to_string(id)}}, {std::to_string(id)}));
+    return h("list", {{"id", "list"}}, std::move(items));
+}
+
+TEST(keyed_lists_reorder_with_the_fewest_moves) {
+    std::mt19937 rng(7);
+    for (int round = 0; round < 400; ++round) {
+        std::vector<int> pool(40);
+        for (int i = 0; i < 40; ++i) pool[static_cast<std::size_t>(i)] = i;
+        auto pick = [&] {
+            std::ranges::shuffle(pool, rng);
+            std::vector<int> ids(pool.begin(), pool.begin() + std::uniform_int_distribution<int>(0, 30)(rng));
+            if (rng() % 3 == 0) std::ranges::sort(ids);  // often mostly in order, like real lists
+            return ids;
+        };
+        std::vector<int> before = pick(), after = pick();
+        if (rng() % 2) {  // or a small edit of `before`
+            after = before;
+            if (!after.empty() && rng() % 2) after.erase(after.begin() + static_cast<long>(rng() % after.size()));
+            if (after.size() > 1) std::swap(after[rng() % after.size()], after[rng() % after.size()]);
+            if (rng() % 2) after.insert(after.begin() + static_cast<long>(rng() % (after.size() + 1)), 100 + round);
+        }
+
+        std::ostringstream log;
+        TextRenderer r(&log);
+        Root root(r);
+        root.render(keyedList(before));
+        std::string list = "#" + std::to_string(byId(r, "list"));
+        log.str("");
+        root.render(keyedList(after));
+
+        TextRenderer fresh;  // the same list mounted from scratch
+        Root freshRoot(fresh);
+        freshRoot.render(keyedList(after));
+        CHECK(r.toString() == fresh.toString());
+
+        // Inserts into the list: every new item once, plus the fewest moves
+        // of kept items (all but a longest run that is already in order).
+        std::vector<int> keptNewPositions;
+        std::size_t added = 0;
+        for (int id : after)
+            if (std::ranges::find(before, id) == before.end()) ++added;
+        for (int id : before)
+            if (auto it = std::ranges::find(after, id); it != after.end())
+                keptNewPositions.push_back(static_cast<int>(it - after.begin()));
+        std::size_t inserts = 0;
+        std::istringstream lines(log.str());
+        for (std::string line; std::getline(lines, line);)
+            if (line.find("] insert ") != std::string::npos && line.find(" into " + list + " ") != std::string::npos) ++inserts;
+        CHECK(inserts == added + keptNewPositions.size() - lisLength(keptNewPositions));
+        if (failures) {
+            std::cerr << "  round " << round << " inserts " << inserts << " added " << added << " kept "
+                      << keptNewPositions.size() << " lis " << lisLength(keptNewPositions) << "\n" << log.str().substr(0, 600);
+            return;
+        }
+    }
 }
 
 // =====================================================================

@@ -364,6 +364,10 @@ add_executable(reactx_tests tests/test_core.cpp)
 target_link_libraries(reactx_tests PRIVATE reactx)
 add_test(NAME reactx_tests COMMAND reactx_tests)
 
+# Timings of the core on big lists (not a test): ./build/release/reactx_bench [rows]
+add_executable(reactx_bench tests/bench_reconciler.cpp)
+target_link_libraries(reactx_bench PRIVATE reactx)
+
 add_executable(reactx_reconciler_tests tests/test_reconciler.cpp)
 target_link_libraries(reactx_reconciler_tests PRIVATE reactx)
 add_test(NAME reactx_reconciler_tests COMMAND reactx_reconciler_tests)

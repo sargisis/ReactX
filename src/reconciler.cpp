@@ -1,7 +1,9 @@
 #include "reconciler.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <stdexcept>
+#include <unordered_map>
 
 #include "reactx/memo.hpp"
 #include "render_context.hpp"
@@ -38,6 +40,43 @@ bool shallowEqual(const Props& a, const Props& b) {
         if (!other || !propEquals(value, *other)) return false;
     }
     return true;
+}
+
+// Counts marked positions before an index in O(log n) (a Fenwick tree).
+class PositionCounter {
+public:
+    explicit PositionCounter(std::size_t n) : tree_(n + 1, 0) {
+        for (std::size_t i = 1; i <= n; ++i) {  // every position starts marked
+            tree_[i] += 1;
+            if (std::size_t parent = i + (i & -i); parent <= n) tree_[parent] += tree_[i];
+        }
+    }
+    void unmark(std::size_t pos) {
+        for (std::size_t i = pos + 1; i < tree_.size(); i += i & -i) --tree_[i];
+    }
+    std::size_t before(std::size_t pos) const {  // marked positions in [0, pos)
+        std::size_t sum = 0;
+        for (std::size_t i = pos; i > 0; i -= i & -i) sum += tree_[i];
+        return sum;
+    }
+
+private:
+    std::vector<std::size_t> tree_;
+};
+
+// Indices (into `seq`) of one longest strictly increasing subsequence.
+std::vector<std::size_t> longestIncreasing(const std::vector<std::size_t>& seq) {
+    std::vector<std::size_t> tails;  // tails[k]: index of the smallest end of a run of length k + 1
+    std::vector<std::size_t> prev(seq.size(), SIZE_MAX);
+    for (std::size_t i = 0; i < seq.size(); ++i) {
+        auto it = std::ranges::lower_bound(tails, seq[i], {}, [&](std::size_t j) { return seq[j]; });
+        if (it != tails.begin()) prev[i] = *(it - 1);
+        if (it == tails.end()) tails.push_back(i);
+        else *it = i;
+    }
+    std::vector<std::size_t> out(tails.size());
+    for (std::size_t k = tails.size(), i = tails.empty() ? SIZE_MAX : tails.back(); k > 0; i = prev[i]) out[--k] = i;
+    return out;
 }
 
 struct BusyGuard {
@@ -221,11 +260,11 @@ void Reconciler::update(Fiber& f, Element e) {
 // Re-render every component that read this provider's value. They are
 // scheduled, so a memo() component in between can't block the update.
 void Reconciler::notifyConsumers(Fiber& provider) {
-    std::erase_if(provider.consumers, [](const std::weak_ptr<Fiber>& w) {
-        auto c = w.lock();
+    std::erase_if(provider.consumers, [](const auto& entry) {
+        auto c = entry.second.lock();
         return !c || !c->alive;
     });
-    for (auto& weak : provider.consumers)
+    for (auto& [address, weak] : provider.consumers)
         if (auto c = weak.lock()) schedule(*c);
 }
 
@@ -279,6 +318,9 @@ void Reconciler::renderComponent(Fiber& f) {
 
 void Reconciler::unmount(Fiber& f) {
     f.alive = false;
+    // Providers are ancestors, so they are still alive here. Without this a
+    // provider whose value never changes would remember every reader forever.
+    for (Fiber* p : std::exchange(f.providers, {})) p->consumers.erase(&f);
     for (auto& child : f.children) unmount(*child);
     for (auto& hook : f.hooks) {
         if (auto* effect = dynamic_cast<EffectHook*>(hook.get()); effect && effect->cleanup)
@@ -311,23 +353,48 @@ void Reconciler::collectNodes(const Fiber& f, std::vector<NodeHandle>& out) cons
     }
 }
 
-// Make the backend children of `host` match the fiber tree.
+// Make the backend children of `host` match the fiber tree with as few
+// moves as possible: nodes on a longest increasing run of their new positions
+// stay where they are, every other node is inserted once. Swapping two rows
+// of a long list moves two nodes, removing rows moves none.
 void Reconciler::sync(Fiber& host) {
     std::vector<NodeHandle> wanted;
     collectNodes(host, wanted);
+    if (wanted == host.attached) return;  // the usual case: nothing moved
 
-    std::vector<NodeHandle> current;
+    std::unordered_map<NodeHandle, std::size_t> wantedIndex;
+    wantedIndex.reserve(wanted.size());
+    for (std::size_t i = 0; i < wanted.size(); ++i) wantedIndex.emplace(wanted[i], i);
+
+    // Detach what is gone; the rest keeps its backend order.
+    std::vector<std::size_t> seq;  // seq[j]: new position of the j-th remaining node
+    std::vector<std::size_t> oldPos(wanted.size(), SIZE_MAX);  // by new position; SIZE_MAX = a new node
     for (NodeHandle n : host.attached) {
-        if (std::ranges::find(wanted, n) == wanted.end()) renderer_.removeChild(host.node, n);
-        else current.push_back(n);
+        auto it = wantedIndex.find(n);
+        if (it == wantedIndex.end()) {
+            renderer_.removeChild(host.node, n);
+            continue;
+        }
+        oldPos[it->second] = seq.size();
+        seq.push_back(it->second);
     }
 
-    for (std::size_t i = 0; i < wanted.size(); ++i) {
-        if (i < current.size() && current[i] == wanted[i]) continue;
-        renderer_.insertChild(host.node, wanted[i], i);
-        auto pos = std::ranges::find(current, wanted[i]);
-        if (pos != current.end()) current.erase(pos);
-        current.insert(current.begin() + static_cast<std::ptrdiff_t>(i), wanted[i]);
+    std::vector<bool> stays(wanted.size(), false);
+    for (std::size_t j : longestIncreasing(seq)) stays[seq[j]] = true;
+
+    // From the end: each node that doesn't stay goes right before the part
+    // already in place. Its index = the old nodes still in front of that part,
+    // i.e. those with a smaller new position, standing before the first
+    // staying node of that part.
+    PositionCounter inFront(seq.size());
+    std::size_t anchor = seq.size();  // old position of the first staying node after i (none: the end)
+    for (std::size_t i = wanted.size(); i-- > 0;) {
+        if (oldPos[i] != SIZE_MAX) inFront.unmark(oldPos[i]);
+        if (stays[i]) {
+            anchor = oldPos[i];
+            continue;
+        }
+        renderer_.insertChild(host.node, wanted[i], inFront.before(anchor));
     }
     host.attached = std::move(wanted);
 }

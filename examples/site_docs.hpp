@@ -48,18 +48,38 @@ inline const std::vector<Page>& pages() {
         {
             "cli", "CLI reactx", "Новый проект, разработка с автообновлением, сборка, зависимости.",
             {
-                {"Установка", "CLI собирается вместе с ReactX; cmake --install кладёт reactx и reactx_serve в bin.",
+                {"Установка", "Готовый reactx для Linux x86-64 лежит в GitHub Releases: распакуйте архив и добавьте bin/ в PATH. "
+                              "Для веб-проектов хватит Emscripten, CMake и Ninja, для терминальных нужен ещё GCC 16. "
+                              "Можно и собрать из исходников: cmake --install кладёт reactx и reactx_serve в bin.",
+                 "# github.com/sargisis/ReactX/releases → reactx-X.Y.Z-linux-x86_64.tar.gz\n"
+                 "tar xzf reactx-*-linux-x86_64.tar.gz && cp reactx-*/bin/* ~/.local/bin/\n\n"
+                 "# или из исходников\n"
                  "cmake --preset release && cmake --build --preset release\n"
                  "cmake --install build/release --prefix ~/.local     # ~/.local/bin/reactx"},
+                {"Docker и devcontainer", "Образ ghcr.io/sargisis/reactx содержит GCC 16, Emscripten и reactx — ставить ничего не нужно. "
+                                          "В контейнере запускайте reactx dev --host 0.0.0.0, иначе страница не откроется снаружи. "
+                                          "reactx new кладёт в проект .devcontainer/ с образом той же версии: VS Code "
+                                          "(«Reopen in Container») и GitHub Codespaces откроют проект сразу со всеми инструментами.",
+                 "docker run --rm -it -u \"$(id -u):$(id -g)\" -v \"$PWD:/app\" -p 8090:8090 ghcr.io/sargisis/reactx\n"
+                 "reactx new my-app && cd my-app && reactx dev --host 0.0.0.0"},
                 {"Новый проект", "reactx new создаёт папку с reactx.json (манифест, как package.json), CMakeLists.txt, "
                                  "CMakePresets.json и src/main.cpp. ReactX подключается с GitHub по тегу релиза "
-                                 "(например, v0.5.0), а не по ветке, поэтому проект не сломается от новых изменений; --local — из исходников, "
+                                 "(например, v0.6.0), а не по ветке, поэтому проект не сломается от новых изменений; --local — из исходников, "
                                  "из которых собран сам CLI. --terminal — терминальное приложение вместо веба.",
                  "reactx new my-app\ncd my-app"},
                 {"reactx dev", "Собирает веб-версию, запускает встроенный сервер на C++ (тот же, что reactx_serve) и следит за "
                                "src/, public/ и манифестом. После каждой удачной пересборки страница в браузере обновляется "
                                "сама; если код не собрался — остаётся прошлая версия, а ошибка видна в терминале.",
-                 "reactx dev              # http://127.0.0.1:8090/\nreactx dev --port 3000"},
+                 "reactx dev              # http://127.0.0.1:8090/\nreactx dev --port 3000\n"
+                 "reactx dev --host 0.0.0.0   # доступен с других устройств и из контейнера"},
+                {"Свой бэкенд: --proxy", "Если API пишется на Flask, Django или Express, reactx dev перешлёт ему запросы под "
+                                         "префиксом (по умолчанию /api) и вернёт ответ как есть — как server.proxy в Vite. "
+                                         "Страница и API тогда на одном адресе, CORS не нужен. Только http://; если бэкенд "
+                                         "не запущен — ответ 502 с причиной.",
+                 "reactx dev --proxy http://127.0.0.1:5000             # /api → Flask\n"
+                 "reactx dev --proxy /graphql=http://127.0.0.1:4000    # свой префикс\n\n"
+                 "# или в reactx.json:\n"
+                 "\"web\": { \"base\": \"/\", \"proxy\": { \"/api\": \"http://127.0.0.1:5000\" } }"},
                 {"reactx build", "Сборка для публикации: build/web/dist — обычные файлы для любого статического хостинга "
                                  "(404.html уже лежит рядом с index.html для маршрутов). Для терминального проекта — "
                                  "build/native/<имя>.", "reactx build"},
@@ -69,17 +89,17 @@ inline const std::vector<Page>& pages() {
                 {"reactx update", "Переводит проект на новейший релиз ReactX: находит теги в репозитории из reactx.json, "
                                   "выбирает самый новый по SemVer (без -rc) и записывает его в rev. --check только проверяет, "
                                   "--to — конкретная версия. Следующий reactx build скачает её сам.",
-                 "reactx update --check   # ReactX v0.4.0 → v0.5.0 is available\n"
-                 "reactx update           # записывает v0.5.0 в reactx.json\n"
+                 "reactx update --check   # ReactX v0.5.0 → v0.6.0 is available\n"
+                 "reactx update           # записывает v0.6.0 в reactx.json\n"
                  "reactx update --to v0.3.0\n"
                  "reactx build"},
                 {"reactx.json", "Всё, что нужно проекту, в одном файле.",
                  "{\n"
                  "  \"name\": \"my-app\",\n"
                  "  \"template\": \"web\",\n"
-                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.5.0\" },\n"
+                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.6.0\" },\n"
                  "  \"dependencies\": { \"fmt\": { \"git\": \"...\", \"rev\": \"11.0.2\", \"target\": \"fmt::fmt\" } },\n"
-                 "  \"web\": { \"base\": \"/\" }\n"
+                 "  \"web\": { \"base\": \"/\", \"proxy\": { \"/api\": \"http://127.0.0.1:5000\" } }\n"
                  "}"},
             },
         },
@@ -92,11 +112,11 @@ inline const std::vector<Page>& pages() {
                            "Что изменилось в каждой версии — в CHANGELOG.md.", ""},
                 {"Версия в коде", "Номер версии записан в одном месте — project(ReactX VERSION ...) в CMakeLists.txt; "
                                   "из него генерируется reactx/version.hpp.",
-                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"0.5.0\"\n"
+                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"0.6.0\"\n"
                  "static_assert(REACTX_VERSION_MAJOR == 0);"},
                 {"Обновиться", "reactx update находит новейший релиз и записывает его в reactx.json; reactx build скачивает его. "
                                "Вручную — поменяйте rev на новый тег.",
-                 "reactx update\n# или в reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.5.0\" }"},
+                 "reactx update\n# или в reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.6.0\" }"},
             },
         },
         {
@@ -342,6 +362,11 @@ inline const std::vector<Page>& pages() {
                  "./build/debug/reactx_serve build/web --port 8090\n"
                  "./build/debug/reactx_serve build/pages/site --base /ReactX/ --not-found 404.html\n"
                  "./build/debug/api_server build/web/app --port 8091 --data todos.json"},
+                {"Прокси", "server.proxy пересылает запросы под префиксом на другой сервер; rx::net::forward отправляет один "
+                           "запрос и возвращает std::expected<Response, HttpError> (502 — не дозвонились, 504 — не ответил).",
+                 "server.proxy(\"/api\", *rx::net::parseUpstream(\"http://127.0.0.1:5000\"));\n\n"
+                 "auto reply = rx::net::forward(req, {.host = \"127.0.0.1\", .port = 5000});\n"
+                 "if (!reply) std::println(\"{}: {}\", reply.error().status, reply.error().message);"},
                 {"Важно", "Сервер рассчитан на разработку на своём компьютере: нет HTTPS и защиты от перегрузки.", ""},
             },
         },

@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -322,6 +323,132 @@ TEST(many_parallel_requests) {
         clients.emplace_back([&, i] { ok[static_cast<std::size_t>(i)] = request(r.port(), "GET", "/n?i=" + std::to_string(i)).body == std::to_string(i); });
     clients.clear();  // join
     CHECK(std::ranges::count(ok, 1) == 32);
+}
+
+// ---- proxy ----
+
+// Accepts one connection on a free port, reads the request head and answers
+// with `reply` (or nothing, if `reply` is empty, until the test ends).
+struct OneShotServer {
+    int fd = ::socket(AF_INET, SOCK_STREAM, 0);
+    int port = 0;
+    std::jthread thread;
+    explicit OneShotServer(std::string reply) {
+        sockaddr_in addr{};
+        addr.sin_family = AF_INET;
+        ::inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
+        ::bind(fd, reinterpret_cast<sockaddr*>(&addr), sizeof addr);
+        ::listen(fd, 1);
+        socklen_t len = sizeof addr;
+        ::getsockname(fd, reinterpret_cast<sockaddr*>(&addr), &len);
+        port = ntohs(addr.sin_port);
+        thread = std::jthread([this, reply = std::move(reply)](std::stop_token stop) {
+            int c = ::accept(fd, nullptr, nullptr);
+            if (c < 0) return;
+            std::string head;
+            char buf[1024];
+            while (head.find("\r\n\r\n") == std::string::npos) {
+                ssize_t n = ::recv(c, buf, sizeof buf, 0);
+                if (n <= 0) break;
+                head.append(buf, static_cast<std::size_t>(n));
+            }
+            if (!reply.empty()) ::send(c, reply.data(), reply.size(), MSG_NOSIGNAL);
+            else
+                while (!stop.stop_requested()) std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            ::close(c);
+        });
+    }
+    ~OneShotServer() {
+        thread.request_stop();
+        ::shutdown(fd, SHUT_RDWR);
+        ::close(fd);
+    }
+};
+
+TEST(parses_upstream_urls) {
+    CHECK((parseUpstream("http://127.0.0.1:5000") == Upstream{"127.0.0.1", 5000, ""}));
+    CHECK((parseUpstream("http://api/v1/") == Upstream{"api", 80, "/v1"}));
+    CHECK((parseUpstream("http://localhost:8000/") == Upstream{"localhost", 8000, ""}));
+    CHECK(!parseUpstream("https://example.com"));
+    CHECK(!parseUpstream("127.0.0.1:5000"));
+    CHECK(!parseUpstream("http://:5000"));
+    CHECK(!parseUpstream("http://host:99999"));
+}
+
+TEST(proxy_forwards_requests_and_replies) {
+    Running backend([](HttpServer& s) {
+        s.get("/api/echo/*", [](const Request& q) {
+            return Response::json("{\"target\": \"" + q.target + "\", \"token\": \"" + q.header("x-token") + "\"}");
+        });
+        s.post("/api/todos", [](const Request& q) {
+            Response r = Response::text("got " + q.body, 201);
+            r.headers.emplace_back("Location", "/api/todos/7");
+            r.headers.emplace_back("Set-Cookie", "a=1");
+            r.headers.emplace_back("Set-Cookie", "b=2");
+            return r;
+        });
+        s.get("/v1/api/x", [](const Request&) { return Response::text("versioned"); });
+    });
+    Running front([&](HttpServer& s) {
+        s.proxy("/api", {"127.0.0.1", backend.port(), ""});
+        s.get("/local", [](const Request&) { return Response::text("mine"); });
+    });
+
+    auto got = rawRequest(front.port(), "GET /api/echo/a%2Fb?x=1 HTTP/1.1\r\nHost: localhost\r\nX-Token: t1\r\n\r\n");
+    CHECK(got.starts_with("HTTP/1.1 200 OK"));
+    CHECK(got.find("application/json") != std::string::npos);
+    CHECK(got.find(R"("target": "/api/echo/a%2Fb?x=1")") != std::string::npos);  // not decoded on the way
+    CHECK(got.find(R"("token": "t1")") != std::string::npos);
+
+    auto created = request(front.port(), "POST", "/api/todos", "milk");
+    CHECK(created.status == 201);
+    CHECK(created.body == "got milk");
+    CHECK(created.hasHeader("Location: /api/todos/7"));
+    CHECK(created.hasHeader("Set-Cookie: a=1") && created.hasHeader("Set-Cookie: b=2"));
+
+    CHECK(request(front.port(), "GET", "/local").body == "mine");  // outside the prefix: not forwarded
+    CHECK(request(front.port(), "GET", "/apis").status == 404);
+    CHECK(request(front.port(), "HEAD", "/api/echo/x").status == 200);
+
+    Running versioned([&](HttpServer& s) { s.proxy("/api", {"127.0.0.1", backend.port(), "/v1"}); });
+    CHECK(request(versioned.port(), "GET", "/api/x").body == "versioned");
+}
+
+TEST(proxy_reports_a_missing_backend) {
+    int closedPort = 0;
+    {
+        Running gone([](HttpServer&) {});
+        closedPort = gone.port();
+    }
+    Running front([&](HttpServer& s) { s.proxy("/api", {"127.0.0.1", closedPort, ""}); });
+    auto r = request(front.port(), "GET", "/api/x");
+    CHECK(r.status == 502);
+    CHECK(r.hasHeader("Bad Gateway"));
+    CHECK(r.body.starts_with("proxy: can't connect to 127.0.0.1:"));
+}
+
+TEST(forward_decodes_chunked_replies) {
+    OneShotServer up("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\n\r\n"
+                     "5\r\nhello\r\n7;ext=1\r\n, world\r\n0\r\n\r\n");
+    auto r = forward({.method = "GET", .path = "/"}, {"127.0.0.1", up.port, ""});
+    CHECK(r && r->status == 200 && r->body == "hello, world" && r->contentType == "text/plain");
+}
+
+TEST(forward_without_content_length_reads_to_the_end) {
+    OneShotServer up("HTTP/1.0 404 Not Found\r\nX-A: b\r\n\r\nno such thing");
+    auto r = forward({.method = "GET", .path = "/"}, {"127.0.0.1", up.port, ""});
+    CHECK(r && r->status == 404 && r->body == "no such thing");
+    CHECK(r && r->headers.size() == 1 && r->headers[0].second == "b");
+}
+
+TEST(forward_rejects_garbage_and_times_out) {
+    OneShotServer garbage("SSH-2.0-OpenSSH\r\n\r\n");
+    auto bad = forward({.method = "GET", .path = "/"}, {"127.0.0.1", garbage.port, ""});
+    CHECK(!bad && bad.error().status == 502);
+
+    OneShotServer silent("");
+    auto slow = forward({.method = "GET", .path = "/"}, {"127.0.0.1", silent.port, ""}, 1);
+    CHECK(!slow && slow.error().status == 504);
 }
 
 }  // namespace

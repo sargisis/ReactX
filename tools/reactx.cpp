@@ -1,7 +1,8 @@
 // reactx — the ReactX command line tool (C++26).
 //
 //   reactx new <name> [--terminal] [--local]   create a project
-//   reactx dev [--port N] [--native]           build, serve, rebuild on changes
+//   reactx dev [--port N] [--host H] [--proxy [PREFIX=]URL] [--native]
+//                                              build, serve, rebuild on changes
 //   reactx build [--native]                    build (web: build/web/dist)
 //   reactx add <name> <git-url> [--rev R] [--target T]
 //   reactx remove <name>
@@ -249,6 +250,8 @@ struct Dependency {
 
 struct WebOptions {
     std::optional<std::string> base;  // <base href>, "/" by default
+    // `reactx dev` forwards these URL prefixes to another server: {"/api": "http://127.0.0.1:5000"}
+    std::optional<std::map<std::string, std::string>> proxy;
 };
 
 struct Manifest {
@@ -477,6 +480,20 @@ h1 { margin: 0; }
 
 constexpr std::string_view kGitignore = "build/\n";
 
+// VS Code "Reopen in Container" / Codespaces: GCC 16, Emscripten and this
+// release's reactx, from the image the release workflow publishes.
+constexpr std::string_view kDevcontainer = R"json({
+  "name": "{{name}}",
+  "image": "ghcr.io/sargisis/reactx:{{version}}",
+  "remoteUser": "dev",
+  "updateRemoteUserUID": true,
+  "forwardPorts": [8090],
+  "customizations": {
+    "vscode": { "extensions": ["ms-vscode.cmake-tools", "llvm-vs-code-extensions.vscode-clangd"] }
+  }
+}
+)json";
+
 constexpr std::string_view kReadme = R"md(# {{name}}
 
 A [ReactX](https://sargisis.github.io/ReactX/) app.
@@ -485,6 +502,9 @@ A [ReactX](https://sargisis.github.io/ReactX/) app.
 reactx dev      # build, serve at http://127.0.0.1:8090/, rebuild on changes
 reactx build    # {{output}}
 ```
+
+No GCC 16 or Emscripten here? Open the folder in VS Code and "Reopen in Container"
+(or in GitHub Codespaces): `.devcontainer/` has everything.
 )md";
 
 // For AI coding agents working in the project (and for people).
@@ -559,7 +579,7 @@ int cmdNew(const std::vector<std::string>& args) {
     if (!terminal) manifest["web"] = rx::json::object({{"base", "/"}});
 
     std::map<std::string, std::string> vars{
-        {"name", name}, {"target", cmakeName(name)},
+        {"name", name}, {"target", cmakeName(name)}, {"version", std::string(kVersion)},
         {"output", terminal ? "build/native/" + cmakeName(name) : "build/web/dist/ (static files for any host)"},
         {"kind", terminal ? "terminal" : "web"},
         {"backend", terminal ? "plus `reactx/terminal.hpp` for `TerminalApp`" : "plus `reactx/dom.hpp` for `mountDom`"},
@@ -576,6 +596,7 @@ int cmdNew(const std::vector<std::string>& args) {
     writeOrFail(dir / ".gitignore", kGitignore);
     writeOrFail(dir / "README.md", fill(std::string(kReadme), vars));
     writeOrFail(dir / "AGENTS.md", fill(std::string(kAgents), vars));
+    if (!local) writeOrFail(dir / ".devcontainer/devcontainer.json", fill(std::string(kDevcontainer), vars));  // the image has no local sources
 
     std::println("Created {} ({} app)\n\n  cd {}\n  reactx dev", name, terminal ? "terminal" : "web", name);
     return 0;
@@ -595,9 +616,11 @@ bool build(const fs::path& root, const std::string& preset) {
     bool manifestChanged = !fresh && fs::last_write_time(root / "reactx.json", ec) > fs::last_write_time(cache, ec);
     if (fresh || manifestChanged) {
         std::vector<std::string> configure{"cmake", "--preset", preset};
-        // ReactX needs GCC 16+ natively; the default `c++` may be older.
-        if (fresh && preset == "native" && !std::getenv("CXX") && !std::string_view(REACTX_CXX_COMPILER).empty())
-            configure.push_back(std::string("-DCMAKE_CXX_COMPILER=") + REACTX_CXX_COMPILER);
+        // ReactX needs GCC 16+ natively; the default `c++` may be older. A downloaded
+        // CLI was built elsewhere: its compiler path may not exist on this machine.
+        std::string_view compiler = REACTX_CXX_COMPILER;
+        if (fresh && preset == "native" && !std::getenv("CXX") && !compiler.empty() && fs::exists(compiler, ec))
+            configure.push_back(std::string("-DCMAKE_CXX_COMPILER=") + std::string(compiler));
         if (run(configure, root) != 0) return false;
     }
     return run({"cmake", "--build", "--preset", preset}, root) == 0;
@@ -658,16 +681,36 @@ void onSignal(int) {
     if (devServer) devServer->stop();
 }
 
+// "--proxy http://127.0.0.1:5000" (prefix /api) or "--proxy /graphql=http://..."
+std::pair<std::string, rx::net::Upstream> proxyRule(std::string_view prefix, std::string_view url) {
+    if (!prefix.starts_with('/')) fail(std::format("dev: proxy prefix \"{}\" must start with /", prefix));
+    auto upstream = rx::net::parseUpstream(url);
+    if (!upstream) fail(std::format("dev: proxy {}: {}", prefix, upstream.error()));
+    return {std::string(prefix), *upstream};
+}
+
 int cmdDev(const std::vector<std::string>& args) {
     fs::path root = projectRoot();
     Manifest manifest = readManifest(root).manifest;
     bool native = isTerminal(manifest);
     int port = 8090;
+    std::string host = "127.0.0.1";
+    std::map<std::string, rx::net::Upstream> proxies;  // reactx.json first, --proxy overrides
+    if (manifest.web && manifest.web->proxy)
+        for (const auto& [prefix, url] : *manifest.web->proxy) proxies.insert(proxyRule(prefix, url));
     for (std::size_t i = 0; i < args.size(); ++i) {
         if (args[i] == "--port" && i + 1 < args.size()) {
             auto parsed = rx::parsePort(args[++i]);
             if (!parsed) fail("dev: " + parsed.error());
             port = *parsed;
+        } else if (args[i] == "--host" && i + 1 < args.size()) {
+            host = args[++i];
+        } else if (args[i] == "--proxy" && i + 1 < args.size()) {
+            std::string_view rule = args[++i];
+            auto eq = rule.find('=');
+            auto [prefix, upstream] = eq == std::string_view::npos ? proxyRule("/api", rule)
+                                                                  : proxyRule(rule.substr(0, eq), rule.substr(eq + 1));
+            proxies.insert_or_assign(prefix, upstream);
         } else if (args[i] == "--native") native = true;
         else fail("dev: unknown option " + args[i]);
     }
@@ -681,12 +724,13 @@ int cmdDev(const std::vector<std::string>& args) {
     if (!build(root, "web")) fail("build failed (fix the error and run reactx dev again)");
 
     std::atomic<int> version{1};
-    rx::net::HttpServer server("127.0.0.1", port);
+    rx::net::HttpServer server(host, port);
     server.get("/__reactx/version", [&version](const rx::net::Request&) {
         auto r = rx::net::Response::text(std::to_string(version.load()));
         r.headers.emplace_back("Cache-Control", "no-store");
         return r;
     });
+    for (const auto& [prefix, upstream] : proxies) server.proxy(prefix, upstream);
     server.serveDirectory(root / "build/web/dist", /*spaFallback=*/true);
     if (auto started = server.tryStart(); !started) fail(started.error());
 
@@ -711,7 +755,9 @@ int cmdDev(const std::vector<std::string>& args) {
         }
     });
 
-    std::println("reactx: http://127.0.0.1:{}/  (Ctrl+C to stop)", server.port());
+    for (const auto& [prefix, upstream] : proxies)
+        std::println("reactx: {} -> http://{}:{}{}", prefix, upstream.host, upstream.port, upstream.path);
+    std::println("reactx: http://{}:{}/  (Ctrl+C to stop)", host == "0.0.0.0" ? "127.0.0.1" : host, server.port());
     std::fflush(stdout);
     server.run();
     devServer = nullptr;
@@ -836,6 +882,8 @@ int usage(std::FILE* out, int code) {
     std::print(out, "reactx {} - the ReactX tool\n\n"
            "  reactx new <name> [--terminal] [--local]   create a project (web by default)\n"
            "  reactx dev [--port N] [--native]           build, serve, rebuild and reload on changes\n"
+           "      [--host 0.0.0.0]                       listen on all interfaces (Docker, phone on Wi-Fi)\n"
+           "      [--proxy [PREFIX=]URL]                 forward PREFIX (default /api) to a backend\n"
            "  reactx build [--native]                    build (web: build/web/dist)\n"
            "  reactx add <name> <git-url> [--rev R] [--target T]   add a dependency\n"
            "  reactx remove <name>                       remove a dependency\n"

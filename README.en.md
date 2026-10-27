@@ -34,13 +34,20 @@
 
 ## Quick start
 
-You need **GCC 16+**, CMake 3.28+ and Ninja; for the browser, [Emscripten](https://emscripten.org) 6+ (the `EMSDK` variable).
+Install `reactx` one of these ways:
 
-```sh
-git clone https://github.com/sargisis/ReactX.git && cd ReactX
-cmake --preset release -DCMAKE_CXX_COMPILER=g++-16 && cmake --build --preset release
-cmake --install build/release --prefix ~/.local          # ~/.local/bin/reactx
-```
+- **A prebuilt `reactx`** for Linux x86-64 — an archive in [GitHub Releases](https://github.com/sargisis/ReactX/releases) (put `bin/reactx` on your `PATH`). Web projects need [Emscripten](https://emscripten.org) 6+ (the `EMSDK` variable), CMake 3.28+ and Ninja; terminal projects also need **GCC 16+**.
+- **Docker** — everything is inside (GCC 16, Emscripten, `reactx`):
+  ```sh
+  docker run --rm -it -u "$(id -u):$(id -g)" -v "$PWD:/app" -p 8090:8090 ghcr.io/sargisis/reactx
+  ```
+  Inside, run `reactx dev --host 0.0.0.0` so the page is reachable from outside. Projects made by `reactx new` open in VS Code "Reopen in Container" and in GitHub Codespaces: they have a `.devcontainer/`.
+- **From source** (GCC 16+, CMake 3.28+, Ninja):
+  ```sh
+  git clone https://github.com/sargisis/ReactX.git && cd ReactX
+  cmake --preset release -DCMAKE_CXX_COMPILER=g++-16 && cmake --build --preset release
+  cmake --install build/release --prefix ~/.local          # ~/.local/bin/reactx
+  ```
 
 ```sh
 reactx new my-app && cd my-app      # a web project (or --terminal)
@@ -53,6 +60,7 @@ Open http://127.0.0.1:8090/ and edit `src/main.cpp`. Next:
 reactx build                        # build/web/dist — files for any static host
 reactx add magic_enum https://github.com/Neargye/magic_enum.git --rev v0.9.8 --target magic_enum::magic_enum
 reactx update                       # move to the newest ReactX release
+reactx dev --proxy http://127.0.0.1:5000   # /api goes to your backend (Flask, Django, Express, ...)
 ```
 
 ## What the code looks like
@@ -305,6 +313,20 @@ server.run();   // until Ctrl+C
 
 It serves files with the right types (`.wasm` → `application/wasm`), never outside the folder (`/../secret` → 403); `--spa` answers router paths with `index.html`, `--base` and `--not-found` mimic GitHub Pages. It is a development server (`127.0.0.1`), not for the open internet: no HTTPS, keep-alive or overload protection.
 
+**A proxy to another backend** (like Vite's `server.proxy`): requests under a prefix go to another server and its answer comes back as is — status, headers (several `Set-Cookie` too), body; the path isn't decoded on the way.
+
+```cpp
+server.proxy("/api", *rx::net::parseUpstream("http://127.0.0.1:5000"));   // /api and /api/...
+auto reply = rx::net::forward(request, {.host = "127.0.0.1", .port = 5000});   // std::expected<Response, HttpError>
+```
+
+```sh
+reactx dev --proxy http://127.0.0.1:5000              # /api -> Flask on :5000
+reactx dev --proxy /graphql=http://127.0.0.1:4000     # your own prefix; --proxy can repeat
+```
+
+Or in `reactx.json`: `"web": {"base": "/", "proxy": {"/api": "http://127.0.0.1:5000"}}`. Plain `http://` only; an unreachable backend gives 502 with the reason, no answer in 30 s gives 504.
+
 </details>
 
 <details>
@@ -439,7 +461,8 @@ AGENTS.md         rules and checks for anyone changing ReactX itself
 - [x] v0.2–0.4: C++26, contracts, reflection, props structs, sanitizers in CI, the `tag::div` DSL
 - [x] `llms.txt` and `AGENTS.md` for AI assistants
 - [x] v0.5: `useKeyboard`, `useReducer`, timers, focus and scroll events, SVG
-- [ ] A prebuilt `reactx` in GitHub Releases and self-updating `reactx update`; a Docker image and a devcontainer
+- [x] v0.6: a prebuilt `reactx` in GitHub Releases, a Docker image and a devcontainer; `reactx dev --proxy`
+- [ ] A self-updating `reactx`
 - [ ] Libraries for the frontend and for working with C++
 - [ ] Later — desktop windows: SDL3 + Skia/ThorVG
 

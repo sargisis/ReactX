@@ -36,12 +36,13 @@ using rx::matchPath;  // shared with the router (reactx/path.hpp)
 using rx::urlDecode;
 
 struct Request {
-    std::string method;  // "GET", "POST", ...
-    std::string path;    // decoded, without the query: "/api/items"
-    std::string query;   // raw, after '?': "page=2&q=milk"
-    std::flat_map<std::string, std::string, std::less<>> headers;  // names in lower case
-    std::string body;
-    std::map<std::string, std::string> pathParams;  // from a route like "/api/todos/:id"
+    std::string method{};  // "GET", "POST", ...
+    std::string path{};    // decoded, without the query: "/api/items"
+    std::string query{};   // raw, after '?': "page=2&q=milk"
+    std::flat_map<std::string, std::string, std::less<>> headers{};  // names in lower case
+    std::string body{};
+    std::map<std::string, std::string> pathParams{};  // from a route like "/api/todos/:id"
+    std::string target{};  // as sent, not decoded: "/api/a%2Fb?page=2" (what a proxy forwards)
 
     std::string header(std::string_view name) const;
     // Decoded value of a query parameter: query "q=milk%20tea" -> param("q") == "milk tea".
@@ -53,8 +54,8 @@ struct Request {
 struct Response {
     int status = 200;
     std::string contentType = "text/plain; charset=utf-8";
-    std::string body;
-    std::vector<std::pair<std::string, std::string>> headers;  // extra headers
+    std::string body{};
+    std::vector<std::pair<std::string, std::string>> headers{};  // extra headers
 
     static Response text(std::string body, int status = 200);
     static Response html(std::string body, int status = 200);
@@ -64,11 +65,29 @@ struct Response {
 // Why a request can't be handled: the status to answer with and a message.
 struct HttpError {
     int status = 400;
-    std::string message;
+    std::string message{};
     bool operator==(const HttpError&) const = default;
 };
 
 using Handler = std::function<Response(const Request&)>;
+
+// Another HTTP server to forward requests to: "http://127.0.0.1:5000" or
+// "http://api:8000/v1" (the path is put in front of the forwarded one).
+struct Upstream {
+    std::string host{};
+    int port = 80;
+    std::string path{};  // "" or "/v1", never ending in '/'
+    bool operator==(const Upstream&) const = default;
+};
+
+// Parses "http://host[:port][/path]". Plain HTTP only: a proxy for local
+// development talks to a backend on the same machine or network.
+std::expected<Upstream, std::string> parseUpstream(std::string_view url);
+
+// Sends `request` to `upstream` (HTTP/1.1, one connection per request) and
+// returns its answer. 502 if the upstream can't be reached or answers
+// nonsense, 504 if it doesn't answer in `timeoutSeconds`.
+std::expected<Response, HttpError> forward(const Request& request, const Upstream& upstream, int timeoutSeconds = 30);
 
 class HttpServer {
 public:
@@ -87,6 +106,11 @@ public:
     void put(std::string path, Handler handler) { route("PUT", std::move(path), std::move(handler)); }
     void patch(std::string path, Handler handler) { route("PATCH", std::move(path), std::move(handler)); }
     void del(std::string path, Handler handler) { route("DELETE", std::move(path), std::move(handler)); }
+
+    // Forward every request under `prefix` ("/api": "/api" and "/api/...")
+    // to another server, like Vite's server.proxy:
+    //   server.proxy("/api", *parseUpstream("http://127.0.0.1:5000"));
+    void proxy(std::string prefix, Upstream upstream);
 
     // Serve files from `root` for GET and HEAD ("/" -> index.html).
     // spaFallback: unknown paths without a file extension get index.html,

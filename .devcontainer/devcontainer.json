@@ -1,0 +1,24 @@
+// Work on ReactX itself in a container with GCC 16, CMake, Ninja and
+// Emscripten (VS Code "Reopen in Container", or GitHub Codespaces).
+// The image is the repository's Dockerfile, the one published as
+// ghcr.io/sargisis/reactx on every release.
+{
+  "name": "ReactX",
+  "build": { "dockerfile": "../Dockerfile", "context": ".." },
+  "remoteUser": "dev",
+  "updateRemoteUserUID": true,
+  "forwardPorts": [8090, 8091, 8092, 8093],
+  "portsAttributes": {
+    "8090": { "label": "web demos / reactx dev" },
+    "8091": { "label": "app + REST API" },
+    "8092": { "label": "site (base /ReactX/)" },
+    "8093": { "label": "site" }
+  },
+  "postCreateCommand": "cmake --preset debug",
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-vscode.cmake-tools", "llvm-vs-code-extensions.vscode-clangd"],
+      "settings": { "cmake.configureOnOpen": false }
+    }
+  }
+}

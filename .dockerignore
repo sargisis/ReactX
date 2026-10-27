@@ -1,0 +1,5 @@
+build/
+.cache/
+gcm.cache/
+.claude/
+.git/

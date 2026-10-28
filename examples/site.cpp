@@ -25,6 +25,7 @@
 #include "reactx/router.hpp"
 #include "reactx/version.hpp"
 #include "site_docs.hpp"
+#include "site_docs_en.hpp"
 
 using namespace rx;
 
@@ -55,11 +56,35 @@ EM_JS(void, site_js_remove_boot, (), {
     if (boot) boot.remove();
 });
 
+// The language: saved choice, else the browser's (Russian or English).
+EM_JS(char*, site_js_lang, (), {
+    let l = null;
+    try { l = localStorage.getItem("rx-lang"); } catch (e) {}
+    if (l !== "ru" && l !== "en") l = (navigator.language || "").toLowerCase().startsWith("ru") ? "ru" : "en";
+    document.documentElement.lang = l;
+    return stringToNewUTF8(l);
+});
+EM_JS(void, site_js_set_lang, (const char* lang), {
+    const l = UTF8ToString(lang);
+    document.documentElement.lang = l;
+    try { localStorage.setItem("rx-lang", l); } catch (e) {}
+});
+
 std::string currentTheme() {
     char* t = site_js_theme();
     std::string out(t);
     std::free(t);
     return out;
+}
+
+// The site language, shared by every component ("en" or "ru"); main() sets it.
+const auto SiteLang = createStore(std::string("en"));
+
+bool useEnglish() { return useStore(SiteLang) == "en"; }
+
+// The text in the current language.
+std::string tr(bool en, std::string_view english, std::string_view russian) {
+    return std::string(en ? english : russian);
 }
 
 void useTitle(const std::string& title) {
@@ -239,17 +264,18 @@ struct CodeProps {
 // A code block with highlighting and a copy button.
 Element CodeBlock(const CodeProps& p) {
     auto [copies, setCopies] = useState(0);
+    bool en = useEnglish();
     Lang lang = detect(p.code);
     const auto& tokens = useMemo([&] { return Highlighter(lang).run(p.code); }, deps(p.code));
 
-    std::vector<Element> copy{"копировать"};
+    std::vector<Element> copy{tr(en, "copy", "копировать")};
     // A new key on each click restarts the "скопировано" animation.
-    if (copies > 0) copy.push_back(h("span", {{"className", "copied"}, {"key", std::to_string(copies)}}, {"скопировано"}));
+    if (copies > 0) copy.push_back(h("span", {{"className", "copied"}, {"key", std::to_string(copies)}}, {tr(en, "copied", "скопировано")}));
     return h("figure", {{"className", "code"}}, {
         h("div", {{"className", "code-bar"}}, {
             h("span", {}, {p.title.empty() ? std::string(langName(lang)) : p.title}),
             h("button", {{"className", "copy"},
-                         {"aria-label", "Скопировать код"},
+                         {"aria-label", tr(en, "Copy the code", "Скопировать код")},
                          {"onClick", [code = p.code, setCopies] {
                               site_js_copy(code.c_str());
                               setCopies([](int n) { return n + 1; });
@@ -263,15 +289,30 @@ Element CodeBlock(const CodeProps& p) {
 Element ThemeToggle(const Props&) {
     auto [theme, setTheme] = useState(currentTheme());
     bool dark = theme == "dark";
+    bool en = useEnglish();
     return h("button", {{"className", "icon-btn"},
-                        {"title", dark ? "Светлая тема" : "Тёмная тема"},
-                        {"aria-label", "Переключить тему"},
+                        {"title", dark ? tr(en, "Light theme", "Светлая тема") : tr(en, "Dark theme", "Тёмная тема")},
+                        {"aria-label", tr(en, "Switch theme", "Переключить тему")},
                         {"onClick", [dark, setTheme] {
                              std::string next = dark ? "light" : "dark";
                              site_js_set_theme(next.c_str());
                              setTheme(next);
                          }}},
              {dark ? "☀" : "☾"});
+}
+
+// EN | RU: switches the whole site, remembered in localStorage.
+Element LangToggle(const Props&) {
+    bool en = useEnglish();
+    return h("button", {{"className", "icon-btn lang-btn"},
+                        {"title", en ? "Русский" : "English"},
+                        {"aria-label", en ? "Switch to Russian" : "Switch to English"},
+                        {"onClick", [en] {
+                             std::string next = en ? "ru" : "en";
+                             site_js_set_lang(next.c_str());
+                             SiteLang.set(next);
+                         }}},
+             {en ? "RU" : "EN"});
 }
 
 // ---- home ----
@@ -284,6 +325,7 @@ struct LiveCounterProps {
 // button) and as TerminalRenderer would draw it in a terminal.
 Element LiveCounter(const LiveCounterProps& p) {
     auto [count, setCount] = useState(p.start);
+    bool en = useEnglish();
     auto inc = [setCount] { setCount([](int c) { return c + 1; }); };
     auto reset = [setCount] { setCount(0); };
 
@@ -313,7 +355,7 @@ Element LiveCounter(const LiveCounterProps& p) {
             h("div", {{"className", "panel"}}, {
                 h("div", {{"className", "panel-bar"}}, {
                     h("span", {{"className", "dots"}}, {h("i"), h("i"), h("i")}),
-                    "браузер",
+                    tr(en, "browser", "браузер"),
                     h("span", {{"className", "tag"}}, {"DomRenderer"}),
                 }),
                 h("div", {{"className", "browser-view"}}, {
@@ -322,13 +364,13 @@ Element LiveCounter(const LiveCounterProps& p) {
                         h("button", {{"className", "btn primary"}, {"onClick", inc}}, {"+1"}),
                         h("button", {{"className", "btn"}, {"onClick", reset}}, {"reset"}),
                     }),
-                    h("div", {{"className", "hint"}}, {"нажмите — обновятся оба"}),
+                    h("div", {{"className", "hint"}}, {tr(en, "click — both update", "нажмите — обновятся оба")}),
                 }),
             }),
             h("div", {{"className", "panel"}}, {
                 h("div", {{"className", "panel-bar"}}, {
                     h("span", {{"className", "dots"}}, {h("i"), h("i"), h("i")}),
-                    "терминал",
+                    tr(en, "terminal", "терминал"),
                     h("span", {{"className", "tag"}}, {"TerminalRenderer"}),
                 }),
                 h("pre", {{"className", "term-view"}, {"aria-hidden", "true"}}, {
@@ -351,16 +393,19 @@ Element Feature(std::string title, std::vector<Element> text) {
 Element code(std::string s) { return h("code", {}, {std::move(s)}); }
 
 Element Home(const Props&) {
-    useTitle("ReactX — React на C++26");
+    bool en = useEnglish();
+    useTitle(tr(en, "ReactX — React for C++26", "ReactX — React на C++26"));
     return h("div", {{"className", "wrap"}}, {
         h("section", {{"className", "hero"}}, {
             h("div", {}, {
                 h("span", {{"className", "eyebrow"}}, {h("b", {}, {"●"}), std::format("v{} · C++26 · WebAssembly", rx::version())}),
-                h("h1", {}, {"React", h("br"), "на ", h("em", {}, {"C++26"}), "."}),
+                en ? h("h1", {}, {"React", h("br"), "for ", h("em", {}, {"C++26"}), "."})
+                   : h("h1", {}, {"React", h("br"), "на ", h("em", {}, {"C++26"}), "."}),
                 h("p", {{"className", "lead"}},
-                  {"Компоненты, хуки и reconciler — как в React. Один и тот же код рисуется в терминале и в браузере."}),
+                  {tr(en, "Components, hooks and a reconciler — like React, in C++. The same code draws in the terminal and in the browser.",
+                      "Компоненты, хуки и reconciler — как в React. Один и тот же код рисуется в терминале и в браузере.")}),
                 h("div", {{"className", "btn-row"}}, {
-                    router::link({.to = "/docs/start", .label = "Быстрый старт →", .className = "btn primary", .activeClassName = ""}),
+                    router::link({.to = "/docs/start", .label = tr(en, "Get started →", "Быстрый старт →"), .className = "btn primary", .activeClassName = ""}),
                     h("a", {{"className", "btn"}, {"href", "https://github.com/sargisis/ReactX"}}, {"GitHub"}),
                 }),
             }),
@@ -368,34 +413,44 @@ Element Home(const Props&) {
         }),
 
         h("section", {{"className", "section"}}, {
-            h("div", {{"className", "section-head"}}, {h("h2", {}, {"Что внутри"}), h("span", {}, {"всё на C++, без JavaScript"})}),
+            h("div", {{"className", "section-head"}}, {h("h2", {}, {tr(en, "What's inside", "Что внутри")}),
+                                                       h("span", {}, {tr(en, "all C++, no JavaScript", "всё на C++, без JavaScript")})}),
             h("div", {{"className", "features"}}, {
-                Feature("Хуки", {code("useState"), " ", code("useEffect"), " ", code("useMemo"), " ", code("useCallback"), " ",
-                                 code("useContext"), " — как в React."}),
-                Feature("Props — структура", {code("h(Counter, {.start = 5})"), ": опечатку в имени поля ловит компилятор."}),
-                Feature("Два бэкенда", {"Терминал (ANSI, Flexbox на Yoga) и браузер (DOM через WebAssembly)."}),
-                Feature("Роутер и данные", {"Страницы, ссылки, ", code("useFetch"), ", свой JSON с рефлексией C++26."}),
-                Feature("Сервер на C++", {"HTTP-сервер с маршрутами; CLI ", code("reactx dev"), " пересобирает и обновляет страницу."}),
-                Feature("Современный C++", {"Контракты, ", code("std::expected"), ", ", code("std::mdspan"), ", ", code("std::flat_map"),
-                                            ", модуль ", code("import reactx;"), "."}),
+                Feature(tr(en, "Hooks", "Хуки"), {code("useState"), " ", code("useEffect"), " ", code("useReducer"), " ", code("useStore"), " ",
+                                                  code("useContext"), tr(en, " — like in React.", " — как в React.")}),
+                Feature(tr(en, "Typed props", "Props — структура"), {code("h(Counter, {.start = 5})"),
+                                                                     tr(en, ": a typo in a field name is a compile error.", ": опечатку в имени поля ловит компилятор.")}),
+                Feature(tr(en, "Two backends", "Два бэкенда"), {tr(en, "Terminal (ANSI, Flexbox layout) and browser (the DOM through WebAssembly).",
+                                                                  "Терминал (ANSI, Flexbox на Yoga) и браузер (DOM через WebAssembly).")}),
+                Feature(tr(en, "Router and data", "Роутер и данные"), {tr(en, "Pages, links, ", "Страницы, ссылки, "), code("useFetch"),
+                                                                       tr(en, ", JSON with C++26 reflection.", ", свой JSON с рефлексией C++26.")}),
+                Feature(tr(en, "C++ dev server", "Сервер на C++"), {code("reactx dev"), tr(en, " rebuilds and reloads the page on every save; ", " пересобирает и обновляет страницу при сохранении; "),
+                                                                    code("--proxy"), tr(en, " for your own backend.", " — для своего бэкенда.")}),
+                Feature(tr(en, "Safe by default", "Надёжность"), {tr(en, "Error boundaries, ", "Границы ошибок, "), code("std::expected"),
+                                                                  tr(en, ", contracts; every change runs sanitizers and fuzzing.",
+                                                                     ", контракты; каждое изменение проверяется санитайзерами и фаззингом.")}),
             }),
         }),
 
         h("section", {{"className", "section"}}, {
-            h("div", {{"className", "section-head"}}, {h("h2", {}, {"Быстрый старт"}), h("span", {}, {"три команды"})}),
+            h("div", {{"className", "section-head"}}, {h("h2", {}, {tr(en, "Get started", "Быстрый старт")}), h("span", {}, {tr(en, "three commands", "три команды")})}),
             h("div", {{"className", "steps"}}, {
                 h("div", {{"className", "step"}, {"key", "1"}}, {
-                    h("div", {}, {h("h3", {}, {"Установите CLI"}), h("p", {}, {"Нужны GCC 16, CMake и Ninja; для браузера — Emscripten. Один раз."}),}),
-                    h(CodeBlock, {.code = "cmake --preset release -DCMAKE_CXX_COMPILER=g++-16\n"
-                                          "cmake --build --preset release\n"
-                                          "cmake --install build/release --prefix ~/.local"}),
+                    h("div", {}, {h("h3", {}, {tr(en, "Install reactx", "Установите reactx")}),
+                                  h("p", {}, {tr(en, "Download it from GitHub Releases (Linux x86-64). Browser apps also need Emscripten.",
+                                                 "Скачайте из GitHub Releases (Linux x86-64). Для браузера нужен ещё Emscripten.")}),}),
+                    h(CodeBlock, {.code = "# github.com/sargisis/ReactX/releases\n"
+                                          "tar xzf reactx-*-linux-x86_64.tar.gz\n"
+                                          "cp reactx-*/bin/* ~/.local/bin/"}),
                 }),
                 h("div", {{"className", "step"}, {"key", "2"}}, {
-                    h("div", {}, {h("h3", {}, {"Создайте проект"}), h("p", {}, {"Веб-приложение или, с --terminal, программа для терминала."}),}),
+                    h("div", {}, {h("h3", {}, {tr(en, "Create an app", "Создайте проект")}),
+                                  h("p", {}, {tr(en, "A web app, or with --terminal a terminal app.", "Веб-приложение или, с --terminal, программа для терминала.")}),}),
                     h(CodeBlock, {.code = "reactx new my-app\ncd my-app"}),
                 }),
                 h("div", {{"className", "step"}, {"key", "3"}}, {
-                    h("div", {}, {h("h3", {}, {"Запустите"}), h("p", {}, {"Сервер на C++ пересобирает и обновляет страницу при каждом сохранении."}),}),
+                    h("div", {}, {h("h3", {}, {tr(en, "Run it", "Запустите")}),
+                                  h("p", {}, {tr(en, "The page rebuilds and reloads every time you save.", "Страница пересобирается и обновляется при каждом сохранении.")}),}),
                     h(CodeBlock, {.code = "reactx dev"}),
                 }),
             }),
@@ -403,9 +458,10 @@ Element Home(const Props&) {
 
         h("section", {{"className", "section"}}, {
             h("div", {{"className", "cta"}}, {
-                h("div", {}, {h("h2", {}, {"Этот сайт написан на ReactX"}),
-                              h("p", {}, {"Роутер, компоненты и подсветка кода — C++, скомпилированный в WebAssembly."})}),
-                router::link({.to = "/docs", .label = "Документация →", .className = "btn primary", .activeClassName = ""}),
+                h("div", {}, {h("h2", {}, {tr(en, "This site is built with ReactX", "Этот сайт написан на ReactX")}),
+                              h("p", {}, {tr(en, "The router, the components and the code highlighting — C++ compiled to WebAssembly.",
+                                             "Роутер, компоненты и подсветка кода — C++, скомпилированный в WebAssembly.")})}),
+                router::link({.to = "/docs", .label = tr(en, "Documentation →", "Документация →"), .className = "btn primary", .activeClassName = ""}),
             }),
         }),
     });
@@ -414,30 +470,32 @@ Element Home(const Props&) {
 // ---- docs ----
 
 struct Group {
-    std::string_view title;
+    std::string_view en, ru;
     std::vector<std::string_view> slugs;
 };
 
 const std::vector<Group>& groups() {
     static const std::vector<Group> all = {
-        {"Начало", {"start", "cli", "versions", "safety"}},
-        {"Основы", {"elements", "hooks", "context", "events"}},
-        {"Платформы", {"terminal", "browser", "ui"}},
-        {"Приложения", {"router", "data", "server"}},
+        {"Start", "Начало", {"start", "cli", "versions", "safety"}},
+        {"Basics", "Основы", {"elements", "hooks", "context", "events"}},
+        {"Platforms", "Платформы", {"terminal", "browser", "ui"}},
+        {"Apps", "Приложения", {"router", "data", "server"}},
     };
     return all;
 }
 
-const site_docs::Page* findPage(std::string_view slug) {
-    const auto& all = site_docs::pages();
+const std::vector<site_docs::Page>& docPages(bool en) { return en ? site_docs::pagesEn() : site_docs::pages(); }
+
+const site_docs::Page* findPage(std::string_view slug, bool en) {
+    const auto& all = docPages(en);
     auto it = std::ranges::find(all, slug, &site_docs::Page::slug);
     return it == all.end() ? nullptr : &*it;
 }
 
-std::string_view groupOf(std::string_view slug) {
+std::string groupOf(std::string_view slug, bool en) {
     for (const auto& g : groups())
-        if (std::ranges::find(g.slugs, slug) != g.slugs.end()) return g.title;
-    return "Документация";
+        if (std::ranges::find(g.slugs, slug) != g.slugs.end()) return std::string(en ? g.en : g.ru);
+    return tr(en, "Documentation", "Документация");
 }
 
 // Lower case for ASCII and Russian letters (enough for the search box).
@@ -465,6 +523,7 @@ struct SidebarProps {
 Element Sidebar(const SidebarProps& p) {
     auto [query, setQuery] = useState(std::string{});
     auto [open, setOpen] = useState(false);
+    bool en = useEnglish();
     std::string location = router::useLocation();
     useEffect([setOpen] { setOpen(false); }, deps(location));  // close the mobile menu after a click
 
@@ -473,28 +532,29 @@ Element Sidebar(const SidebarProps& p) {
     for (const auto& g : groups()) {
         std::vector<Element> links;
         for (auto slug : g.slugs) {
-            const auto* page = findPage(slug);
+            const auto* page = findPage(slug, en);
             if (!page) continue;
             if (!q.empty() && lower(page->title).find(q) == std::string::npos && lower(page->summary).find(q) == std::string::npos)
                 continue;
             links.push_back(router::link({.to = "/docs/" + page->slug, .label = page->title, .key = page->slug}));
         }
         if (links.empty()) continue;
-        std::vector<Element> group{h("div", {{"className", "group-title"}}, {std::string(g.title)})};
+        std::string title(en ? g.en : g.ru);
+        std::vector<Element> group{h("div", {{"className", "group-title"}}, {title})};
         for (auto& l : links) group.push_back(std::move(l));
-        blocks.push_back(h("div", {{"className", "group"}, {"key", std::string(g.title)}}, std::move(group)));
+        blocks.push_back(h("div", {{"className", "group"}, {"key", title}}, std::move(group)));
     }
-    if (blocks.empty()) blocks.push_back(h("div", {{"className", "nothing"}}, {"ничего не найдено"}));
+    if (blocks.empty()) blocks.push_back(h("div", {{"className", "nothing"}}, {tr(en, "nothing found", "ничего не найдено")}));
 
-    const auto* page = findPage(p.current);
+    const auto* page = findPage(p.current, en);
     return fragment({
         h("button", {{"className", "menu-btn"}, {"aria-expanded", open ? "true" : "false"},
                      {"onClick", [open, setOpen] { setOpen(!open); }}},
-          {page ? page->title : std::string("Разделы"), h("span", {}, {open ? "✕" : "☰"})}),
-        h("aside", {{"className", open ? "sidebar open" : "sidebar"}, {"aria-label", "Разделы документации"}}, {
+          {page ? page->title : tr(en, "Sections", "Разделы"), h("span", {}, {open ? "✕" : "☰"})}),
+        h("aside", {{"className", open ? "sidebar open" : "sidebar"}, {"aria-label", tr(en, "Documentation sections", "Разделы документации")}}, {
             h("div", {{"className", "search-wrap"}}, {
-                h("input", {{"className", "search"}, {"type", "text"}, {"placeholder", "поиск"}, {"value", query},
-                            {"aria-label", "Поиск по разделам"},
+                h("input", {{"className", "search"}, {"type", "text"}, {"placeholder", tr(en, "search", "поиск")}, {"value", query},
+                            {"aria-label", tr(en, "Search the docs", "Поиск по разделам")},
                             {"onInput", [setQuery](const std::string& text) { setQuery(text); }}}),
             }),
             fragment(std::move(blocks)),
@@ -508,12 +568,14 @@ struct TocProps {
 
 // "On this page": buttons that scroll to the sections (s-0, s-1, ...).
 Element Toc(const TocProps& p) {
-    std::vector<Element> items{h("div", {{"className", "toc-title"}}, {"На странице"})};
+    bool en = useEnglish();
+    std::string title = tr(en, "On this page", "На странице");
+    std::vector<Element> items{h("div", {{"className", "toc-title"}}, {title})};
     for (std::size_t i = 0; i < p.headings.size(); ++i) {
         std::string id = "s-" + std::to_string(i);
         items.push_back(h("button", {{"key", id}, {"onClick", [id] { site_js_scroll_to(id.c_str()); }}}, {p.headings[i]}));
     }
-    return h("nav", {{"className", "toc"}, {"aria-label", "На странице"}}, std::move(items));
+    return h("nav", {{"className", "toc"}, {"aria-label", title}}, std::move(items));
 }
 
 std::vector<Element> paragraphs(const std::string& text) {
@@ -527,46 +589,49 @@ std::vector<Element> paragraphs(const std::string& text) {
     return out;
 }
 
-Element DocsIndex() {
+Element DocsIndex(bool en) {
     std::vector<Element> blocks;
     for (const auto& g : groups()) {
         for (auto slug : g.slugs) {
-            const auto* page = findPage(slug);
+            const auto* page = findPage(slug, en);
             if (!page) continue;
             blocks.push_back(router::link({.to = "/docs/" + page->slug,
-                                           .children = {h("small", {}, {std::string(g.title)}), h("b", {}, {page->title}),
+                                           .children = {h("small", {}, {std::string(en ? g.en : g.ru)}), h("b", {}, {page->title}),
                                                         h("span", {}, {page->summary})},
                                            .className = "doc-card", .activeClassName = "", .key = page->slug}));
         }
     }
     return h("div", {{"className", "article"}}, {
         h("div", {{"className", "crumbs"}}, {"~/docs"}),
-        h("h1", {}, {"Документация"}),
-        h("p", {{"className", "lead"}}, {"Всё, что есть в ReactX: от первого компонента до сервера на C++."}),
+        h("h1", {}, {tr(en, "Documentation", "Документация")}),
+        h("p", {{"className", "lead"}}, {tr(en, "Everything ReactX has, from your first component to a C++ server. New here? Start with Getting started.",
+                                            "Всё, что есть в ReactX: от первого компонента до сервера на C++. Впервые здесь? Начните с «Быстрого старта».")}),
         h("div", {{"className", "doc-index"}}, std::move(blocks)),
     });
 }
 
 Element Docs(const Props&) {
+    bool en = useEnglish();
     std::string slug = router::useParam("page");
-    const auto* page = findPage(slug);
-    useTitle(page ? page->title + " — ReactX" : std::string("Документация — ReactX"));
+    const auto* page = findPage(slug, en);
+    useTitle(page ? page->title + " — ReactX" : tr(en, "Documentation — ReactX", "Документация — ReactX"));
 
     Element body;
     Element toc = fragment({});
     if (slug.empty()) {
-        body = DocsIndex();
+        body = DocsIndex(en);
     } else if (!page) {
         body = h("div", {{"className", "article"}}, {
-            h("h1", {}, {"Нет такого раздела"}),
-            h("p", {{"className", "lead"}}, {"Раздела «" + slug + "» нет. Выберите другой в меню."}),
-            router::link({.to = "/docs", .label = "← Вся документация", .className = "btn", .activeClassName = ""}),
+            h("h1", {}, {tr(en, "No such page", "Нет такого раздела")}),
+            h("p", {{"className", "lead"}}, {tr(en, "There is no page \"" + slug + "\". Pick another one in the menu.",
+                                                "Раздела «" + slug + "» нет. Выберите другой в меню.")}),
+            router::link({.to = "/docs", .label = tr(en, "← All docs", "← Вся документация"), .className = "btn", .activeClassName = ""}),
         });
     } else {
-        const auto& all = site_docs::pages();
+        const auto& all = docPages(en);
         std::vector<Element> article{
             h("div", {{"className", "crumbs"}}, {router::link({.to = "/docs", .label = "~/docs", .activeClassName = ""}),
-                                                 " / " + std::string(groupOf(slug))}),
+                                                 " / " + groupOf(slug, en)}),
             h("h1", {}, {page->title}),
             h("p", {{"className", "lead"}}, {page->summary}),
         };
@@ -583,13 +648,13 @@ Element Docs(const Props&) {
         std::vector<Element> pager;
         if (it != all.begin())
             pager.push_back(router::link({.to = "/docs/" + (it - 1)->slug,
-                                          .children = {h("small", {}, {"← назад"}), h("b", {}, {(it - 1)->title})},
+                                          .children = {h("small", {}, {tr(en, "← previous", "← назад")}), h("b", {}, {(it - 1)->title})},
                                           .className = "prev", .activeClassName = "", .key = "prev"}));
         if (it + 1 != all.end())
             pager.push_back(router::link({.to = "/docs/" + (it + 1)->slug,
-                                          .children = {h("small", {}, {"дальше →"}), h("b", {}, {(it + 1)->title})},
+                                          .children = {h("small", {}, {tr(en, "next →", "дальше →")}), h("b", {}, {(it + 1)->title})},
                                           .className = "next", .activeClassName = "", .key = "next"}));
-        article.push_back(h("nav", {{"className", "pager"}, {"aria-label", "Соседние разделы"}}, std::move(pager)));
+        article.push_back(h("nav", {{"className", "pager"}, {"aria-label", tr(en, "Previous and next", "Соседние разделы")}}, std::move(pager)));
         body = h("article", {{"className", "article"}, {"key", slug}}, std::move(article));
         toc = h(Toc, {.headings = std::move(headings)});
     }
@@ -606,33 +671,37 @@ Element Docs(const Props&) {
 // ---- other pages ----
 
 Element Demos(const Props&) {
-    useTitle("Демо — ReactX");
-    auto demo = [](const char* file, const char* title, const char* text) {
+    bool en = useEnglish();
+    useTitle(tr(en, "Demos — ReactX", "Демо — ReactX"));
+    auto demo = [en](const char* file, std::string title, std::string text) {
         // Plain <a>: separate pages, not routes of this app.
         return h("a", {{"className", "doc-card"}, {"href", file}, {"key", file}},
-                 {h("small", {}, {"демо"}), h("b", {}, {title}), h("span", {}, {text})});
+                 {h("small", {}, {tr(en, "demo", "демо")}), h("b", {}, {title}), h("span", {}, {text})});
     };
     return h("div", {{"className", "wrap page"}}, {
-        h("h1", {}, {"Демо"}),
-        h("p", {{"className", "lead"}}, {"Отдельные страницы — каждая это ReactX в WebAssembly."}),
+        h("h1", {}, {tr(en, "Demos", "Демо")}),
+        h("p", {{"className", "lead"}}, {tr(en, "Separate pages, each one ReactX in WebAssembly.", "Отдельные страницы — каждая это ReactX в WebAssembly.")}),
         h("div", {{"className", "doc-index"}}, {
-            demo("web_counter.html", "Счётчик", "useState и события"),
-            demo("web_ui_demo.html", "Компоненты rx::ui", "вкладки, список, поле ввода, тема, модальное окно"),
+            demo("web_counter.html", tr(en, "Counter", "Счётчик"), tr(en, "useState and events", "useState и события")),
+            demo("web_ui_demo.html", tr(en, "rx::ui components", "Компоненты rx::ui"),
+                 tr(en, "tabs, a list, an input, a theme, a dialog", "вкладки, список, поле ввода, тема, модальное окно")),
         }),
     });
 }
 
 Element NotFound(const Props&) {
+    bool en = useEnglish();
     useTitle("404 — ReactX");
     return h("div", {{"className", "wrap page"}}, {
         h("p", {{"className", "big-404"}}, {"404"}),
-        h("h1", {}, {"Такой страницы нет"}),
+        h("h1", {}, {tr(en, "No such page", "Такой страницы нет")}),
         h("p", {{"className", "lead mono"}}, {"$ cd " + router::useLocation() + "\nno such file or directory"}),
-        router::link({.to = "/", .label = "← На главную", .className = "btn primary", .activeClassName = ""}),
+        router::link({.to = "/", .label = tr(en, "← Home", "← На главную"), .className = "btn primary", .activeClassName = ""}),
     });
 }
 
 Element Site(const Props&) {
+    bool en = useEnglish();
     return fragment({
         h("header", {{"className", "header"}}, {
             h("div", {{"className", "wrap"}}, {
@@ -641,11 +710,12 @@ Element Site(const Props&) {
                                            h("span", {{"className", "brand-text"}},
                                              {"ReactX", h("span", {{"className", "brand-cursor"}}, {"_"})})},
                               .className = "brand", .activeClassName = ""}),
-                h("nav", {{"className", "topnav"}, {"aria-label", "Основное меню"}}, {
+                h("nav", {{"className", "topnav"}, {"aria-label", tr(en, "Main menu", "Основное меню")}}, {
                     router::link({.to = "/docs", .label = "docs", .key = "docs"}),
                     router::link({.to = "/demos", .label = "demos", .key = "demos"}),
                     h("a", {{"href", "https://github.com/sargisis/ReactX"}, {"className", "gh"}, {"key", "gh"}}, {"github"}),
                 }),
+                h(LangToggle),
                 h(ThemeToggle),
             }),
         }),
@@ -661,8 +731,8 @@ Element Site(const Props&) {
         h("footer", {{"className", "footer"}}, {
             h("div", {{"className", "wrap"}}, {
                 h("span", {}, {std::format("ReactX v{} · C++26 → WebAssembly", rx::version())}),
-                h("span", {}, {"Этот сайт написан на ReactX · ",
-                               h("a", {{"href", "https://github.com/sargisis/ReactX"}}, {"исходники"})}),
+                h("span", {}, {tr(en, "This site is built with ReactX · ", "Этот сайт написан на ReactX · "),
+                               h("a", {{"href", "https://github.com/sargisis/ReactX"}}, {tr(en, "source", "исходники")})}),
             }),
         }),
     });
@@ -671,6 +741,9 @@ Element Site(const Props&) {
 }  // namespace
 
 int main() {
+    char* lang = site_js_lang();
+    SiteLang.set(lang);
+    std::free(lang);
     site_js_remove_boot();
     mountDom(h(Site));
 }

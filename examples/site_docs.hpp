@@ -31,16 +31,49 @@ inline const std::vector<Page>& pages() {
                             "что действительно изменилось.\n\n"
                             "Один и тот же код компонентов работает в двух местах: в браузере (через WebAssembly) и в терминале "
                             "(текстовый интерфейс). JavaScript, Node и npm не нужны.", ""},
-                {"1. Установите", "Скачайте готовый reactx для Linux x86-64 из GitHub Releases и положите в PATH. Для приложений "
-                                  "в браузере нужны ещё Emscripten, CMake и Ninja; для терминальных — GCC 16.\n\n"
-                                  "Не хотите ничего ставить? В Docker-образе ghcr.io/sargisis/reactx есть всё (см. «CLI reactx»).",
+                {"1. Установка: Arch Linux",
+                 "В Arch Linux компилятор и инструменты сборки ставятся через pacman одной командой:\n\n"
+                 "- Компилятор GCC 16, CMake, Ninja и Git\n"
+                 "- Emscripten для сборки в WebAssembly\n"
+                 "- Готовый reactx из GitHub Releases либо сборка из исходников",
+                 "# Установка инструментов\n"
+                 "sudo pacman -S gcc cmake ninja git emscripten\n\n"
+                 "# Скачать готовый CLI reactx:\n"
                  "# github.com/sargisis/ReactX/releases -> reactx-X.Y.Z-linux-x86_64.tar.gz\n"
                  "tar xzf reactx-*-linux-x86_64.tar.gz && cp reactx-*/bin/* ~/.local/bin/\n"
-                 "reactx --version\n\n"
-                 "# Emscripten — для браузера (один раз)\n"
+                 "reactx --version"},
+                {"Установка: macOS",
+                 "На macOS (Apple Silicon M1/M2/M3/M4 и Intel) всё устанавливается через Homebrew:\n\n"
+                 "- brew install cmake ninja git\n"
+                 "- GCC для нативных C++26 приложений или Apple Clang\n"
+                 "- Emscripten для сборки веб-приложений (через brew или emsdk)",
+                 "# 1. Установите инструменты и GCC через Homebrew:\n"
+                 "brew install cmake ninja git gcc emscripten\n\n"
+                 "# 2. Соберите CLI reactx из исходников:\n"
+                 "git clone https://github.com/sargisis/ReactX.git && cd ReactX\n"
+                 "cmake --preset release -DCMAKE_CXX_COMPILER=g++-14 && cmake --build --preset release\n"
+                 "cmake --install build/release --prefix ~/.local     # ~/.local/bin/reactx"},
+                {"Установка: Windows",
+                 "На Windows для нативной поддержки C++26 и POSIX-терминала рекомендуется использовать WSL 2 (Windows Subsystem for Linux):\n\n"
+                 "- WSL 2 обеспечивает 100% совместимость с Linux-тулчейном\n"
+                 "- Браузер в Windows открывает http://127.0.0.1:8090/ автоматически\n"
+                 "- Также можно работать через VS Code с расширением WSL или Dev Containers",
+                 "# 1. В PowerShell (от администратора) установите WSL:\n"
+                 "wsl --install\n\n"
+                 "# 2. Внутри терминала WSL (Ubuntu/Arch) установите инструменты:\n"
+                 "sudo apt update && sudo apt install -y cmake ninja-build gcc-16 git\n\n"
+                 "# 3. Emscripten для веб-проектов:\n"
                  "git clone https://github.com/emscripten-core/emsdk.git ~/emsdk\n"
-                 "~/emsdk/emsdk install latest && ~/emsdk/emsdk activate latest\n"
-                 "source ~/emsdk/emsdk_env.sh"},
+                 "~/emsdk/emsdk install latest && ~/emsdk/emsdk activate latest && source ~/emsdk/emsdk_env.sh\n\n"
+                 "# 4. Скачайте reactx из Releases или соберите из исходников"},
+                {"Установка: Ubuntu / Debian и Docker",
+                 "Для Linux x86-64 доступен готовый архив из GitHub Releases, а также полностью настроенный официальный Docker-контейнер:",
+                 "# Вариант А: бинарник из GitHub Releases\n"
+                 "sudo apt update && sudo apt install -y cmake ninja-build git\n"
+                 "tar xzf reactx-*-linux-x86_64.tar.gz && cp reactx-*/bin/* ~/.local/bin/\n\n"
+                 "# Вариант Б: запуск через Docker (внутри уже есть GCC 16, Emscripten и reactx):\n"
+                 "docker run --rm -it -u \"$(id -u):$(id -g)\" -v \"$PWD:/app\" -p 8090:8090 ghcr.io/sargisis/reactx\n"
+                 "reactx new my-app && cd my-app && reactx dev --host 0.0.0.0"},
                 {"2. Создайте приложение", "Появится папка с работающим примером: веб-приложение со счётчиком и двумя страницами. "
                                            "С --terminal — программа для терминала.",
                  "reactx new my-app\ncd my-app"},

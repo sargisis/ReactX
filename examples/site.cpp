@@ -93,7 +93,7 @@ void useTitle(const std::string& title) {
 
 // ---- syntax highlighting (a small lexer; tokens become <span>s) ----
 
-enum class Lang { Cpp, Shell, CMake };
+enum class Lang { Cpp, Shell, CMake, Python };
 
 Lang detect(std::string_view code) {
     for (std::string_view word : {"target_link_libraries", "find_package", "reactx_add_app", "FetchContent"})
@@ -101,6 +101,10 @@ Lang detect(std::string_view code) {
     std::string_view first = code.substr(0, code.find('\n'));
     for (std::string_view cmd : {"cmake ", "reactx ", "./", "git ", "cd ", "emcmake ", "source ", "sudo ", "ctest "})
         if (first.starts_with(cmd)) return Lang::Shell;
+    if (code.find("def ") != std::string_view::npos || code.find("from flask") != std::string_view::npos ||
+        code.find("import ") != std::string_view::npos || code.find("app = Flask") != std::string_view::npos)
+        if (code.find("#include") == std::string_view::npos && code.find("using namespace") == std::string_view::npos)
+            return Lang::Python;
     return Lang::Cpp;
 }
 
@@ -108,6 +112,7 @@ std::string_view langName(Lang lang) {
     switch (lang) {
         case Lang::Shell: return "shell";
         case Lang::CMake: return "cmake";
+        case Lang::Python: return "python";
         default: return "c++";
     }
 }
@@ -126,7 +131,14 @@ constexpr std::array kKeywords = {
     "void",    "while",    "contract_assert", "pre", "post",
 };
 
+constexpr std::array kPyKeywords = {
+    "and", "as", "assert", "async", "await", "break", "class", "continue", "def", "del", "elif",
+    "else", "except", "False", "finally", "for", "from", "global", "if", "import", "in", "is",
+    "lambda", "None", "not", "or", "pass", "raise", "return", "True", "try", "while", "with", "yield",
+};
+
 bool isKeyword(std::string_view word) { return std::ranges::find(kKeywords, word) != kKeywords.end(); }
+bool isPyKeyword(std::string_view word) { return std::ranges::find(kPyKeywords, word) != kPyKeywords.end(); }
 
 class Highlighter {
 public:
@@ -190,9 +202,13 @@ private:
                 continue;
             }
             bool wasLineStart = std::exchange(lineStart, false);
-            if (lang_ == Lang::CMake && c == '#') {
+            if ((lang_ == Lang::CMake || lang_ == Lang::Python) && c == '#') {
                 auto end = rest.find('\n');
                 token("t-com", rest.substr(0, end));
+                i += end == std::string_view::npos ? rest.size() : end;
+            } else if (lang_ == Lang::Python && c == '@') {
+                auto end = rest.find('\n');
+                token("t-pp", rest.substr(0, end));
                 i += end == std::string_view::npos ? rest.size() : end;
             } else if (lang_ == Lang::Cpp && c == '#' && wasLineStart) {  // #include, #embed, ...
                 auto end = rest.find('\n');
@@ -212,7 +228,7 @@ private:
                 std::size_t n = end == std::string_view::npos ? rest.size() : end + 2;
                 token("t-str", rest.substr(0, n));
                 i += n;
-            } else if (c == '"' || (c == '\'' && lang_ == Lang::Cpp)) {
+            } else if (c == '"' || c == '\'') {
                 std::size_t j = 1;
                 while (j < rest.size() && rest[j] != c && rest[j] != '\n') j += rest[j] == '\\' ? 2 : 1;
                 std::size_t n = std::min(j + 1, rest.size());
@@ -231,6 +247,7 @@ private:
                 while (k < rest.size() && rest[k] == ' ') ++k;
                 bool call = k < rest.size() && rest[k] == '(';
                 if (lang_ == Lang::Cpp && isKeyword(word)) token("t-kw", word);
+                else if (lang_ == Lang::Python && isPyKeyword(word)) token("t-kw", word);
                 else if (call) token("t-fn", word);
                 else if (lang_ == Lang::CMake && std::ranges::all_of(word, [](char x) { return !std::islower(static_cast<unsigned char>(x)); }))
                     token("t-kw", word);  // PRIVATE, SOURCES, ...
@@ -479,7 +496,7 @@ const std::vector<Group>& groups() {
         {"Start", "Начало", {"start", "cli", "versions", "safety"}},
         {"Basics", "Основы", {"elements", "hooks", "context", "events"}},
         {"Platforms", "Платформы", {"terminal", "browser", "ui"}},
-        {"Apps", "Приложения", {"router", "data", "server"}},
+        {"Apps", "Приложения", {"router", "data", "server", "backend"}},
     };
     return all;
 }
@@ -578,11 +595,94 @@ Element Toc(const TocProps& p) {
     return h("nav", {{"className", "toc"}, {"aria-label", title}}, std::move(items));
 }
 
-std::vector<Element> paragraphs(const std::string& text) {
+std::vector<Element> formatInline(std::string_view s) {
+    std::vector<Element> out;
+    std::string text;
+    auto flush = [&] {
+        if (!text.empty()) {
+            out.push_back(Element(std::exchange(text, {})));
+        }
+    };
+    std::size_t i = 0;
+    while (i < s.size()) {
+        if (s[i] == '`') {
+            auto end = s.find('`', i + 1);
+            if (end != std::string_view::npos) {
+                flush();
+                out.push_back(h("code", {}, {std::string(s.substr(i + 1, end - i - 1))}));
+                i = end + 1;
+                continue;
+            }
+        } else if (s.substr(i).starts_with("**")) {
+            auto end = s.find("**", i + 2);
+            if (end != std::string_view::npos) {
+                flush();
+                out.push_back(h("b", {}, {std::string(s.substr(i + 2, end - i - 2))}));
+                i = end + 2;
+                continue;
+            }
+        }
+        text += s[i];
+        ++i;
+    }
+    flush();
+    return out;
+}
+
+std::vector<Element> renderSectionText(const std::string& text) {
     std::vector<Element> out;
     for (std::size_t start = 0; start < text.size();) {
         auto end = text.find("\n\n", start);
-        out.push_back(h("p", {}, {text.substr(start, end - start)}));
+        std::string_view block = std::string_view(text).substr(start, end == std::string::npos ? std::string_view::npos : end - start);
+
+        std::vector<std::string_view> lines;
+        for (std::size_t lstart = 0; lstart < block.size();) {
+            auto lend = block.find('\n', lstart);
+            lines.push_back(block.substr(lstart, lend == std::string_view::npos ? std::string_view::npos : lend - lstart));
+            if (lend == std::string_view::npos) break;
+            lstart = lend + 1;
+        }
+
+        std::vector<Element> currentList;
+        std::string currentPara;
+
+        auto flushList = [&] {
+            if (!currentList.empty()) {
+                out.push_back(h("ul", {}, std::exchange(currentList, {})));
+            }
+        };
+        auto flushPara = [&] {
+            if (!currentPara.empty()) {
+                out.push_back(h("p", {}, formatInline(std::exchange(currentPara, {}))));
+            }
+        };
+
+        for (std::string_view line : lines) {
+            auto trimmed = line;
+            while (!trimmed.empty() && trimmed.front() == ' ') trimmed.remove_prefix(1);
+
+            bool isBullet = false;
+            std::string_view content;
+            if (trimmed.starts_with("- ") || trimmed.starts_with("* ")) {
+                isBullet = true;
+                content = trimmed.substr(2);
+            } else if (trimmed.starts_with("• ")) {
+                isBullet = true;
+                content = trimmed.substr(std::string_view("• ").size());
+            }
+
+            if (isBullet) {
+                flushPara();
+                currentList.push_back(h("li", {}, formatInline(content)));
+            } else {
+                flushList();
+                if (!currentPara.empty()) currentPara += ' ';
+                currentPara += line;
+            }
+        }
+        flushPara();
+        flushList();
+
         if (end == std::string::npos) break;
         start = end + 2;
     }
@@ -639,7 +739,7 @@ Element Docs(const Props&) {
         for (std::size_t i = 0; i < page->sections.size(); ++i) {
             const auto& s = page->sections[i];
             std::vector<Element> section{h("h2", {}, {s.heading})};
-            for (auto& para : paragraphs(s.text)) section.push_back(std::move(para));
+            for (auto& elem : renderSectionText(s.text)) section.push_back(std::move(elem));
             if (!s.code.empty()) section.push_back(h(CodeBlock, {.code = s.code}));
             article.push_back(h("section", {{"id", "s-" + std::to_string(i)}, {"key", slug + s.heading}}, std::move(section)));
             headings.push_back(s.heading);

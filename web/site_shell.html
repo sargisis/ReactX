@@ -12,7 +12,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23f5a524'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='16' font-weight='700' text-anchor='middle' fill='%230d0f12'%3Erx%3C/text%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&family=JetBrains+Mono:ital,wght@0,400..700;1,400..700&display=swap">
   <script>
     // The saved theme before anything is drawn (no flash of the wrong one).
     try { const t = localStorage.getItem("rx-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
@@ -54,8 +54,14 @@
 
     /* ---- base ---- */
     * { box-sizing: border-box; }
-    html { scroll-padding-top: calc(var(--header) + 16px); -webkit-text-size-adjust: 100%; }
-    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.65 var(--sans); }
+    html {
+      scroll-padding-top: calc(var(--header) + 16px);
+      -webkit-text-size-adjust: 100%;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+    }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.68 var(--sans); letter-spacing: -0.011em; }
     a { color: inherit; }
     ::selection { background: var(--accent); color: var(--on-accent); }
     button { font: inherit; color: inherit; }
@@ -191,8 +197,13 @@
     .article section { padding-top: 28px; }
     .article h2 { font: 700 21px/1.3 var(--mono); letter-spacing: -0.02em; margin: 0 0 12px; display: flex; gap: 10px; }
     .article h2::before { content: "#"; color: var(--accent); opacity: 0.7; }
-    .article p { margin: 0 0 14px; max-width: 72ch; }
-    .article .code { margin: 4px 0 8px; }
+    .article p { margin: 0 0 14px; max-width: 72ch; line-height: 1.68; }
+    .article ul { margin: 0 0 16px 0; padding-left: 0; list-style: none; max-width: 72ch; }
+    .article ul li { position: relative; margin-bottom: 8px; line-height: 1.62; padding-left: 20px; }
+    .article ul li::before { content: "•"; position: absolute; left: 4px; color: var(--accent); font-weight: 700; font-size: 16px; line-height: 1.4; }
+    .article code { font-family: var(--mono); font-size: 0.88em; color: var(--text); background: var(--surface-2); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border); }
+    .article b { font-weight: 600; color: var(--text); }
+    .article .code { margin: 6px 0 12px; }
     .pager { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--border); }
     .pager a { display: flex; flex-direction: column; gap: 4px; padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--radius);
                text-decoration: none; background: var(--surface); }

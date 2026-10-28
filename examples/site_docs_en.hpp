@@ -354,6 +354,9 @@ inline const std::vector<Page>& pagesEn() {
                  "auto v = json::parse(R\"({\"title\": \"Milk\", \"done\": false})\");\n"
                  "std::string title = v[\"title\"].asString();\nbool done = v.get<bool>(\"done\");\n"
                  "json::Value todo = json::object({{\"id\", 1}, {\"title\", title}});\ntodo.dump();"},
+                {"Backend (Flask)", "ReactX works with Flask and REST APIs via fetch and useFetch. "
+                                    "During development, requests are proxied via reactx dev --proxy. "
+                                    "See the «Backend and Flask» page for details and limitations.", ""},
             },
         },
         {
@@ -370,6 +373,54 @@ inline const std::vector<Page>& pagesEn() {
                  "server.proxy(\"/api\", *rx::net::parseUpstream(\"http://127.0.0.1:5000\"));"},
                 {"Important", "It is a server for development on your machine: no HTTPS, no protection against heavy load. "
                               "Don't put it on the open internet.", ""},
+            },
+        },
+        {
+            "backend", "Backend and Flask", "Connecting ReactX to Flask and REST APIs: capabilities and limitations.",
+            {
+                {"Working with Flask",
+                 "ReactX compiles to WebAssembly and runs in the browser as a client-side app. You can connect it to any backend — Flask, FastAPI, Django, Express, or Go.\n\n"
+                 "During development, the dev server proxies API calls to your local backend: reactx dev --proxy http://127.0.0.1:5000. In production, serving the client files (HTML, JS, WASM) and handling the API is done by Flask, Nginx, or an external reverse proxy.",
+                 "# app.py — Flask API example\n"
+                 "from flask import Flask, jsonify, request\n\n"
+                 "app = Flask(__name__)\n\n"
+                 "@app.route(\"/api/todos\", methods=[\"GET\", \"POST\"])\n"
+                 "def todos():\n"
+                 "    if request.method == \"POST\":\n"
+                 "        item = request.get_json()\n"
+                 "        return jsonify({\"id\": 1, \"title\": item.get(\"title\")}), 201\n"
+                 "    return jsonify([{\"id\": 1, \"title\": \"Buy milk\"}])\n\n"
+                 "if __name__ == \"__main__\":\n"
+                 "    app.run(port=5000)"},
+                {"Client example in ReactX",
+                 "On the client side, use useFetch (to load data on component mount) or fetch (to send data on user interactions).",
+                 "// Load todos from Flask API\n"
+                 "auto res = useFetch(\"/api/todos\");\n"
+                 "if (res.loading) return h(\"p\", {}, {\"Loading...\"});\n"
+                 "if (!res.ok()) return h(\"p\", {}, {\"Error: \" + res.errorText()});\n\n"
+                 "// Submit a new todo (POST)\n"
+                 "fetch({\n"
+                 "    .method = \"POST\",\n"
+                 "    .url = \"/api/todos\",\n"
+                 "    .body = json::object({{\"title\", \"New task\"}}).dump()\n"
+                 "}, [](const FetchResponse& r) {\n"
+                 "    if (r.ok()) std::println(\"Todo added!\");\n"
+                 "});"},
+                {"What works and is tested",
+                 "Backend communication is stable and verified in tests and production:\n\n"
+                 "- useFetch / fetch in the browser: uses the browser's standard fetch() under the hood, ensuring browser-grade network reliability. Tested in automated suites and real-world projects like TaskFlow and PulseBoard.\n"
+                 "- HTTP methods: GET, POST, PUT, PATCH, DELETE with JSON payloads, status codes, network errors, and JSON parsing with std::expected without crashing on malformed responses.\n"
+                 "- Proxy: reactx dev --proxy is verified with end-to-end integration tests against real backends and fuzzing; a DoS vulnerability was identified and fixed.",
+                 ""},
+                {"Current limitations",
+                 "Current gaps to keep in mind when designing your application:\n\n"
+                 "- Custom request headers: custom headers like Authorization: Bearer <token> cannot be sent yet. This is the main limitation for JWT APIs. Cookie-based authentication works out of the box (the browser sends cookies automatically to the same origin).\n"
+                 "- Response headers: response headers (such as Location or pagination headers) cannot be inspected.\n"
+                 "- Cancellation and timeouts: AbortController and custom request timeouts are not yet supported.\n"
+                 "- WebSockets / Streaming (SSE): streaming responses are not supported; real-time updates require polling via useInterval.\n"
+                 "- Terminal applications: console apps support http:// only (no HTTPS).\n"
+                 "- Dev proxy: reactx dev --proxy is for local development only. In production, API and static files should be served by Flask, Nginx, or a production web server.",
+                 ""},
             },
         },
     };

@@ -401,6 +401,9 @@ inline const std::vector<Page>& pages() {
                  "auto v = json::parse(R\"({\"title\": \"Молоко\", \"done\": false})\");\n"
                  "std::string title = v[\"title\"].asString();\nbool done = v.get<bool>(\"done\");\n"
                  "json::Value todo = json::object({{\"id\", 1}, {\"title\", title}});\ntodo.dump();"},
+                {"Бэкенд (Flask)", "ReactX работает с Flask и другими REST API через fetch / useFetch. "
+                                   "В разработке запросы проксируются через reactx dev --proxy. "
+                                   "Подробно о проверенных возможностях и текущих ограничениях — в разделе «Бэкенд и Flask».", ""},
             },
         },
         {
@@ -425,6 +428,54 @@ inline const std::vector<Page>& pages() {
                  "auto reply = rx::net::forward(req, {.host = \"127.0.0.1\", .port = 5000});\n"
                  "if (!reply) std::println(\"{}: {}\", reply.error().status, reply.error().message);"},
                 {"Важно", "Сервер рассчитан на разработку на своём компьютере: нет HTTPS и защиты от перегрузки.", ""},
+            },
+        },
+        {
+            "backend", "Бэкенд и Flask", "Интеграция с Flask и REST API: возможности, проверенные сценарии и ограничения.",
+            {
+                {"Связка с Flask",
+                 "ReactX компилируется в WebAssembly и работает в браузере как клиентское приложение. Вы можете подключать его к любому бэкенду — Flask, FastAPI, Django, Express или Go.\n\n"
+                 "При разработке встроенный dev-сервер проксирует запросы к API на ваш локальный бэкенд: reactx dev --proxy http://127.0.0.1:5000. В продакшене отдачу файлов клиента (HTML, JS, WASM) и обработку API выполняет сам бэкенд (Flask), Nginx или внешний обратный прокси.",
+                 "# app.py — пример Flask API\n"
+                 "from flask import Flask, jsonify, request\n\n"
+                 "app = Flask(__name__)\n\n"
+                 "@app.route(\"/api/todos\", methods=[\"GET\", \"POST\"])\n"
+                 "def todos():\n"
+                 "    if request.method == \"POST\":\n"
+                 "        item = request.get_json()\n"
+                 "        return jsonify({\"id\": 1, \"title\": item.get(\"title\")}), 201\n"
+                 "    return jsonify([{\"id\": 1, \"title\": \"Купить хлеб\"}])\n\n"
+                 "if __name__ == \"__main__\":\n"
+                 "    app.run(port=5000)"},
+                {"Пример клиента на ReactX",
+                 "На стороне клиента обращение к API выполняется через useFetch (загрузка данных при монтировании) или fetch (отправка данных по действиям пользователя).",
+                 "// Получение списка задач из Flask\n"
+                 "auto res = useFetch(\"/api/todos\");\n"
+                 "if (res.loading) return h(\"p\", {}, {\"Загрузка...\"});\n"
+                 "if (!res.ok()) return h(\"p\", {}, {\"Ошибка: \" + res.errorText()});\n\n"
+                 "// Отправка новой задачи (POST)\n"
+                 "fetch({\n"
+                 "    .method = \"POST\",\n"
+                 "    .url = \"/api/todos\",\n"
+                 "    .body = json::object({{\"title\", \"Новая задача\"}}).dump()\n"
+                 "}, [](const FetchResponse& r) {\n"
+                 "    if (r.ok()) std::println(\"Задача добавлена!\");\n"
+                 "});"},
+                {"Что работает и проверено",
+                 "Взаимодействие с внешними бэкендами стабильно и проверено на практике:\n\n"
+                 "- useFetch / fetch в браузере. Под капотом обычный fetch() браузера, так что надёжность на уровне браузера. Это проверено тестами и реальными проектами: TaskFlow и PulseBoard работали с бэкендами через API.\n"
+                 "- GET, POST, PUT, PATCH, DELETE с JSON-телом, статусы, ошибки сети, разбор JSON через std::expected, без падений на кривом ответе.\n"
+                 "- Прокси reactx dev --proxy проверен сквозными тестами с настоящим бэкендом и фаззингом. Нашли и исправили DoS-уязвимость.",
+                 ""},
+                {"Чего не хватает (реальные пробелы)",
+                 "В текущей реализации есть архитектурные ограничения, которые важно учитывать:\n\n"
+                 "- Своих заголовков запроса. Нельзя передать Authorization: Bearer <token>. Для API с JWT это главная проблема. Авторизация через cookie работает (браузер отправляет их сам на тот же адрес), а через токен в заголовке — нет.\n"
+                 "- Заголовков ответа: нельзя прочитать, например, Location или заголовки пагинации.\n"
+                 "- Отмены запроса и своего таймаута.\n"
+                 "- WebSocket / потоковых ответов (SSE): чат в реальном времени можно сделать только опросом через useInterval.\n"
+                 "- В терминальных приложениях только http://, без HTTPS.\n"
+                 "- Прокси reactx dev — только для разработки. В продакшене API раздаёт Flask, nginx и т. п. (как в примере выше), а не ReactX.",
+                 ""},
             },
         },
     };

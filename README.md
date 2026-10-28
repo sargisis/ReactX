@@ -44,14 +44,32 @@ Don't invent anything that isn't there.
 
 ## Quick start
 
-Install `reactx` one of these ways:
+Install `reactx` and the tools for your platform:
 
-- **A prebuilt `reactx`** for Linux x86-64 — an archive in [GitHub Releases](https://github.com/sargisis/ReactX/releases) (put `bin/reactx` on your `PATH`). Web projects need [Emscripten](https://emscripten.org) 6+ (the `EMSDK` variable), CMake 3.28+ and Ninja; terminal projects also need **GCC 16+**.
+- **Arch Linux**:
+  ```sh
+  sudo pacman -S gcc cmake ninja git emscripten
+  ```
+  Download prebuilt `reactx` from [GitHub Releases](https://github.com/sargisis/ReactX/releases) (put in `~/.local/bin/` on your `PATH`) or build from source.
+
+- **macOS (Homebrew)**:
+  ```sh
+  brew install cmake ninja git gcc emscripten
+  ```
+  Build `reactx` from source: `cmake --preset release -DCMAKE_CXX_COMPILER=g++-14 && cmake --build --preset release && cmake --install build/release --prefix ~/.local`.
+
+- **Windows (WSL 2)**:
+  In an elevated PowerShell run `wsl --install`. Inside WSL (Ubuntu/Arch), install `sudo apt install cmake ninja-build gcc-16 git` and Emscripten. The dev server `http://127.0.0.1:8090/` opens right in your Windows browser.
+
+- **Ubuntu / Debian**:
+  A prebuilt `reactx` for Linux x86-64 is in [GitHub Releases](https://github.com/sargisis/ReactX/releases) (`tar xzf reactx-*-linux-x86_64.tar.gz && cp reactx-*/bin/* ~/.local/bin/`). Web projects need [Emscripten](https://emscripten.org) 6+, CMake 3.28+ and Ninja; terminal projects need GCC 16+.
+
 - **Docker** — everything is inside (GCC 16, Emscripten, `reactx`):
   ```sh
   docker run --rm -it -u "$(id -u):$(id -g)" -v "$PWD:/app" -p 8090:8090 ghcr.io/sargisis/reactx
   ```
-  Inside, run `reactx dev --host 0.0.0.0` so the page is reachable from outside. Projects made by `reactx new` open in VS Code "Reopen in Container" and in GitHub Codespaces: they have a `.devcontainer/`.
+  Inside, run `reactx dev --host 0.0.0.0`. Projects made by `reactx new` open in VS Code "Reopen in Container" and in GitHub Codespaces (`.devcontainer/`).
+
 - **From source** (GCC 16+, CMake 3.28+, Ninja):
   ```sh
   git clone https://github.com/sargisis/ReactX.git && cd ReactX
@@ -306,6 +324,8 @@ In the terminal build `fetch` and `useFetch` use the network too (since v0.7): g
 
 `setLocalFetch` is a "server inside the app": requests go to a C++ handler first, no network needed (static sites without a backend, API tests).
 
+Working with an external backend (e.g. Python / Flask, Node.js, Go) is supported out of the box via `reactx dev --proxy http://127.0.0.1:5000` (forwarding `/api/*` to your API server). See the [Backend and Flask documentation](https://sargisis.github.io/ReactX/#backend) for integration guides and current limitations.
+
 **Full stack** — UI and server in C++ ([examples/web_app.cpp](examples/web_app.cpp) + [examples/api_server.cpp](examples/api_server.cpp)):
 
 ```sh
@@ -478,7 +498,7 @@ AGENTS.md         rules and checks for anyone changing ReactX itself
 - Terminal: every character counts as 1 column (emoji and CJK can shift a line); the `input` cursor is always at the end; no scrolling — what doesn't fit is cut off; POSIX only (Linux/macOS).
 - `rx::ui`: switching tabs with arrows and "select on focus" aren't done yet; long lists don't scroll.
 - Browser: `import reactx;` is off in the web build; no mouse events except clicks (hover, drag); `onScroll` only on a scrolling element; the page is built in the browser (no server-side rendering).
-- `useFetch` / `fetch` in the terminal build: `http://` with a full URL only (`http://127.0.0.1:8090/api/todos`), no HTTPS.
+- `useFetch` / `fetch` in the terminal build: `http://` with a full URL only (`http://127.0.0.1:8090/api/todos`), no HTTPS. Custom request headers (e.g. `Authorization: Bearer`), response headers access, timeouts/cancellation, and WebSockets/SSE are not supported yet.
 - Reflection (`json::to` / `from`) works in native builds only.
 - The terminal layout is recomputed fully on every re-render.
 - `memo` doesn't compare children; hooks can't be called in a loop with a varying number of iterations (like in React) — list items need their own component.
@@ -497,7 +517,7 @@ AGENTS.md         rules and checks for anyone changing ReactX itself
 - [x] v0.8: −28% memory, fuzzing and static analysis in CI, SECURITY.md
 - [x] v0.7: `errorBoundary`, `createStore` / `useStore`, `useId`, network in the terminal, a faster core
 - [x] v0.6: a prebuilt `reactx` in GitHub Releases, a Docker image and a devcontainer; `reactx dev --proxy`
-- [ ] A self-updating `reactx`
+- [x] A self-updating `reactx`
 - [ ] Libraries for the frontend and for working with C++
 - [ ] Later — desktop windows: SDL3 + Skia/ThorVG
 

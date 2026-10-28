@@ -32,14 +32,32 @@
 
 ## Быстрый старт
 
-Установите `reactx` одним из способов:
+Установите `reactx` и инструменты для вашей платформы:
 
-- **Готовый `reactx`** для Linux x86-64 — архив в [GitHub Releases](https://github.com/sargisis/ReactX/releases) (`bin/reactx` положите в `PATH`). Для веб-проектов нужны [Emscripten](https://emscripten.org) 6+ (переменная `EMSDK`), CMake 3.28+ и Ninja; для терминальных — ещё **GCC 16+**.
-- **Docker** — всё уже внутри (GCC 16, Emscripten, `reactx`):
+- **Arch Linux**:
+  ```sh
+  sudo pacman -S gcc cmake ninja git emscripten
+  ```
+  Скачайте готовый `reactx` из [GitHub Releases](https://github.com/sargisis/ReactX/releases) (положите в `~/.local/bin/`) или соберите из исходников.
+
+- **macOS (Homebrew)**:
+  ```sh
+  brew install cmake ninja git gcc emscripten
+  ```
+  Соберите `reactx` из исходников: `cmake --preset release -DCMAKE_CXX_COMPILER=g++-14 && cmake --build --preset release && cmake --install build/release --prefix ~/.local`.
+
+- **Windows (WSL 2)**:
+  В PowerShell от администратора выполните `wsl --install`. Внутри WSL (Ubuntu/Arch) установите инструменты: `sudo apt install cmake ninja-build gcc-16 git` и Emscripten. Локальный сервер `http://127.0.0.1:8090/` открывается прямо в браузере Windows.
+
+- **Ubuntu / Debian**:
+  Готовый `reactx` для Linux x86-64 — архив в [GitHub Releases](https://github.com/sargisis/ReactX/releases) (`tar xzf reactx-*-linux-x86_64.tar.gz && cp reactx-*/bin/* ~/.local/bin/`). Для веб-проектов нужны [Emscripten](https://emscripten.org) 6+, CMake 3.28+ и Ninja; для терминальных — GCC 16+.
+
+- **Docker** — всё внутри (GCC 16, Emscripten, `reactx`):
   ```sh
   docker run --rm -it -u "$(id -u):$(id -g)" -v "$PWD:/app" -p 8090:8090 ghcr.io/sargisis/reactx
   ```
-  Внутри — `reactx dev --host 0.0.0.0`, чтобы страница открылась снаружи. Проекты из `reactx new` открываются в VS Code «Reopen in Container» и в GitHub Codespaces: в них есть `.devcontainer/`.
+  Внутри — `reactx dev --host 0.0.0.0`, чтобы страница открылась снаружи. Проекты из `reactx new` открываются в VS Code «Reopen in Container» и в GitHub Codespaces (`.devcontainer/`).
+
 - **Из исходников** (GCC 16+, CMake 3.28+, Ninja):
   ```sh
   git clone https://github.com/sargisis/ReactX.git && cd ReactX
@@ -294,6 +312,8 @@ fetch({.method = "POST", .url = "/api/todos", .body = json::object({{"title", "�
 
 `setLocalFetch` — «сервер внутри приложения»: запросы сначала идут в обработчик на C++, сеть не нужна (так работают статические сайты без бэкенда и тесты API).
 
+Работа со сторонними бэкендами (например, Python / Flask, Node.js, Go) поддерживается из коробки через `reactx dev --proxy http://127.0.0.1:5000` (проксирует `/api/*` на ваш сервер). Подробнее о связке и текущих ограничениях — в [разделе документации «Бэкенд и Flask»](https://sargisis.github.io/ReactX/#backend?lang=ru).
+
 **Полный стек** — интерфейс и сервер на C++ ([examples/web_app.cpp](examples/web_app.cpp) + [examples/api_server.cpp](examples/api_server.cpp)):
 
 ```sh
@@ -469,7 +489,7 @@ AGENTS.md         правила и проверки для тех, кто ме�
 - Терминал: ширина символа считается за 1 колонку (эмодзи и иероглифы могут сдвигать строку); курсор в `input` только в конце текста; нет прокрутки — что не влезло, обрезается; только POSIX (Linux/macOS).
 - `rx::ui`: переключение вкладок стрелками и выбор «по фокусу» пока не сделаны; нет прокрутки длинных списков.
 - Браузер: `import reactx;` в веб-сборке выключен; нет событий мыши кроме клика (наведение, перетаскивание); `onScroll` — только у элемента с прокруткой; страница строится в браузере (нет серверного рендеринга).
-- `useFetch` / `fetch` в терминальной сборке: только `http://` и полный URL (`http://127.0.0.1:8090/api/todos`), без HTTPS.
+- `useFetch` / `fetch` в терминальной сборке: только `http://` и полный URL (`http://127.0.0.1:8090/api/todos`), без HTTPS. В сетевом клиенте пока нет кастомных заголовков запроса (`Authorization: Bearer`), чтения заголовков ответа, таймаутов, отмены запросов и WebSockets/SSE.
 - Рефлексия (`json::to` / `from`) — только в нативной сборке.
 - Раскладка терминала пересчитывается целиком на каждую перерисовку.
 - `memo` не сравнивает детей; хуки нельзя вызывать в цикле с разным числом итераций (как в React) — для элементов списка нужен отдельный компонент.
@@ -488,7 +508,7 @@ AGENTS.md         правила и проверки для тех, кто ме�
 - [x] v0.8: −28% памяти, фаззинг и статический анализ в CI, SECURITY.md
 - [x] v0.7: `errorBoundary`, `createStore` / `useStore`, `useId`, сеть в терминале, быстрее ядро
 - [x] v0.6: готовый `reactx` в GitHub Releases, Docker-образ и devcontainer; `reactx dev --proxy`
-- [ ] Самообновление `reactx`
+- [x] Самообновление `reactx`
 - [ ] Свои библиотеки для фронтенда и для работы с C++
 - [ ] Позже — окна на рабочем столе: SDL3 + Skia/ThorVG
 

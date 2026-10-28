@@ -1,10 +1,12 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ReactX — React на C++26</title>
-  <meta name="description" content="ReactX: UI-фреймворк в духе React на C++26. Один код компонентов — в терминале и в браузере (WebAssembly).">
+  <title>ReactX — React for C++26</title>
+  <meta name="description" content="ReactX: a React-like UI framework in C++26. One component code for the browser (WebAssembly) and the terminal. Components, hooks, router, no JavaScript.">
+  <meta property="og:title" content="ReactX — React for C++26">
+  <meta property="og:description" content="Components, hooks and a reconciler in modern C++. The same code runs in the browser (WebAssembly) and in the terminal.">
   <!-- The folder of the site (from CMake); assets and router paths are relative to it. -->
   <base href="@REACTX_WEB_BASE@">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23f5a524'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='16' font-weight='700' text-anchor='middle' fill='%230d0f12'%3Erx%3C/text%3E%3C/svg%3E">
@@ -238,7 +240,7 @@
   </style>
 </head>
 <body>
-  <div id="app"><div class="boot">загрузка ReactX</div></div>
+  <div id="app"><div class="boot">loading ReactX</div></div>
   {{{ SCRIPT }}}
 </body>
 </html>

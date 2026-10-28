@@ -24,25 +24,47 @@ struct Page {
 inline const std::vector<Page>& pages() {
     static const std::vector<Page> all = {
         {
-            "start", "Быстрый старт", "Что такое ReactX и как собрать первый пример.",
+            "start", "Быстрый старт", "Что такое ReactX и первое приложение за три команды.",
             {
-                {"Что это", "ReactX — UI-фреймворк в духе React на современном C++ (режим C++26). Компоненты — обычные функции, состояние — хуки, "
-                            "изменения в дерево вносит reconciler.\n\nОдин и тот же код компонентов работает в терминале "
-                            "(бэкенд TerminalRenderer) и в браузере (WebAssembly + DOM).", ""},
-                {"Свой проект", "Проще всего начать с CLI: reactx new my-app && cd my-app && reactx dev. Подробнее — в разделе «CLI reactx».", ""},
-                {"Сборка ReactX", "Нужны CMake 3.28+, Ninja и GCC 16+ (стандартная библиотека C++26). Для браузера — Emscripten 6+ (переменная EMSDK).",
-                 "cmake --preset debug -DCMAKE_CXX_COMPILER=g++-16 && cmake --build --preset debug\n"
-                 "ctest --preset debug\n\n"
-                 "cmake --preset web && cmake --build --preset web    # WebAssembly\n"
-                 "./build/debug/reactx_serve build/web                 # http://127.0.0.1:8090/"},
-                {"Первый компонент", "Компонент получает props и возвращает дерево элементов. В браузере его монтирует mountDom.",
+                {"Что это", "ReactX позволяет делать интерфейсы так же, как в React — компоненты, состояние, хуки, — но на C++. "
+                            "Вы описываете, как должен выглядеть экран; когда состояние меняется, ReactX обновляет только то, "
+                            "что действительно изменилось.\n\n"
+                            "Один и тот же код компонентов работает в двух местах: в браузере (через WebAssembly) и в терминале "
+                            "(текстовый интерфейс). JavaScript, Node и npm не нужны.", ""},
+                {"1. Установите", "Скачайте готовый reactx для Linux x86-64 из GitHub Releases и положите в PATH. Для приложений "
+                                  "в браузере нужны ещё Emscripten, CMake и Ninja; для терминальных — GCC 16.\n\n"
+                                  "Не хотите ничего ставить? В Docker-образе ghcr.io/sargisis/reactx есть всё (см. «CLI reactx»).",
+                 "# github.com/sargisis/ReactX/releases -> reactx-X.Y.Z-linux-x86_64.tar.gz\n"
+                 "tar xzf reactx-*-linux-x86_64.tar.gz && cp reactx-*/bin/* ~/.local/bin/\n"
+                 "reactx --version\n\n"
+                 "# Emscripten — для браузера (один раз)\n"
+                 "git clone https://github.com/emscripten-core/emsdk.git ~/emsdk\n"
+                 "~/emsdk/emsdk install latest && ~/emsdk/emsdk activate latest\n"
+                 "source ~/emsdk/emsdk_env.sh"},
+                {"2. Создайте приложение", "Появится папка с работающим примером: веб-приложение со счётчиком и двумя страницами. "
+                                           "С --terminal — программа для терминала.",
+                 "reactx new my-app\ncd my-app"},
+                {"3. Запустите", "reactx dev собирает приложение, запускает локальный сервер и пересобирает страницу при каждом "
+                                 "сохранении. Откройте http://127.0.0.1:8090/ и правьте src/main.cpp.",
+                 "reactx dev"},
+                {"Первый компонент", "Компонент — это функция: получает props (структуру) и возвращает элементы. useState хранит "
+                                     "значение между отрисовками; когда оно меняется, компонент перерисовывается.",
                  "#include \"reactx/dom.hpp\"\n#include \"reactx/reactx.hpp\"\nusing namespace rx;\n\n"
-                 "Element Counter(const Props&) {\n"
-                 "    auto [count, setCount] = useState(0);\n"
+                 "struct CounterProps {\n    int start = 0;\n};\n\n"
+                 "Element Counter(const CounterProps& p) {\n"
+                 "    auto [count, setCount] = useState(p.start);\n"
                  "    return h(\"button\", {{\"onClick\", [setCount] { setCount([](int c) { return c + 1; }); }}},\n"
                  "             {\"Нажато: \" + std::to_string(count)});\n"
-                 "}\n\nint main() { mountDom(h(Counter)); }"},
-                {"Модуль", "Вместо заголовков можно подключить модуль (в нативной сборке с Ninja).", "import reactx;"},
+                 "}\n\n"
+                 "int main() { mountDom(h(Counter, {.start = 0})); }"},
+                {"С ИИ-помощником", "Нейросети ReactX пока не знают: он новый. В каждом проекте из reactx new есть AGENTS.md — "
+                                    "Codex, Cursor и Claude Code читают его сами. В обычном чате начните с этой фразы:",
+                 "Пишем на ReactX — это C++26-фреймворк (не JavaScript): https://github.com/sargisis/ReactX.\n"
+                 "Сначала прочитай https://sargisis.github.io/ReactX/llms.txt — там весь API.\n"
+                 "Ничего, чего там нет, не придумывай."},
+                {"Сборка самого ReactX", "Только если хотите менять фреймворк: нужны GCC 16, CMake 3.28+ и Ninja.",
+                 "cmake --preset debug -DCMAKE_CXX_COMPILER=g++-16 && cmake --build --preset debug\n"
+                 "ctest --preset debug -LE slow"},
             },
         },
         {

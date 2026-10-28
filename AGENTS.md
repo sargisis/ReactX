@@ -2,7 +2,7 @@
 
 Instructions for AI coding agents (and people) changing the ReactX framework itself. To write an *app* with ReactX, read [llms.txt](llms.txt) instead.
 
-ReactX is a React-like UI framework in C++26: components, hooks and a reconciler (`src/reconciler.cpp`), with a terminal backend (ANSI + Yoga Flexbox) and a browser backend (WebAssembly + DOM), a router, `useFetch`, JSON, an HTTP server and the `reactx` CLI. The docs and comments in the code are the source of truth; the user-facing docs are in Russian (README.md, CHANGELOG.md, the site in `examples/site_docs.hpp`), code and comments in English.
+ReactX is a React-like UI framework in C++26: components, hooks and a reconciler (`src/reconciler.cpp`), with a terminal backend (ANSI + Yoga Flexbox) and a browser backend (WebAssembly + DOM), a router, `useFetch`, JSON, an HTTP server and the `reactx` CLI. The docs and comments in the code are the source of truth; user-facing docs come in English and Russian (README.md / README.ru.md, the site in `examples/site_docs_en.hpp` / `site_docs.hpp`); CHANGELOG.md is in Russian; code and comments in English.
 
 ## Toolchains
 
@@ -59,7 +59,7 @@ web/              HTML shells for the web builds
 
 ## Changes that need more than code
 
-- Public API or behaviour: README.md, the docs page in `examples/site_docs.hpp`, [llms.txt](llms.txt), and `## [Не выпущено]` in CHANGELOG.md (sections Добавлено / Изменено / Исправлено).
+- Public API or behaviour: README.md and README.ru.md, the docs pages in `examples/site_docs_en.hpp` and `site_docs.hpp`, [llms.txt](llms.txt), and `## [Не выпущено]` in CHANGELOG.md (sections Добавлено / Изменено / Исправлено).
 - New source file: add it to **both** source lists in CMakeLists.txt (native and `if(EMSCRIPTEN)`) when the web build needs it.
 - CLI templates (`kWebMain`, `kTerminalMain`, ...): new projects pin ReactX to the release tag of the CLI, so a template may only use API that exists in that release.
 

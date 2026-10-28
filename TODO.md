@@ -57,12 +57,23 @@ Preact — это самый компактный и чистый React-совм
 
 Когда фреймворк стабилен — сюда добавить конкретные задачи по библиотекам.
 
-### Фронтенд библиотеки (`rx::ui` расширение):
+### Базовые UI-атомы (Atomic Design по совету Aton B.):
+> *«A component library of atoms to compose any UI pattern is more useful than having to build whole UIs.»*
+- [ ] **`Button`** (primary, secondary, outline, ghost, loading state, disabled)
+- [ ] **`Input` / `TextField`** (controlled/uncontrolled, error states, clearable, icons)
+- [ ] **`Badge` / `Tag`** (статусные метки, варианты цветов)
+- [ ] **`Card`** (header, content, footer, border/elevation tokens)
+- [ ] **`Stack` / `Box`** (типизированные Flexbox-примитивы: Row, Column, gap, wrap)
+- [ ] **`Dialog` / `Modal`** (оверлей, a11y, focus trap, Esc для закрытия)
+- [ ] **`Dropdown` / `Menu`** (всплывающее меню, навигация стрелками)
+- [ ] **`Tooltip`** (подсказки при наведении с автопозиционированием)
+
+### Высокоуровневые компоненты (`rx::ui` расширение):
 - [ ] Виртуализированный список (для таблиц 10k+ строк без лагов)
 - [ ] Богатые формы с валидацией через C++26 рефлексию
   - Идея: `rx::form<MyStruct>()` автоматически генерирует форму из struct-полей
 - [ ] Графики и чарты (SVG-based, без внешних зависимостей)
-- [ ] Toast/уведомления, модалки, тултипы
+- [ ] Toast / Snackbar уведомления
 
 ### Бэкенд (`rx::net` расширение):
 - [ ] WebSockets и Server-Sent Events (SSE) — сейчас главный пробел
@@ -100,7 +111,10 @@ Preact — это самый компактный и чистый React-совм
 
 | Комментарий | Автор | Что делать |
 |:---|:---|:---|
-| *«Good job but it does not feel native»* | LinkedIn | Улучшить first-load UX (preload, skeleton, SW) |
+| *«think first set of atoms to compose any ui pattern would be elegant. A component libary is more useful than only having to build whole UIs»* | Aton B. (LinkedIn) | 🔥 **Atomic Design:** сначала базовые строительные кирпичики (`Button`, `Input`, `Card`, `Modal`), из которых разработчики соберут любой интерфейс |
+| *«Previously I thought QT was the best option for implementing UI with C++ and now this»* | Bruce NKUNDABAGENZI (LinkedIn) | Использовать сравнение с Qt в постах (легковесность, DOM вместо Canvas, без MOC) |
+| *«What if you need a package that is available in JS? A transpiler could be better addition»* | Lead Consultant (LinkedIn) | Документировать JS Interop (`emscripten::val`) для использования готовых npm-пакетов при необходимости |
+| *«Good job but it does not feel native»* | LinkedIn | Улучшить first-load UX (preload, skeleton, SW) и фокусы/hover-анимации |
 | *«Why not Preact?»* | LinkedIn | Изучить Preact архитектуру (см. выше), нишевые преимущества ReactX задокументированы |
 | *«Tsoding vibes»* | LinkedIn | Позитив, ничего делать не надо 😄 |
 | *«I will give it a test»* | Ahmed El-Azab (Sr. Backend) | Следить за фидбеком, ответить если появятся вопросы |

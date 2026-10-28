@@ -4,43 +4,55 @@
 
 # ReactX
 
-**React на C++26. Один и тот же код компонентов — в терминале и в браузере.**
+**React in C++26. The same component code runs in a terminal and in a browser.**
 
-**Русский** · [English](README.en.md)
+[Русский](README.ru.md) · **English**
 
 [![CI](https://github.com/sargisis/ReactX/actions/workflows/pages.yml/badge.svg)](https://github.com/sargisis/ReactX/actions/workflows/pages.yml)
-[![Версия](https://img.shields.io/github/v/tag/sargisis/ReactX?sort=semver&label=%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F&color=f5a524)](CHANGELOG.md)
+[![Version](https://img.shields.io/github/v/tag/sargisis/ReactX?sort=semver&label=version&color=f5a524)](CHANGELOG.md)
 [![C++26](https://img.shields.io/badge/C%2B%2B-26-0d0f12?logo=cplusplus)](https://sargisis.github.io/ReactX/docs/safety)
 [![WebAssembly](https://img.shields.io/badge/WebAssembly-Emscripten-654ff0?logo=webassembly&logoColor=white)](https://sargisis.github.io/ReactX/docs/browser)
-[![Сайт](https://img.shields.io/badge/%D1%81%D0%B0%D0%B9%D1%82-sargisis.github.io%2FReactX-b45309)](https://sargisis.github.io/ReactX/)
-[![Лицензия: MIT или Apache-2.0](https://img.shields.io/badge/%D0%BB%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F-MIT%20%7C%20Apache--2.0-6b675e)](#лицензия)
+[![Site](https://img.shields.io/badge/site-sargisis.github.io%2FReactX-b45309)](https://sargisis.github.io/ReactX/)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20%7C%20Apache--2.0-6b675e)](#license)
 
-[Сайт и документация](https://sargisis.github.io/ReactX/) · [Быстрый старт](#быстрый-старт) · [Примеры](examples) · [Изменения](CHANGELOG.md) · [Для AI-помощников](#для-ai-помощников)
+[Site and docs](https://sargisis.github.io/ReactX/) · [Quick start](#quick-start) · [Examples](examples) · [Changelog](CHANGELOG.md) · [For AI assistants](#for-ai-assistants)
 
-<img src=".github/assets/two-backends.svg" width="860" alt="Один компонент: в терминале и в браузере">
+<img src=".github/assets/two-backends.en.svg" width="860" alt="One component, drawn in a terminal and in a browser">
 
 </div>
 
-## Почему ReactX
+> The documentation site and the CHANGELOG are in Russian for now; the code, its comments, the CLI and [llms.txt](llms.txt) are in English.
 
-- **Как React, только C++.** Компоненты — обычные функции, состояние — хуки, изменения вносит reconciler с ключами и пакетными обновлениями.
-- **Один код — два мира.** Терминал (ANSI, Flexbox на Yoga, фокус, клавиатура) и браузер (WebAssembly + DOM). Готовые компоненты `rx::ui` выглядят уместно и там, и там.
-- **Типы ловят ошибки.** Props — своя структура: `h(Counter, {.start = 5})`. Опечатку в имени поля или неверный тип найдёт компилятор, а не пользователь.
-- **Весь стек на C++.** Роутер, `useFetch`, свой JSON (с рефлексией C++26), HTTP-сервер и CLI `reactx` — без Node, npm и webpack. Счётчик в браузере весит ~135 КБ.
-- **Современный и строгий C++.** Контракты C++26, `std::expected` для ошибок, hardening стандартной библиотеки; каждый push проверяется под ASan, UBSan и ThreadSanitizer.
-- **Этот сайт тоже на ReactX:** [sargisis.github.io/ReactX](https://sargisis.github.io/ReactX/).
+## Start with an AI assistant
 
-## Быстрый старт
+New to ReactX? Make a project and open its folder in Codex, Cursor or Claude Code: every project from `reactx new` has an `AGENTS.md` they read on their own. In a plain chat (ChatGPT), start with:
 
-Установите `reactx` одним из способов:
+```text
+We're using ReactX, a C++26 UI framework (not JavaScript): https://github.com/sargisis/ReactX.
+Read https://sargisis.github.io/ReactX/llms.txt first — it has the whole API.
+Don't invent anything that isn't there.
+```
 
-- **Готовый `reactx`** для Linux x86-64 — архив в [GitHub Releases](https://github.com/sargisis/ReactX/releases) (`bin/reactx` положите в `PATH`). Для веб-проектов нужны [Emscripten](https://emscripten.org) 6+ (переменная `EMSDK`), CMake 3.28+ и Ninja; для терминальных — ещё **GCC 16+**.
-- **Docker** — всё уже внутри (GCC 16, Emscripten, `reactx`):
+## Why ReactX
+
+- **Like React, but C++.** Components are plain functions, state lives in hooks, and a reconciler with keys and batched updates applies the changes.
+- **One codebase, two worlds.** A terminal (ANSI, Flexbox on Yoga, focus, keyboard) and a browser (WebAssembly + DOM). The ready-made `rx::ui` components look at home in both.
+- **Types catch mistakes.** Props are your own struct: `h(Counter, {.start = 5})`. A typo in a field name or a wrong type is found by the compiler, not by your users.
+- **The whole stack in C++.** A router, `useFetch`, its own JSON (with C++26 reflection), an HTTP server and the `reactx` CLI — no Node, npm or webpack. A counter in the browser weighs ~135 KB.
+- **Modern, strict C++.** C++26 contracts, `std::expected` for errors, a hardened standard library; every push runs under ASan, UBSan and ThreadSanitizer.
+- **This site is built with ReactX too:** [sargisis.github.io/ReactX](https://sargisis.github.io/ReactX/).
+
+## Quick start
+
+Install `reactx` one of these ways:
+
+- **A prebuilt `reactx`** for Linux x86-64 — an archive in [GitHub Releases](https://github.com/sargisis/ReactX/releases) (put `bin/reactx` on your `PATH`). Web projects need [Emscripten](https://emscripten.org) 6+ (the `EMSDK` variable), CMake 3.28+ and Ninja; terminal projects also need **GCC 16+**.
+- **Docker** — everything is inside (GCC 16, Emscripten, `reactx`):
   ```sh
   docker run --rm -it -u "$(id -u):$(id -g)" -v "$PWD:/app" -p 8090:8090 ghcr.io/sargisis/reactx
   ```
-  Внутри — `reactx dev --host 0.0.0.0`, чтобы страница открылась снаружи. Проекты из `reactx new` открываются в VS Code «Reopen in Container» и в GitHub Codespaces: в них есть `.devcontainer/`.
-- **Из исходников** (GCC 16+, CMake 3.28+, Ninja):
+  Inside, run `reactx dev --host 0.0.0.0` so the page is reachable from outside. Projects made by `reactx new` open in VS Code "Reopen in Container" and in GitHub Codespaces: they have a `.devcontainer/`.
+- **From source** (GCC 16+, CMake 3.28+, Ninja):
   ```sh
   git clone https://github.com/sargisis/ReactX.git && cd ReactX
   cmake --preset release -DCMAKE_CXX_COMPILER=g++-16 && cmake --build --preset release
@@ -48,11 +60,11 @@
   ```
 
 ```sh
-reactx new my-app && cd my-app      # веб-проект (или --terminal)
-reactx dev                          # сервер на C++, пересборка и обновление страницы при сохранении
+reactx new my-app && cd my-app      # a web project (or --terminal)
+reactx dev                          # a C++ server; rebuilds and reloads the page on every save
 ```
 
-Откройте http://127.0.0.1:8090/ и правьте `src/main.cpp`. `reactx build --native` собирает те же компоненты для терминала — тогда `main` выбирает точку входа: `mountDom` есть только в браузере (нативно это понятная ошибка компиляции), в терминале — `TerminalApp`:
+Open http://127.0.0.1:8090/ and edit `src/main.cpp`. `reactx build --native` builds the same components for the terminal; then `main` picks the entry point: `mountDom` exists only in the browser (natively it's a clear compile error), the terminal uses `TerminalApp`:
 
 ```cpp
 #ifdef __EMSCRIPTEN__
@@ -62,27 +74,27 @@ reactx dev                          # сервер на C++, пересборк�
 #endif
 ```
 
-Дальше:
+Next:
 
 ```sh
-reactx build                        # build/web/dist — файлы для любого хостинга
+reactx build                        # build/web/dist — files for any static host
 reactx add magic_enum https://github.com/Neargye/magic_enum.git --rev v0.9.8 --target magic_enum::magic_enum
-reactx update                       # перейти на новейший релиз ReactX
-reactx dev --proxy http://127.0.0.1:5000   # /api — на свой бэкенд (Flask, Django, Express, ...)
+reactx update                       # move to the newest ReactX release
+reactx dev --proxy http://127.0.0.1:5000   # /api goes to your backend (Flask, Django, Express, ...)
 ```
 
-### Редактор
+### The editor
 
-Подсветка ошибок в редакторе — через **clangd**: он понимает C++26 так же, как компилятор, и берёт флаги из настоящей сборки. Встроенный IntelliSense расширения C/C++ от Microsoft C++26 и GCC 16 не знает и подчёркивает правильный код («такого нет»).
+Errors in the editor come from **clangd**: it understands C++26 like the compiler and takes the flags of the real build. The Microsoft C/C++ extension's IntelliSense doesn't know C++26 and GCC 16, and underlines correct code.
 
-`reactx new` уже кладёт в проект `.clangd` и `.vscode/`: установите расширение **clangd** (VS Code предложит сам), выполните один раз `reactx build` — и ошибки в редакторе совпадут с ошибками сборки. Для веб-проекта используется clangd из Emscripten (`$EMSDK/upstream/bin/clangd`), отдельно ставить ничего не нужно. В проект, созданный до v0.8.1, скопируйте `.clangd` и `.vscode/` из нового (`reactx new tmp`).
+`reactx new` puts a `.clangd` and a `.vscode/` into the project: install the **clangd** extension (VS Code suggests it), run `reactx build` once, and the editor shows what the build shows. Web projects use Emscripten's own clangd (`$EMSDK/upstream/bin/clangd`), nothing to install. For a project made before v0.8.1, copy `.clangd` and `.vscode/` from a new one (`reactx new tmp`).
 
-## Как выглядит код
+## What the code looks like
 
 ```cpp
 #include <string>
-#include "reactx/dom.hpp"       // mountDom — браузер
-#include "reactx/reactx.hpp"    // Element, h, хуки, контекст, memo
+#include "reactx/dom.hpp"       // mountDom — the browser
+#include "reactx/reactx.hpp"    // Element, h, hooks, context, memo
 using namespace rx;
 
 struct TodoProps {
@@ -97,60 +109,60 @@ Element Todo(const TodoProps& p) {
 
 Element App(const Props&) {
     auto [done, setDone] = useState(false);
-    useKeyboard([setDone](const KeyEvent& k) {          // сочетания клавиш для всего приложения
+    useKeyboard([setDone](const KeyEvent& k) {          // keyboard shortcuts for the whole app
         if (k.ctrl && k.key == "z") { setDone(false); return true; }
         return false;
     });
     return h("ul", {}, {
-        h(Todo, {.title = "Написать reconciler", .done = done, .onToggle = [setDone, done] { setDone(!done); }}),
+        h(Todo, {.title = "Write the reconciler", .done = done, .onToggle = [setDone, done] { setDone(!done); }}),
     });
 }
 
 int main() { mountDom(h(App)); }
 ```
 
-Для терминала — `#include "reactx/terminal.hpp"` и `TerminalApp().run(h(App))` вместо `mountDom`. Компоненты те же.
+For a terminal: `#include "reactx/terminal.hpp"` and `TerminalApp().run(h(App))` instead of `mountDom`. The components stay the same.
 
-## Что внутри
+## What's inside
 
 | | |
 |---|---|
-| **Ядро** | элементы `h()`, фрагменты, ключи; компоненты-функции; props-структуры; reconciler с переиспользованием узлов; пакетные обновления |
-| **Хуки** | `useState`, `useEffect`, `useRef`, `useMemo`, `useCallback`, `useContext`, `useReducer`, `useStore`, `useId`, `useTimeout`, `useInterval`, `useKeyboard`, `useDebounce`, `useLocalStorage`, `useWindowSize`, `memo<C>`, `errorBoundary` |
-| **События** | `onClick`, `onInput`, `onChange`, `onKey`, `onSubmit`, `onFocus`, `onBlur`, `onScroll`; всплытие как в React |
-| **Терминал** | ANSI-отрисовка только изменённых строк, Flexbox на Yoga, рамки, цвета, фокус, Unicode/ASCII по локали |
-| **Браузер** | WebAssembly + DOM, управляемые поля, SVG, делегирование событий |
-| **Компоненты** | `rx::ui`: кнопки, поля, флажки, вкладки, модальные окна, списки — с темой |
-| **Приложения** | роутер (History API), `useFetch`, JSON с рефлексией, HTTP-сервер на C++, REST API |
-| **Инструменты** | CLI `reactx` (`new`, `dev`, `build`, `add`, `remove`, `update`), модуль `import reactx;`, `TextRenderer` для тестов |
+| **Core** | `h()` elements, fragments, keys; function components; props structs; a reconciler that reuses nodes; batched updates |
+| **Hooks** | `useState`, `useEffect`, `useRef`, `useMemo`, `useCallback`, `useContext`, `useReducer`, `useStore`, `useId`, `useTimeout`, `useInterval`, `useKeyboard`, `useDebounce`, `useLocalStorage`, `useWindowSize`, `memo<C>`, `errorBoundary` |
+| **Events** | `onClick`, `onInput`, `onChange`, `onKey`, `onSubmit`, `onFocus`, `onBlur`, `onScroll`; bubbling like in React |
+| **Terminal** | ANSI drawing of changed lines only, Flexbox on Yoga, borders, colors, focus, Unicode/ASCII by locale |
+| **Browser** | WebAssembly + DOM, controlled inputs, SVG, event delegation |
+| **Components** | `rx::ui`: buttons, inputs, checkboxes, tabs, modals, lists — themed |
+| **Apps** | a router (History API), `useFetch`, JSON with reflection, an HTTP server in C++, a REST API |
+| **Tools** | the `reactx` CLI (`new`, `dev`, `build`, `add`, `remove`, `update`), the `import reactx;` module, `TextRenderer` for tests |
 
-## Справочник
+## Reference
 
 <details>
-<summary><b>Хуки и события</b></summary>
+<summary><b>Hooks and events</b></summary>
 
-- `useState` — значение или функция-updater; равное значение не вызывает перерисовку.
-- `useEffect` — без deps (каждый раз), `deps(a, b)` или `deps()` (один раз); может вернуть функцию очистки.
-- `useRef`, `useMemo` (пересчёт только при смене deps), `useCallback` (обработчик сохраняет «личность», пока не сменились deps).
-- `useReducer(reducer, initial)` → `[state, dispatch]`: состояние, которое меняют действия; берётся самый свежий reducer.
-- `useTimeout(fn, std::optional(5s))`, `useInterval(fn, 1s)` — таймеры в потоке интерфейса; `std::nullopt` выключает, размонтирование отменяет.
-- `useKeyboard(handler)` — сочетания клавиш для всего приложения, где бы ни был фокус: вызывается раньше `onKey` элемента, `return true` забирает клавишу; пока фокус в поле ввода, клавиши набора текста сюда не приходят.
-- `useDebounce(value, 300ms)`, `useLocalStorage("key", default)` (браузер — `localStorage`, нативно — память), `useWindowSize()`.
-- **Общее состояние** (как Zustand): `const auto Cart = createStore<std::vector<Item>>({});`, `Cart.set(v)` / `Cart.update([](auto items) { ...; return items; })` где угодно в потоке интерфейса; `useStore(Cart)` перерисовывает при каждом изменении, `useStore(Cart, [](const auto& c) { return c.size(); })` — только когда меняется выбранная часть.
-- `useId()` — id, уникальный в приложении и одинаковый при каждой отрисовке: для `<label for>` и `aria-*`.
-- **Границы ошибок**: `errorBoundary([](const RenderError& e) { return h("p", {}, {e.message}); }, {children})` — если дети бросили исключение при отрисовке (в том числе позже, при обновлении состояния), вместо них показывается запасной вариант, а остальное приложение работает; `e.retry()` пробует снова. Исключения в обработчиках событий и эффектах не ловятся (как в React).
-- **Контекст**: `createContext<T>(default)`, `ctx.provide(value, {children})`, `useContext(ctx)`; при смене значения перерисовываются все читатели, даже сквозь `memo`.
-- **Лямбда-компонент**: `const auto Badge = [](const BadgeProps& p) -> Element { ... };` и `h(Badge, {.label = "new"})` — как функция (без захватов: данные — через props).
-- `rx::urlEncode(text)` / `rx::urlDecode` — значение для строки запроса: `"/api/logs?q=" + rx::urlEncode(q)`.
-- **memo**: `h(memo<Item>, props)` пропускает перерисовку при тех же props. Для props-структуры — её `operator==`; для `Props` — значения через `==`, обработчики равны, только если из одного `useCallback`; элементы с детьми перерисовываются всегда.
-- **Батчинг**: `setState` только помечает компонент; перерисовка в `flush()` (сама — после `render`, `dispatch`, ответов `fetch` и таймеров), родители раньше детей.
+- `useState` — a value or an updater function; an equal value doesn't re-render.
+- `useEffect` — without deps (every render), `deps(a, b)` or `deps()` (once); may return a cleanup function.
+- `useRef`, `useMemo` (recomputes only when deps change), `useCallback` (a handler keeps its identity until deps change).
+- `useReducer(reducer, initial)` → `[state, dispatch]`: state changed by actions; the newest reducer is used.
+- `useTimeout(fn, std::optional(5s))`, `useInterval(fn, 1s)` — timers on the UI thread; `std::nullopt` switches them off, unmounting cancels them.
+- `useKeyboard(handler)` — keyboard shortcuts for the whole app, wherever the focus is: runs before the element's `onKey`, `return true` consumes the key; while a text field has focus, keys that type text don't reach it.
+- `useDebounce(value, 300ms)`, `useLocalStorage("key", default)` (`localStorage` in the browser, memory natively), `useWindowSize()`.
+- **Shared state** (like Zustand): `const auto Cart = createStore<std::vector<Item>>({});`, `Cart.set(v)` / `Cart.update([](auto items) { ...; return items; })` anywhere on the UI thread; `useStore(Cart)` re-renders on every change, `useStore(Cart, [](const auto& c) { return c.size(); })` only when the selected part changes.
+- `useId()` — an id unique in the app and the same on every render: for `<label for>` and `aria-*`.
+- **Error boundaries**: `errorBoundary([](const RenderError& e) { return h("p", {}, {e.message}); }, {children})` — when the children throw while rendering (also later, on a state update), the fallback shows instead and the rest of the app keeps working; `e.retry()` tries again. Exceptions in event handlers and effects aren't caught (as in React).
+- **Context**: `createContext<T>(default)`, `ctx.provide(value, {children})`, `useContext(ctx)`; when the value changes, every reader re-renders, even through `memo`.
+- **Lambda components**: `const auto Badge = [](const BadgeProps& p) -> Element { ... };` and `h(Badge, {.label = "new"})` — like a function (no captures: pass data in props).
+- `rx::urlEncode(text)` / `rx::urlDecode` — a value for a query string: `"/api/logs?q=" + rx::urlEncode(q)`.
+- **memo**: `h(memo<Item>, props)` skips re-rendering with the same props. For a props struct — its `operator==`; for `Props` — values with `==`, handlers equal only if they come from the same `useCallback`; elements with children always re-render.
+- **Batching**: `setState` only marks the component; re-rendering happens in `flush()` (on its own after `render`, `dispatch`, `fetch` responses and timers), parents before children.
 
-**События** — четыре вида обработчиков: `Callback` (`void()`: `onClick`, `onFocus`, `onBlur`, `onSubmit`), `KeyHandler` (`void(const KeyEvent&)`: `onKey`), `InputHandler` (`void(const std::string&)`: `onInput`, `onChange`) и `ScrollHandler` (`void(const ScrollEvent&)`: `onScroll`, с `nearBottom()` для подгрузки). Бэкенд передаёт данные через `Root::dispatch(node, "onKey", KeyEvent{"Enter"})`; если данные не подходят обработчику, `dispatch` вернёт `false`. Обработчики остаются в ядре и в бэкенд не передаются.
+**Events** — four kinds of handlers: `Callback` (`void()`: `onClick`, `onFocus`, `onBlur`, `onSubmit`), `KeyHandler` (`void(const KeyEvent&)`: `onKey`), `InputHandler` (`void(const std::string&)`: `onInput`, `onChange`) and `ScrollHandler` (`void(const ScrollEvent&)`: `onScroll`, with `nearBottom()` for loading more). A backend sends the data with `Root::dispatch(node, "onKey", KeyEvent{"Enter"})`; if the data doesn't fit the handler, `dispatch` returns `false`. Handlers stay in the core and are never sent to the backend.
 
 </details>
 
 <details>
-<summary><b>Терминал</b></summary>
+<summary><b>Terminal</b></summary>
 
 ```cpp
 #include "reactx/terminal.hpp"
@@ -164,108 +176,108 @@ int main() {
 }
 ```
 
-Раскладка — **Flexbox**, её считает [Yoga](https://github.com/facebook/yoga) (движок React Native). Единица — клетка терминала.
+Layout is **Flexbox**, computed by [Yoga](https://github.com/facebook/yoga) (the engine behind React Native). The unit is a terminal cell.
 
 ```cpp
-h("box", {{"flexGrow", 1}, {"justifyContent", "center"}, {"alignItems", "center"}}, {   // центр экрана
-    h("box", {{"border", true}, {"title", "Окно"}, {"padding", 1}, {"gap", 1}, {"width", "60%"}}, {
+h("box", {{"flexGrow", 1}, {"justifyContent", "center"}, {"alignItems", "center"}}, {   // the middle of the screen
+    h("box", {{"border", true}, {"title", "Window"}, {"padding", 1}, {"gap", 1}, {"width", "60%"}}, {
         h("box", {{"direction", "row"}, {"gap", 1}}, {
-            h("text", {}, {"Имя:"}),
-            h("input", {{"flexGrow", 1}, {"value", name}}),                          // тянется на всю ширину
+            h("text", {}, {"Name:"}),
+            h("input", {{"flexGrow", 1}, {"value", name}}),                          // takes the whole width
         }),
         h("box", {{"direction", "row"}, {"justifyContent", "space-between"}}, {
-            h("button", {}, {"Отмена"}), h("button", {}, {"OK"}),
+            h("button", {}, {"Cancel"}), h("button", {}, {"OK"}),
         }),
     }),
 });
 ```
 
-| Тег | Что рисует |
+| Tag | Draws |
 |---|---|
-| `box` (и любой неизвестный тег) | flex-контейнер, по умолчанию столбец |
-| `text` | свой текст; переносится по словам (`wrap=false` — обрезать) |
-| `input` | поле ввода: `value`, `placeholder`, курсор `_` в фокусе |
+| `box` (and any unknown tag) | a flex container, a column by default |
+| `text` | its text; wraps at words (`wrap=false` truncates) |
+| `input` | a text field: `value`, `placeholder`, a `_` cursor when focused |
 | `button` | `[ label ]` |
 
-**Flex-пропсы** (как в CSS): `direction` (`row`, `column`, `row-reverse`, `column-reverse`), `justifyContent` (`start`, `center`, `end`, `space-between`, `space-around`, `space-evenly`), `alignItems` / `alignSelf` (`start`, `center`, `end`, `stretch`), `flexGrow`, `flexShrink`, `flexBasis`, `flexWrap`, `width` / `height` / `min*` / `max*` (число или `"50%"`), `padding*` и `margin*` (`X`, `Y`, `Left`, …; `margin: "auto"`), `gap` / `rowGap` / `columnGap`, `position: "absolute"` + `top` / `left` / `right` / `bottom`, `display: "none"`, `overflow: "hidden"`.
+**Flex props** (like CSS): `direction` (`row`, `column`, `row-reverse`, `column-reverse`), `justifyContent` (`start`, `center`, `end`, `space-between`, `space-around`, `space-evenly`), `alignItems` / `alignSelf` (`start`, `center`, `end`, `stretch`), `flexGrow`, `flexShrink`, `flexBasis`, `flexWrap`, `width` / `height` / `min*` / `max*` (a number or `"50%"`), `padding*` and `margin*` (`X`, `Y`, `Left`, …; `margin: "auto"`), `gap` / `rowGap` / `columnGap`, `position: "absolute"` + `top` / `left` / `right` / `bottom`, `display: "none"`, `overflow: "hidden"`.
 
-**Оформление**: `border`, `title`, `color`, `bg`, `bold`, `dim`, `underline`, `focusable`. Цвета: `black red green yellow blue magenta cyan white gray`, `bright-<цвет>`. Рамки — `┌─┐` в UTF-8 и `+-+` в других локалях (по `std::text_encoding`).
+**Look**: `border`, `title`, `color`, `bg`, `bold`, `dim`, `underline`, `focusable`. Colors: `black red green yellow blue magenta cyan white gray`, `bright-<color>`. Borders are `┌─┐` in UTF-8 and `+-+` in other locales (decided with `std::text_encoding`).
 
-**Клавиши**: Tab/↓ и Shift+Tab/↑ — фокус (элемент, который его потерял, получает `onBlur`, новый — `onFocus`); любая клавиша уходит в `onKey` элемента в фокусе и всплывает к родителям; в `input` символы и Backspace меняют `value` через `onInput` (держите `value` в `useState`); Enter/Space — `onClick`; Ctrl+C — выход. Фокус получают `input`, `button` и узлы с `focusable=true`; `trapFocus` не выпускает Tab из окна, `opaque` стирает то, что под коробкой.
+**Keys**: Tab/↓ and Shift+Tab/↑ move the focus (the element that lost it gets `onBlur`, the new one `onFocus`); any key goes to the focused element's `onKey` and bubbles to its parents; in an `input`, characters and Backspace change `value` through `onInput` (keep `value` in `useState`); Enter/Space — `onClick`; Ctrl+C quits. `input`, `button` and nodes with `focusable=true` take focus; `trapFocus` keeps Tab inside a window, `opaque` clears what is under a box.
 
-Отличия от браузера: корень занимает весь терминал; `flexShrink` по умолчанию 1 в строках и 0 в столбцах (что не влезло по высоте — обрезается), кнопки не сжимаются; рамка всегда обрезает содержимое.
+Differences from the browser: the root fills the whole terminal; `flexShrink` defaults to 1 in rows and 0 in columns (what doesn't fit in height is cut off), buttons don't shrink; a border always clips its content.
 
-Демо: `./build/debug/todo_tui`, `./build/debug/ui_demo` (нужен настоящий терминал).
+Demos: `./build/debug/todo_tui`, `./build/debug/ui_demo` (need a real terminal).
 
 </details>
 
 <details>
-<summary><b>Компоненты <code>rx::ui</code></b></summary>
+<summary><b><code>rx::ui</code> components</b></summary>
 
-Готовые компоненты ([`reactx/ui.hpp`](include/reactx/ui.hpp)) с темой через контекст — **один и тот же код в терминале и в браузере**: в терминале они рисуются рамками и символами ([`ui_terminal.cpp`](src/ui_terminal.cpp)), в браузере — HTML с классами `rx-*` и CSS, который сам добавляется на страницу ([`ui_web.cpp`](src/ui_web.cpp)).
+Ready-made components ([`reactx/ui.hpp`](include/reactx/ui.hpp)) themed through a context — **the same code in a terminal and in a browser**: in a terminal they are drawn with borders and characters ([`ui_terminal.cpp`](src/ui_terminal.cpp)), in a browser as HTML with `rx-*` classes and CSS that adds itself to the page ([`ui_web.cpp`](src/ui_web.cpp)).
 
 ```cpp
 ui::themeProvider(ui::Theme{.accent = "magenta"}, {
     ui::tabs({.tabs = {
-        {"Задачи", {
-            ui::input({.value = draft, .onChange = setDraftFn, .onSubmit = addFn, .label = "Новая:"}),
-            ui::list({.title = "Список", .items = {
-                ui::listItem({.label = "Купить молоко", .detail = "сегодня", .onSelect = toggleFn}),
+        {"Tasks", {
+            ui::input({.value = draft, .onChange = setDraftFn, .onSubmit = addFn, .label = "New:"}),
+            ui::list({.title = "List", .items = {
+                ui::listItem({.label = "Buy milk", .detail = "today", .onSelect = toggleFn}),
             }}),
-            ui::button({.label = "Удалить всё", .onClick = askFn, .variant = ui::Variant::Danger}),
+            ui::button({.label = "Delete all", .onClick = askFn, .variant = ui::Variant::Danger}),
         }},
-        {"Настройки", {ui::checkbox({.label = "Тёмная тема", .checked = dark, .onToggle = flipFn})}},
+        {"Settings", {ui::checkbox({.label = "Dark theme", .checked = dark, .onToggle = flipFn})}},
     }}),
-    ui::modal({.title = "Точно?", .open = asking, .onClose = closeFn, .children = {/* ... */}}),
+    ui::modal({.title = "Sure?", .open = asking, .onClose = closeFn, .children = {/* ... */}}),
 });
 ```
 
-| Компонент | Что умеет |
+| Component | Does |
 |---|---|
-| `button` | `label`, `onClick`, `variant` (`Default`, `Primary`, `Danger`, `Success`), `disabled` (не получает фокус) |
-| `input` | `value`, `onChange(text)`, `onSubmit(text)` по Enter, `placeholder`, `label`; Escape очищает |
+| `button` | `label`, `onClick`, `variant` (`Default`, `Primary`, `Danger`, `Success`), `disabled` (doesn't take focus) |
+| `input` | `value`, `onChange(text)`, `onSubmit(text)` on Enter, `placeholder`, `label`; Escape clears it |
 | `checkbox` | `label`, `checked`, `onToggle` (Enter / Space) |
-| `tabs` | вкладки `{label, content}`, `initial`; Enter на заголовке открывает вкладку |
-| `modal` | `title`, `open`, `onClose` (Escape), `width`; закрывает то, что под ним, держит фокус внутри и возвращает его после закрытия |
-| `list` / `listItem` | рамка с заголовком, `emptyText`; пункт: `label`, `detail` справа, `selected`, `onSelect`, `onKey` |
+| `tabs` | tabs `{label, content}`, `initial`; Enter on a title opens the tab |
+| `modal` | `title`, `open`, `onClose` (Escape), `width`; covers what is under it, keeps the focus inside and gives it back when closed |
+| `list` / `listItem` | a bordered box with a title, `emptyText`; an item: `label`, `detail` on the right, `selected`, `onSelect`, `onKey` |
 
-Тема (`ui::Theme`): `accent`, `text`, `muted`, `success`, `warning`, `danger`, `surface`. В браузере тема превращается в CSS-переменные (`--rx-accent`, …), имена цветов терминала переводятся в палитру, можно передавать и CSS-цвета (`"#ff6600"`); свои стили — по классам `rx-btn`, `rx-btn--primary`, `rx-input`, `rx-tab--active`, `rx-modal__dialog`, `rx-item--selected`. Каждый компонент есть и как функция с `Props`: `h(ui::Button, {{"label", "OK"}})`.
+Theme (`ui::Theme`): `accent`, `text`, `muted`, `success`, `warning`, `danger`, `surface`. In the browser the theme becomes CSS variables (`--rx-accent`, …), terminal color names map to a palette, CSS colors (`"#ff6600"`) work too; style them yourself through the classes `rx-btn`, `rx-btn--primary`, `rx-input`, `rx-tab--active`, `rx-modal__dialog`, `rx-item--selected`. Every component also exists as a `Props` function: `h(ui::Button, {{"label", "OK"}})`.
 
-Демо: `./build/debug/ui_demo` (терминал) и `web_ui_demo.html` (браузер).
+Demos: `./build/debug/ui_demo` (terminal) and `web_ui_demo.html` (browser).
 
 </details>
 
 <details>
-<summary><b>В браузере (WebAssembly)</b></summary>
+<summary><b>In the browser (WebAssembly)</b></summary>
 
-Бэкенд [`DomRenderer`](include/reactx/dom.hpp) рисует в настоящий DOM: теги — обычный HTML, оформление — обычный CSS. `mountDom(h(App))` монтирует приложение в `<div id="app">`.
+The [`DomRenderer`](include/reactx/dom.hpp) backend renders into the real DOM: tags are plain HTML, styling is plain CSS. `mountDom(h(App))` mounts the app into `<div id="app">`.
 
-| Пропс / событие | В браузере |
+| Prop / event | In the browser |
 |---|---|
-| `className`, `style` (строка CSS), `htmlFor` | `class`, `style`, `for` |
-| `value` | значение поля; поле управляемое — показывает то, что в состоянии |
-| `checked`, `disabled`, `selected` | свойства DOM |
-| остальное | атрибуты (`true` — есть, `false` — убрать) |
-| `onClick`, `onInput(text)`, `onChange`, `onKey(KeyEvent)`, `onSubmit`, `onFocus`, `onBlur` | события; всплывают как в React; `onSubmit` не перезагружает страницу |
-| `onScroll(ScrollEvent)` | прокрутка элемента (не всплывает): `top`, `scrollHeight`, `clientHeight`, `nearBottom()` |
-| `svg`, `rect`, `circle`, `path`, `g`, … | SVG в своём пространстве имён; `svg:text`, `svg:a` — для тегов, которые есть и в HTML |
-| `data-rx-self` | элемент получает только клики по себе, не по детям (фон окна) |
-| `data-rx-trap` | Tab не выходит из элемента; при появлении он забирает фокус, при удалении — возвращает |
+| `className`, `style` (a CSS string), `htmlFor` | `class`, `style`, `for` |
+| `value` | the field's value; the field is controlled — it shows what is in the state |
+| `checked`, `disabled`, `selected` | DOM properties |
+| anything else | attributes (`true` — present, `false` — removed) |
+| `onClick`, `onInput(text)`, `onChange`, `onKey(KeyEvent)`, `onSubmit`, `onFocus`, `onBlur` | events; they bubble like in React; `onSubmit` doesn't reload the page |
+| `onScroll(ScrollEvent)` | the element scrolled (doesn't bubble): `top`, `scrollHeight`, `clientHeight`, `nearBottom()` |
+| `svg`, `rect`, `circle`, `path`, `g`, … | SVG in its own namespace; `svg:text`, `svg:a` for the tags HTML also has |
+| `data-rx-self` | the element only gets clicks on itself, not on its children (dialog backdrops) |
+| `data-rx-trap` | Tab stays inside the element; it takes focus when it appears and gives it back when removed |
 
 ```sh
 cmake --preset web && cmake --build --preset web
-ctest --preset web                                     # тесты DOM-бэкенда под Node
+ctest --preset web                                     # DOM backend tests under Node
 ./build/debug/reactx_serve build/web --port 8090       # http://localhost:8090/
 ```
 
-Результат — обычные `.html`, `.js`, `.wasm`: их можно выложить на любой статический хостинг.
+The result is plain `.html`, `.js` and `.wasm` files for any static host.
 
 </details>
 
 <details>
-<summary><b>Роутер, данные и API</b></summary>
+<summary><b>Router, data and API</b></summary>
 
-**Роутер** ([`reactx/router.hpp`](include/reactx/router.hpp)) — как React Router; в браузере через History API (адрес меняется, «назад»/«вперёд» работают, страница не перезагружается), в терминале — история в памяти:
+**Router** ([`reactx/router.hpp`](include/reactx/router.hpp)) — like React Router; in the browser through the History API (the address changes, Back/Forward work, the page never reloads), in a terminal the history lives in memory:
 
 ```cpp
 router::routes({
@@ -274,49 +286,49 @@ router::routes({
     {"/todos/:id", h(TodoPage)},     // router::useParam("id")
     {"*",          h(NotFound)},     // router::useLocation()
 });
-router::link({.to = "/todos/7", .label = "Открыть"});   // <a href>, Ctrl+клик — новая вкладка
+router::link({.to = "/todos/7", .label = "Open"});   // <a href>, Ctrl+click opens a new tab
 router::navigate("/todos");  router::back();  router::useQuery("show");
 ```
 
-Базовый путь (например `/ReactX/` на GitHub Pages) берётся из `<base href>`; маршруты и ссылки в коде пишутся без него.
+The base path (e.g. `/ReactX/` on GitHub Pages) comes from `<base href>`; routes and links in code are written without it.
 
-**Данные** ([`reactx/fetch.hpp`](include/reactx/fetch.hpp)):
+**Data** ([`reactx/fetch.hpp`](include/reactx/fetch.hpp)):
 
 ```cpp
-auto todos = useFetch("/api/todos");            // заново при смене url; todos.reload()
+auto todos = useFetch("/api/todos");            // again when the url changes; todos.reload()
 if (todos.loading) ...; if (!todos.ok()) ... todos.errorText();
 if (auto list = todos.tryJson()) for (const auto& t : list->asArray()) ...
-fetch({.method = "POST", .url = "/api/todos", .body = json::object({{"title", "Молоко"}}).dump()},
+fetch({.method = "POST", .url = "/api/todos", .body = json::object({{"title", "Milk"}}).dump()},
       [](const FetchResponse& r) { ... });
 ```
 
-В терминальной сборке `fetch` и `useFetch` тоже ходят в сеть (с v0.7): нужен полный URL с `http://`; запрос идёт в своём потоке, ответ приходит в потоке интерфейса на ближайшем `flush()` (`TerminalApp` делает его сам). HTTPS там нет.
+In the terminal build `fetch` and `useFetch` use the network too (since v0.7): give a full `http://` URL; the request runs on its own thread and the answer arrives on the UI thread at the next `flush()` (`TerminalApp` does it). No HTTPS there.
 
-`setLocalFetch` — «сервер внутри приложения»: запросы сначала идут в обработчик на C++, сеть не нужна (так работают статические сайты без бэкенда и тесты API).
+`setLocalFetch` is a "server inside the app": requests go to a C++ handler first, no network needed (static sites without a backend, API tests).
 
-**Полный стек** — интерфейс и сервер на C++ ([examples/web_app.cpp](examples/web_app.cpp) + [examples/api_server.cpp](examples/api_server.cpp)):
+**Full stack** — UI and server in C++ ([examples/web_app.cpp](examples/web_app.cpp) + [examples/api_server.cpp](examples/api_server.cpp)):
 
 ```sh
 cmake --build --preset web && cmake --build --preset debug
 ./build/debug/api_server build/web/app --port 8091 --data todos.json   # http://127.0.0.1:8091/
 ```
 
-| Запрос | Ответ |
+| Request | Response |
 |---|---|
-| `GET /api/todos` | список |
-| `POST /api/todos` `{"title": "..."}` | 201 + новая задача |
-| `GET /api/todos/:id` | задача или 404 |
-| `PATCH /api/todos/:id` `{"done": true}` | обновлённая задача |
+| `GET /api/todos` | the list |
+| `POST /api/todos` `{"title": "..."}` | 201 + the new todo |
+| `GET /api/todos/:id` | the todo or 404 |
+| `PATCH /api/todos/:id` `{"done": true}` | the updated todo |
 | `DELETE /api/todos/:id` | 204 |
 
-Ошибки — `{"error": "..."}`. С `--data файл.json` задачи сохраняются на диск атомарно и переживают перезапуск.
+Errors are `{"error": "..."}`. With `--data file.json` the todos are saved to disk atomically and survive restarts.
 
 </details>
 
 <details>
-<summary><b>Сервер на C++</b></summary>
+<summary><b>The C++ server</b></summary>
 
-Свой HTTP/1.1-сервер ([`reactx/http.hpp`](include/reactx/http.hpp), POSIX-сокеты, поток на соединение) — для разработки Python и Node не нужны:
+An HTTP/1.1 server of its own ([`reactx/http.hpp`](include/reactx/http.hpp), POSIX sockets, a thread per connection) — no Python or Node needed for development:
 
 ```cpp
 rx::net::HttpServer server("127.0.0.1", 8090);
@@ -324,91 +336,91 @@ server.get("/api/todos/:id", [](const rx::net::Request& req) {
     return rx::net::Response::json(R"({"id": )" + req.pathParam("id") + "}");
 });
 server.serveDirectory("build/web", /*spaFallback=*/true);
-if (auto started = server.tryStart(); !started) std::println("{}", started.error());   // порт занят
-server.run();   // до Ctrl+C
+if (auto started = server.tryStart(); !started) std::println("{}", started.error());   // port in use
+server.run();   // until Ctrl+C
 ```
 
 ```sh
-./build/debug/reactx_serve [ПАПКА] [--port 8090] [--host 127.0.0.1] [--spa] [--base /ReactX/] [--not-found 404.html] [--quiet]
+./build/debug/reactx_serve [DIR] [--port 8090] [--host 127.0.0.1] [--spa] [--base /ReactX/] [--not-found 404.html] [--quiet]
 ```
 
-Отдаёт файлы с правильными типами (`.wasm` → `application/wasm`), не выпускает за пределы папки (`/../секрет` → 403), `--spa` отдаёт `index.html` для путей роутера, `--base` и `--not-found` повторяют GitHub Pages. Это сервер для разработки (`127.0.0.1`), не для открытого интернета: нет HTTPS, keep-alive и защиты от перегрузки.
+It serves files with the right types (`.wasm` → `application/wasm`), never outside the folder (`/../secret` → 403); `--spa` answers router paths with `index.html`, `--base` and `--not-found` mimic GitHub Pages. It is a development server (`127.0.0.1`), not for the open internet: no HTTPS, keep-alive or overload protection.
 
-**Прокси на другой бэкенд** (как `server.proxy` в Vite): запросы под префиксом уходят на другой сервер, ответ возвращается как есть — статус, заголовки (в том числе несколько `Set-Cookie`), тело; путь не раскодируется по дороге.
+**A proxy to another backend** (like Vite's `server.proxy`): requests under a prefix go to another server and its answer comes back as is — status, headers (several `Set-Cookie` too), body; the path isn't decoded on the way.
 
 ```cpp
-server.proxy("/api", *rx::net::parseUpstream("http://127.0.0.1:5000"));   // /api и /api/...
+server.proxy("/api", *rx::net::parseUpstream("http://127.0.0.1:5000"));   // /api and /api/...
 auto reply = rx::net::forward(request, {.host = "127.0.0.1", .port = 5000});   // std::expected<Response, HttpError>
 ```
 
 ```sh
-reactx dev --proxy http://127.0.0.1:5000              # /api → Flask на :5000
-reactx dev --proxy /graphql=http://127.0.0.1:4000     # свой префикс; --proxy можно повторять
+reactx dev --proxy http://127.0.0.1:5000              # /api -> Flask on :5000
+reactx dev --proxy /graphql=http://127.0.0.1:4000     # your own prefix; --proxy can repeat
 ```
 
-Или в `reactx.json`: `"web": {"base": "/", "proxy": {"/api": "http://127.0.0.1:5000"}}`. Только `http://`; бэкенд недоступен — 502 с причиной, не ответил за 30 с — 504.
+Or in `reactx.json`: `"web": {"base": "/", "proxy": {"/api": "http://127.0.0.1:5000"}}`. Plain `http://` only; an unreachable backend gives 502 with the reason, no answer in 30 s gives 504.
 
 </details>
 
 <details>
-<summary><b>Стандарт C++ и безопасность</b></summary>
+<summary><b>C++ standard and safety</b></summary>
 
-**Правило:** берём из стандартной библиотеки всё, что в ней уже есть, и не пишем замен тому, чего нет. Нативная сборка требует **GCC 16**, браузерная — Emscripten 6 (libc++), где C++26-библиотеки пока нет, поэтому общий код использует только то, что есть в обеих.
+**The rule:** use everything the standard library already has, and write no stand-ins for what it doesn't. Native builds need **GCC 16**; browser builds use Emscripten 6 (libc++), which has no C++26 library yet, so shared code uses only what both have.
 
-| Где | Что используем |
+| Where | What we use |
 |---|---|
-| везде | `std::expected`, `std::flat_map`, `std::flat_set`, `std::format` / `std::print`, `std::from_chars` ([`reactx/parse.hpp`](include/reactx/parse.hpp)), `= delete("причина")`, `T...[0]`, `#embed` |
-| терминал | `std::inplace_vector<char, 4>` — символ в ячейке без кучи, `std::mdspan` — экран `screen[строка, столбец]`, `std::text_encoding` |
-| CLI | `std::generator` — обход файлов, `std::expected`-цепочка для `reactx.json` |
-| предусловия | контракты C++26 (`-fcontracts`), `<stacktrace>`, `<debugging>` |
-| JSON | рефлексия C++26 `<meta>`: `json::to(структура)`, `json::from<Структура>(json)` |
+| everywhere | `std::expected`, `std::flat_map`, `std::flat_set`, `std::format` / `std::print`, `std::from_chars` ([`reactx/parse.hpp`](include/reactx/parse.hpp)), `= delete("reason")`, `T...[0]`, `#embed` |
+| terminal | `std::inplace_vector<char, 4>` — a cell's character without the heap, `std::mdspan` — the screen as `screen[row, col]`, `std::text_encoding` |
+| CLI | `std::generator` — walking files, an `std::expected` chain for `reactx.json` |
+| preconditions | C++26 contracts (`-fcontracts`), `<stacktrace>`, `<debugging>` |
+| JSON | C++26 reflection `<meta>`: `json::to(aStruct)`, `json::from<Struct>(json)` |
 
-Пока нет ни в GCC 16, ни в Emscripten: `<hive>`, `<simd>`, `<linalg>`, `<rcu>`, `<hazard_pointer>`.
+Not in GCC 16 or Emscripten yet: `<hive>`, `<simd>`, `<linalg>`, `<rcu>`, `<hazard_pointer>`.
 
-**JSON для структур через рефлексию** (GCC 16) — поля структуры становятся ключами, типы проверяются, ошибка говорит, где:
+**JSON for structs with reflection** (GCC 16) — struct fields become keys, types are checked, an error says where:
 
 ```cpp
 struct Dependency { std::string git; std::string rev; std::optional<std::string> target; };
 struct Manifest { std::string name; std::optional<std::map<std::string, Dependency>> dependencies; };
 
 auto m = rx::json::from<Manifest>(rx::json::parse(text));   // std::expected<Manifest, json::Error>
-// ошибка: field "dependencies": "fmt": missing field "rev"
+// error: field "dependencies": "fmt": missing field "rev"
 rx::json::Value v = rx::json::to(*m);
 ```
 
-Поддерживаются `bool`, числа, строки, `std::optional`, последовательности, словари со строковыми ключами и вложенные структуры; поле `template_` читается как ключ `"template"`. Подключается к цели: `target_link_libraries(app PRIVATE reactx::reflection)` (не на всё сразу: GCC 16.0.1 с `-freflection` не читает модуль `import reactx;`). В браузерной сборке рефлексии нет.
+Supported: `bool`, numbers, strings, `std::optional`, sequences, maps with string keys and nested structs; a field `template_` reads the key `"template"`. Enable it per target: `target_link_libraries(app PRIVATE reactx::reflection)` (not globally: GCC 16.0.1 with `-freflection` can't read the `import reactx;` module). The browser build has no reflection.
 
-- **Hardening** (`REACTX_HARDENING`, включено): выход за границы в `v[i]`, `s[i]`, `front()` пустого контейнера останавливает программу, а не портит память. Действует и на программы, подключившие ReactX.
-- **Предусловия** `REACTX_PRE(условие)` ([`reactx/contract.hpp`](include/reactx/contract.hpp)) — для ошибок программиста. На GCC 16 это контракт C++26 `contract_assert`; без контрактов макрос печатает условие, место и стек вызовов.
-- **Ошибки как значения** (`std::expected`) там, где сбой — нормальная ситуация: `json::tryParse`, `FetchResponse::tryJson`, `HttpServer::tryStart`, `net::parseRequestHead`, `rx::parseNumber` / `rx::parsePort` вместо `std::stoi`, файлы в CLI.
-- **Санитайзеры в CI**: каждый push — все тесты под ASan + UBSan + LeakSanitizer и под ThreadSanitizer.
+- **Hardening** (`REACTX_HARDENING`, on): out-of-bounds `v[i]`, `s[i]`, `front()` on an empty container stop the program instead of corrupting memory. Applies to programs linking ReactX too.
+- **Preconditions** `REACTX_PRE(condition)` ([`reactx/contract.hpp`](include/reactx/contract.hpp)) — for programmer errors. On GCC 16 it is a C++26 `contract_assert`; without contracts the macro prints the condition, the place and the call stack.
+- **Errors are values** (`std::expected`) where failure is normal: `json::tryParse`, `FetchResponse::tryJson`, `HttpServer::tryStart`, `net::parseRequestHead`, `rx::parseNumber` / `rx::parsePort` instead of `std::stoi`, files in the CLI.
+- **Sanitizers in CI**: every push runs all tests under ASan + UBSan + LeakSanitizer and under ThreadSanitizer.
 
 </details>
 
 <details>
-<summary><b>Сборка из исходников</b></summary>
+<summary><b>Building from source</b></summary>
 
-Зависимость одна — [Yoga](https://github.com/facebook/yoga) v3.2.1 (MIT), CMake скачает её сам (без интернета: `-DFETCHCONTENT_SOURCE_DIR_YOGA=/путь/к/yoga`).
+The only dependency is [Yoga](https://github.com/facebook/yoga) v3.2.1 (MIT); CMake downloads it (offline: `-DFETCHCONTENT_SOURCE_DIR_YOGA=/path/to/yoga`).
 
 ```sh
-cmake --preset debug -DCMAKE_CXX_COMPILER=g++-16   # или release
+cmake --preset debug -DCMAKE_CXX_COMPILER=g++-16   # or release
 cmake --build --preset debug
-ctest --preset debug -LE slow                       # быстрые тесты; без -LE — ещё и полный прогон CLI
-./build/debug/counter                               # и todo, todo_tui, ui_demo
+ctest --preset debug -LE slow                       # quick tests; without -LE also the full CLI run
+./build/debug/counter                               # and todo, todo_tui, ui_demo
 ```
 
-С генератором Makefiles модуль отключается сам и всё собирается через заголовки; вручную — `-DREACTX_MODULES=OFF`.
+With the Makefiles generator the module turns itself off and everything builds through headers; by hand — `-DREACTX_MODULES=OFF`.
 
-**`import` или `#include`**: `import reactx;` подключает весь публичный API (стандартные заголовки подключайте сами; `import std;` не используется). Заголовки (`reactx/reactx.hpp`) работают так же — модуль ([modules/reactx.cppm](modules/reactx.cppm)) лишь реэкспортирует их. С `-fsanitize=undefined` или `thread` модуль отключается сам (GCC их не переносит).
+**`import` or `#include`**: `import reactx;` brings in the whole public API (include standard headers yourself; `import std;` isn't used). The headers (`reactx/reactx.hpp`) work the same — the module ([modules/reactx.cppm](modules/reactx.cppm)) only re-exports them. With `-fsanitize=undefined` or `thread` the module turns itself off (GCC can't build it then).
 
 </details>
 
 <details>
-<summary><b>Публикация сайта на GitHub Pages</b></summary>
+<summary><b>Publishing the site on GitHub Pages</b></summary>
 
-Сайт собирается и публикуется автоматически ([.github/workflows/pages.yml](.github/workflows/pages.yml)) при каждом push в `main`: нативные тесты (GCC 16), санитайзеры, сборка Emscripten, веб-тесты под Node; если всё прошло — `build/pages/site` записывается в ветку **`gh-pages`**. Один раз: **Settings → Pages → Deploy from a branch → `gh-pages` / `(root)`**.
+The site is built and published automatically ([.github/workflows/pages.yml](.github/workflows/pages.yml)) on every push to `main`: native tests (GCC 16), sanitizers, the Emscripten build and web tests under Node; if all pass, `build/pages/site` is written to the **`gh-pages`** branch. Once: **Settings → Pages → Deploy from a branch → `gh-pages` / `(root)`**.
 
-Сайт ([examples/site.cpp](examples/site.cpp), [web/site_shell.html](web/site_shell.html)) — на ReactX: главная с живым примером, документация ([examples/site_docs.hpp](examples/site_docs.hpp)) с поиском и оглавлением, демо, `llms.txt`. `404.html` — копия сайта, поэтому прямые ссылки вида `/ReactX/docs/hooks` открываются. Проверить локально как на Pages:
+The site ([examples/site.cpp](examples/site.cpp), [web/site_shell.html](web/site_shell.html)) is ReactX: a home page with a live example, docs ([examples/site_docs.hpp](examples/site_docs.hpp)) with search and a table of contents, demos, `llms.txt`. `404.html` is a copy of the site, so direct links like `/ReactX/docs/hooks` open. Check it locally the way Pages serves it:
 
 ```sh
 cmake --preset pages && cmake --build --preset pages
@@ -418,101 +430,100 @@ cmake --preset pages && cmake --build --preset pages
 </details>
 
 <details>
-<summary><b>Как это работает</b></summary>
+<summary><b>How it works</b></summary>
 
-1. `h(...)` строит дерево **элементов** — неизменяемое описание UI.
-2. `Root::render` передаёт его в **reconciler** ([src/reconciler.cpp](src/reconciler.cpp)); он хранит дерево **fiber'ов** — смонтированные элементы с состоянием хуков и узлами бэкенда.
-3. При перерисовке reconciler сравнивает новые элементы со старыми fiber'ами: совпали тип и ключ (или позиция) — fiber обновляется, бэкенду уходят только изменённые пропсы и текст; не совпали — старый удаляется, новый создаётся.
-4. `sync` приводит порядок детей в бэкенде к нужному с минимумом `insertChild` / `removeChild`: узлы на самой длинной возрастающей подпоследовательности старых позиций остаются на месте, остальные вставляются по одному разу.
-5. После commit запускаются эффекты; если в них меняется состояние, сразу идёт следующий проход.
+1. `h(...)` builds a tree of **elements** — an immutable description of the UI.
+2. `Root::render` hands it to the **reconciler** ([src/reconciler.cpp](src/reconciler.cpp)); it keeps a tree of **fibers** — mounted elements with hook state and backend nodes.
+3. On re-render the reconciler compares the new elements with the old fibers: same type and key (or position) — the fiber is updated and only changed props and text go to the backend; otherwise the old one is removed and a new one created.
+4. `sync` brings the backend's children into the right order with the fewest `insertChild` / `removeChild` calls.
+5. After the commit, effects run; if they change state, another pass follows right away.
 
-| Действие | Операции бэкенда |
+| Action | Backend operations |
 |---|---|
-| клик `+1` в counter | одна: `text #4 = "Count: 6"` |
-| отметить задачу в todo | две: счётчик «N left» и `[x]` |
-| поменять местами две строки списка с ключами | две перестановки, ничего не создаётся |
-| удалить каждую вторую строку | только `remove`, без перестановок |
-| удалить задачу | `remove` одного узла + `destroy` его поддерева |
-
-`./build/release/reactx_bench` меряет ядро на 10 000 строк с ключами: перерисовка без изменений ~8 мс, обмен двух строк ~9 мс, 50 000 строк, смонтированных и удалённых под одним провайдером контекста, — память не растёт.
+| clicking `+1` in counter | one: `text #4 = "Count: 6"` |
+| checking a todo | two: the "N left" counter and `[x]` |
+| reversing a keyed list | two moves, nothing created |
+| deleting a todo | `remove` of one node + `destroy` of its subtree |
 
 </details>
 
 <details>
-<summary><b>Структура репозитория</b></summary>
+<summary><b>Repository layout</b></summary>
 
 ```
-include/reactx/   публичный API: element, hooks, context, memo, router, fetch, json, http,
+include/reactx/   public API: element, hooks, context, memo, router, fetch, json, http,
                   dom, terminal, ui, dsl, parse, contract, text_renderer
-src/              реализация; reconciler.cpp — ядро, utility_hooks.cpp — таймеры, клавиши,
-                  размер окна, хранилище; dom.cpp — браузер; terminal*.cpp — терминал
+src/              implementation; reconciler.cpp — the core, utility_hooks.cpp — timers, keys,
+                  window size, storage; dom.cpp — browser; terminal*.cpp — terminal
 modules/          reactx.cppm — import reactx;
-tools/            reactx.cpp — CLI (шаблоны проектов внутри); serve.cpp — reactx_serve
-examples/         терминал: counter, todo, todo_tui, ui_demo; браузер: web_counter, web_todo,
-                  web_ui_demo; полный стек: web_app + api_server + todo_api.hpp;
-                  сайт: site.cpp + site_docs.hpp
-web/              HTML-оболочки: shell.html (демо), app_shell.html (web_app), site_shell.html (сайт)
-tests/            по файлу на область; test_cli.cpp запускает настоящий CLI;
-                  test_dom*.cpp, test_ui_web.cpp, test_web_*.cpp + web/fake_dom.js — браузер под Node
+tools/            reactx.cpp — the CLI (project templates inside); serve.cpp — reactx_serve
+examples/         terminal: counter, todo, todo_tui, ui_demo; browser: web_counter, web_todo,
+                  web_ui_demo; full stack: web_app + api_server + todo_api.hpp;
+                  the site: site.cpp + site_docs.hpp
+web/              HTML shells: shell.html (demos), app_shell.html (web_app), site_shell.html (the site)
+tests/            one file per area; test_cli.cpp runs the real CLI;
+                  test_dom*.cpp, test_ui_web.cpp, test_web_*.cpp + web/fake_dom.js — browser under Node
 cmake/            ReactXApp.cmake — reactx_add_app(); version.hpp.in
-llms.txt          API для AI-помощников, которые пишут приложения на ReactX
-AGENTS.md         правила и проверки для тех, кто меняет сам ReactX
+llms.txt          the API for AI assistants writing apps with ReactX
+AGENTS.md         rules and checks for anyone changing ReactX itself
 ```
 
 </details>
 
 <details>
-<summary><b>Ограничения сейчас</b></summary>
+<summary><b>Current limitations</b></summary>
 
-- Числа вроде `size_t` в props нужно явно приводить к `int64_t`.
-- В тестах после `setState` вне `dispatch` нужно самому вызвать `root.flush()` (в браузере и `TerminalApp` это происходит само).
-- Терминал: ширина символа считается за 1 колонку (эмодзи и иероглифы могут сдвигать строку); курсор в `input` только в конце текста; нет прокрутки — что не влезло, обрезается; только POSIX (Linux/macOS).
-- `rx::ui`: переключение вкладок стрелками и выбор «по фокусу» пока не сделаны; нет прокрутки длинных списков.
-- Браузер: `import reactx;` в веб-сборке выключен; нет событий мыши кроме клика (наведение, перетаскивание); `onScroll` — только у элемента с прокруткой; страница строится в браузере (нет серверного рендеринга).
-- `useFetch` / `fetch` в терминальной сборке: только `http://` и полный URL (`http://127.0.0.1:8090/api/todos`), без HTTPS.
-- Рефлексия (`json::to` / `from`) — только в нативной сборке.
-- Раскладка терминала пересчитывается целиком на каждую перерисовку.
-- `memo` не сравнивает детей; хуки нельзя вызывать в цикле с разным числом итераций (как в React) — для элементов списка нужен отдельный компонент.
+- Numbers like `size_t` in props need an explicit cast to `int64_t`.
+- In tests, after `setState` outside `dispatch`, call `root.flush()` yourself (the browser and `TerminalApp` do it on their own).
+- Terminal: every character counts as 1 column (emoji and CJK can shift a line); the `input` cursor is always at the end; no scrolling — what doesn't fit is cut off; POSIX only (Linux/macOS).
+- `rx::ui`: switching tabs with arrows and "select on focus" aren't done yet; long lists don't scroll.
+- Browser: `import reactx;` is off in the web build; no mouse events except clicks (hover, drag); `onScroll` only on a scrolling element; the page is built in the browser (no server-side rendering).
+- `useFetch` / `fetch` in the terminal build: `http://` with a full URL only (`http://127.0.0.1:8090/api/todos`), no HTTPS.
+- Reflection (`json::to` / `from`) works in native builds only.
+- The terminal layout is recomputed fully on every re-render.
+- `memo` doesn't compare children; hooks can't be called in a loop with a varying number of iterations (like in React) — list items need their own component.
 
 </details>
 
-## План
+## Roadmap
 
-- [x] Ядро, хуки, reconciler с ключами, абстрактный бэкенд и `TextRenderer`
-- [x] Терминал: ANSI, Flexbox на Yoga, фокус и клавиатура; `rx::ui` с темой
-- [x] Браузер: WebAssembly + DOM, роутер, `useFetch`, JSON, HTTP-сервер и REST API на C++
-- [x] Сайт с документацией на GitHub Pages; CLI `reactx` (`new`, `dev`, `build`, `add`, `remove`, `update`)
-- [x] v0.2–0.4: C++26, контракты, рефлексия, props-структуры, санитайзеры в CI, DSL `tag::div`
-- [x] `llms.txt` и `AGENTS.md` для AI-помощников
-- [x] v0.5: `useKeyboard`, `useReducer`, таймеры, события фокуса и прокрутки, SVG
-- [x] v0.8: −28% памяти, фаззинг и статический анализ в CI, SECURITY.md
-- [x] v0.7: `errorBoundary`, `createStore` / `useStore`, `useId`, сеть в терминале, быстрее ядро
-- [x] v0.6: готовый `reactx` в GitHub Releases, Docker-образ и devcontainer; `reactx dev --proxy`
-- [ ] Самообновление `reactx`
-- [ ] Свои библиотеки для фронтенда и для работы с C++
-- [ ] Позже — окна на рабочем столе: SDL3 + Skia/ThorVG
+- [x] Core, hooks, keyed reconciler, an abstract backend and `TextRenderer`
+- [x] Terminal: ANSI, Flexbox on Yoga, focus and keyboard; themed `rx::ui`
+- [x] Browser: WebAssembly + DOM, router, `useFetch`, JSON, HTTP server and REST API in C++
+- [x] The docs site on GitHub Pages; the `reactx` CLI (`new`, `dev`, `build`, `add`, `remove`, `update`)
+- [x] v0.2–0.4: C++26, contracts, reflection, props structs, sanitizers in CI, the `tag::div` DSL
+- [x] `llms.txt` and `AGENTS.md` for AI assistants
+- [x] v0.5: `useKeyboard`, `useReducer`, timers, focus and scroll events, SVG
+- [x] v0.8: −28% memory, fuzzing and static analysis in CI, SECURITY.md
+- [x] v0.7: `errorBoundary`, `createStore` / `useStore`, `useId`, network in the terminal, a faster core
+- [x] v0.6: a prebuilt `reactx` in GitHub Releases, a Docker image and a devcontainer; `reactx dev --proxy`
+- [ ] A self-updating `reactx`
+- [ ] Libraries for the frontend and for working with C++
+- [ ] Later — desktop windows: SDL3 + Skia/ThorVG
 
-## Для AI-помощников
+## For AI assistants
 
-[llms.txt](llms.txt) — API, полные программы и частые ошибки для тех, кто пишет приложения на ReactX (опубликован на сайте: https://sargisis.github.io/ReactX/llms.txt). [AGENTS.md](AGENTS.md) — правила и проверки для тех, кто меняет сам ReactX. `reactx new` кладёт в каждый проект свой `AGENTS.md`.
+[llms.txt](llms.txt) — the API, complete programs and common mistakes for anyone writing apps with ReactX (published at https://sargisis.github.io/ReactX/llms.txt). [AGENTS.md](AGENTS.md) — rules and checks for anyone changing ReactX itself. `reactx new` puts an `AGENTS.md` into every project.
 
-## Безопасность
+## Security
 
-Нашли уязвимость — сообщите приватно, не в публичном issue: [SECURITY.md](SECURITY.md). Там же — что считается уязвимостью и как ReactX проверяется (санитайзеры, фаззинг, статический анализ на каждый push).
+Found a vulnerability? Report it privately, not in a public issue: [SECURITY.md](SECURITY.md) (it also lists what counts as one and how ReactX is checked).
 
-## Лицензия
+## License
 
-ReactX распространяется **на ваш выбор** на условиях одной из двух лицензий:
+ReactX is licensed under either of
 
-- [Apache License 2.0](LICENSE-APACHE)
-- [MIT](LICENSE-MIT)
+- [Apache License, Version 2.0](LICENSE-APACHE)
+- [MIT license](LICENSE-MIT)
 
-Если вы присылаете изменения в ReactX (pull request), вы соглашаетесь, что они распространяются на тех же условиях — под обеими лицензиями, без дополнительных требований.
+at your option.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in ReactX by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
 
 ---
 
 <div align="center">
 
-Версии по [SemVer](https://semver.org/lang/ru/) (`vX.Y.Z`), номер — в `project(ReactX VERSION ...)` и `rx::version()` · [CHANGELOG](CHANGELOG.md) · [Сайт](https://sargisis.github.io/ReactX/)
+[Semantic Versioning](https://semver.org) (`vX.Y.Z`); the version lives in `project(ReactX VERSION ...)` and `rx::version()` · [CHANGELOG](CHANGELOG.md) · [Site](https://sargisis.github.io/ReactX/)
 
 </div>

@@ -99,7 +99,7 @@ jobs:
           name="reactx-${{ needs.notes.outputs.version }}-linux-x86_64"
           mkdir -p "dist/$name/bin"
           install -s build/reactx build/reactx_serve "dist/$name/bin/"
-          cp LICENSE-MIT LICENSE-APACHE README.md README.en.md CHANGELOG.md "dist/$name/"
+          cp LICENSE-MIT LICENSE-APACHE README.md README.ru.md CHANGELOG.md "dist/$name/"
           tar -C dist -czf "dist/$name.tar.gz" "$name"
           (cd dist && sha256sum "$name.tar.gz" > "$name.tar.gz.sha256")
 

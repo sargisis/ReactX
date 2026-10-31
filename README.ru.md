@@ -32,7 +32,15 @@
 
 ## Быстрый старт
 
-Установите `reactx` и инструменты для вашей платформы:
+**Одной строкой** (Linux x86-64):
+
+```sh
+curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh
+```
+
+Команда скачивает готовый `reactx` в `~/.local/bin`, затем `reactx install` скачивает компилятор для браузера (Emscripten) и, если в системе их нет, CMake и Ninja в `~/.reactx` — без sudo, как npm. `reactx build` и `reactx dev` находят их сами (без `source emsdk_env.sh`). Нужны `curl`, `git`, `python3` и `tar`; `reactx install --check` показывает, что уже есть. Терминальным приложениям нужен ещё GCC 16+ из пакетного менеджера.
+
+**Вручную** или на других платформах:
 
 - **Arch Linux**:
   ```sh
@@ -87,6 +95,7 @@ reactx build                        # build/web/dist — файлы для лю�
                                     # и предупреждает о std::format / печати double (~100 КБ каждое)
 reactx add magic_enum https://github.com/Neargye/magic_enum.git --rev v0.9.8 --target magic_enum::magic_enum
 reactx update                       # перейти на новейший релиз ReactX
+reactx install [--check]            # скачать Emscripten (+ CMake, Ninja, если их нет) в ~/.reactx
 reactx dev --proxy http://127.0.0.1:5000   # /api — на свой бэкенд (Flask, Django, Express, ...)
 ```
 

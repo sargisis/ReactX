@@ -14,6 +14,7 @@
 // rx::net::HttpServer (the same server as reactx_serve) and reloads the page
 // after every successful rebuild.
 #include <signal.h>
+#include <sys/utsname.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -66,6 +67,10 @@ constexpr std::string_view kVersion = REACTX_VERSION;  // from project(ReactX VE
 const std::string kReactXRev = std::string("v") + REACTX_VERSION;
 constexpr std::string_view kReactXGit = "https://github.com/sargisis/ReactX.git";
 
+// Whether EMSDK came from the user's shell (emsdk_env.sh), not from reactx
+// finding ~/.reactx/emsdk: an editor started from that shell sees it too.
+bool userSetEmsdk = false;
+
 #ifndef REACTX_SOURCE_DIR
 #define REACTX_SOURCE_DIR ""
 #endif
@@ -114,6 +119,8 @@ std::string fill(std::string text, const std::map<std::string, std::string>& var
 
 // Runs a program (no shell) in `cwd`; returns its exit code.
 int run(const std::vector<std::string>& args, const fs::path& cwd) {
+    std::fflush(stdout);  // our lines first, then the program's (matters when output goes to a file)
+    std::fflush(stderr);
     pid_t pid = ::fork();
     if (pid < 0) fail("fork failed");
     if (pid == 0) {
@@ -549,7 +556,7 @@ reactx add <name> <git-url> --rev <tag> --target <cmake-target>   # a library
 reactx update   # move to the newest ReactX release
 ```
 
-Native builds need GCC 16+; web builds need Emscripten (`EMSDK` set).
+Native builds need GCC 16+; web builds need Emscripten: `reactx install` downloads it (or set `EMSDK`).
 
 ## Files
 
@@ -573,6 +580,14 @@ Native builds need GCC 16+; web builds need Emscripten (`EMSDK` set).
 )md";
 
 // ---- commands ----
+
+// The Emscripten folder for .vscode/settings.json: ${env:EMSDK} when the
+// user's shell sets it, else the folder reactx install made (the editor
+// doesn't get the EMSDK that reactx sets for its own child processes).
+std::string clangdEmsdk() {
+    const char* e = std::getenv("EMSDK");
+    return userSetEmsdk || !e || !*e ? std::string("${env:EMSDK}") : std::string(e);
+}
 
 int cmdNew(const std::vector<std::string>& args) {
     std::string name;
@@ -608,7 +623,7 @@ int cmdNew(const std::vector<std::string>& args) {
         {"name", name}, {"target", cmakeName(name)}, {"version", std::string(kVersion)},
         {"builddir", terminal ? "build/native" : "build/web"},
         // Web projects have Emscripten, which ships a clangd that knows the wasm target.
-        {"clangd_path", terminal ? "" : "\n  \"clangd.path\": \"${env:EMSDK}/upstream/bin/clangd\","},
+        {"clangd_path", terminal ? "" : "\n  \"clangd.path\": \"" + clangdEmsdk() + "/upstream/bin/clangd\","},
         {"output", terminal ? "build/native/" + cmakeName(name) : "build/web/dist/ (static files for any host)"},
         {"kind", terminal ? "terminal" : "web"},
         {"backend", terminal ? "plus `reactx/terminal.hpp` for `TerminalApp`" : "plus `reactx/dom.hpp` for `mountDom`"},
@@ -636,10 +651,232 @@ int cmdNew(const std::vector<std::string>& args) {
 
 bool isTerminal(const Manifest& manifest) { return manifest.template_ == "terminal"; }
 
+// ---- tools: reactx install, and finding what it installed ----
+//
+// Like npm/nvm, the tools live in the user's home, no sudo:
+//   ~/.reactx/emsdk          Emscripten (the compiler for the browser), via emsdk
+//   ~/.reactx/emsdk-system   an emsdk-shaped link to a system Emscripten (Arch's /usr/lib/emscripten)
+//   ~/.reactx/tools/cmake    a portable CMake, if the system one is missing or too old
+//   ~/.reactx/tools/ninja    a portable Ninja, if missing
+// REACTX_HOME moves the folder (tests).
+
+constexpr std::string_view kEmscriptenVersion = "6.0.13";  // the same as CI and the Docker image
+constexpr std::string_view kCmakeVersion = "3.31.6";
+constexpr std::string_view kNinjaVersion = "1.12.1";
+
+fs::path reactxHome() {
+    if (const char* h = std::getenv("REACTX_HOME"); h && *h) return h;
+    const char* home = std::getenv("HOME");
+    return fs::path(home && *home ? home : ".") / ".reactx";
+}
+
+std::optional<fs::path> findOnPath(std::string_view name) {
+    const char* path = std::getenv("PATH");
+    if (!path) return std::nullopt;
+    for (auto part : std::views::split(std::string_view(path), ':')) {
+        fs::path candidate = fs::path(std::string_view(part.begin(), part.end())) / name;
+        std::error_code ec;
+        if (::access(candidate.c_str(), X_OK) == 0 && fs::is_regular_file(candidate, ec)) return candidate;
+    }
+    return std::nullopt;
+}
+
+bool isEmsdk(const fs::path& dir) {
+    std::error_code ec;
+    return fs::exists(dir / "upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake", ec);
+}
+
+// $EMSDK if it is a real one, else what reactx install set up.
+std::optional<fs::path> findEmsdk() {
+    if (const char* e = std::getenv("EMSDK"); e && *e && isEmsdk(e)) return fs::path(e);
+    for (const char* name : {"emsdk", "emsdk-system"})
+        if (isEmsdk(reactxHome() / name)) return reactxHome() / name;
+    return std::nullopt;
+}
+
+void prependPath(const fs::path& dir) {
+    const char* old = std::getenv("PATH");
+    std::string value = dir.string() + (old && *old ? ":" + std::string(old) : "");
+    ::setenv("PATH", value.c_str(), 1);
+}
+
+// Makes the tools from `reactx install` visible to cmake, ninja and emcc
+// started by this process: no `source emsdk_env.sh`, no PATH edits.
+void useInstalledTools() {
+    std::error_code ec;
+    fs::path tools = reactxHome() / "tools";
+    if (fs::exists(tools / "ninja/ninja", ec)) prependPath(tools / "ninja");
+    if (fs::exists(tools / "cmake/bin/cmake", ec)) prependPath(tools / "cmake/bin");
+    auto emsdk = findEmsdk();
+    if (!emsdk) return;
+    ::setenv("EMSDK", emsdk->c_str(), 1);
+    prependPath(*emsdk / "upstream/emscripten");
+    if (fs::exists(*emsdk / ".emscripten", ec) && !std::getenv("EM_CONFIG"))
+        ::setenv("EM_CONFIG", (*emsdk / ".emscripten").c_str(), 1);
+    for (const auto& node : fs::directory_iterator(*emsdk / "node", ec))  // emsdk's own Node.js
+        if (fs::exists(node.path() / "bin/node", ec)) prependPath(node.path() / "bin");
+}
+
+// "cmake version 3.31.6" -> {3, 31}
+std::optional<std::pair<int, int>> cmakeVersion(const std::string& cmake) {
+    auto out = capture({cmake, "--version"});
+    if (!out) return std::nullopt;
+    auto at = out->find("version ");
+    if (at == std::string::npos) return std::nullopt;
+    std::string_view v = std::string_view(*out).substr(at + 8);
+    auto dot = v.find('.');
+    auto major = rx::parseNumber<int>(v.substr(0, dot));
+    auto end = v.find_first_not_of("0123456789", dot + 1);
+    auto minor = rx::parseNumber<int>(v.substr(dot + 1, end - dot - 1));
+    if (!major || !minor) return std::nullopt;
+    return std::pair{*major, *minor};
+}
+
+// Major version of g++-16 or g++, 0 if there is none.
+int gccMajor() {
+    for (const char* name : {"g++-16", "g++"}) {
+        if (!findOnPath(name)) continue;
+        auto out = capture({name, "-dumpversion"});
+        if (!out) continue;
+        if (auto v = rx::parseNumber<int>(std::string_view(*out).substr(0, out->find_first_not_of("0123456789")))) return *v;
+    }
+    return 0;
+}
+
+bool downloadTo(const std::string& url, const fs::path& file) {
+    std::println("  downloading {}", url);
+    return run({"curl", "-fL", "--progress-bar", "-o", file.string(), url}, file.parent_path()) == 0;
+}
+
+int cmdInstall(const std::vector<std::string>& args) {
+    bool check = false;
+    std::string emVersion(kEmscriptenVersion);
+    for (std::size_t i = 0; i < args.size(); ++i) {
+        if (args[i] == "--check") check = true;
+        else if (args[i] == "--emscripten" && i + 1 < args.size()) emVersion = args[++i];
+        else fail("install: unknown option " + args[i]);
+    }
+    fs::path home = reactxHome();
+    fs::path tools = home / "tools";
+    std::error_code ec;
+    bool ready = true;
+    auto ok = [](std::string_view what, std::string_view detail) { std::println("  ok       {:<11} {}", what, detail); };
+    auto missing = [&ready](std::string_view what, std::string_view detail) {
+        ready = false;
+        std::println("  missing  {:<11} {}", what, detail);
+    };
+
+#if !defined(__linux__)
+    if (!check) fail("install: downloads tools for Linux only; on macOS: brew install cmake ninja emscripten (and gcc for terminal apps)");
+#endif
+    if (check) std::println("ReactX tools in {} (reactx install --check):", home.string());
+    else std::println("Installing the ReactX tools into {}:", home.string());
+
+    // What emsdk and the downloads need from the system: tiny, everywhere.
+    std::vector<std::string> basics;
+    for (const char* tool : {"curl", "git", "python3", "tar"})
+        if (!findOnPath(tool)) basics.emplace_back(tool);
+    if (!basics.empty()) {
+        std::string list;
+        for (const auto& b : basics) list += (list.empty() ? "" : " ") + b;
+        missing("system", list + " (e.g. sudo apt install " + list + ", or sudo pacman -S " + list + ")");
+        if (!check) fail("install: install " + list + " first, then run reactx install again");
+    }
+
+    std::string arch;
+    if (utsname u{}; ::uname(&u) == 0) arch = u.machine;
+    bool arm = arch == "aarch64" || arch == "arm64";
+
+    // CMake 3.28+: the system one, or a portable one.
+    auto systemCmake = findOnPath("cmake");
+    auto cmakeV = systemCmake ? cmakeVersion(systemCmake->string()) : std::nullopt;
+    if (fs::exists(tools / "cmake/bin/cmake", ec)) {
+        ok("cmake", (tools / "cmake").string());
+    } else if (cmakeV && *cmakeV >= std::pair{3, 28}) {
+        ok("cmake", std::format("{}.{} (system)", cmakeV->first, cmakeV->second));
+    } else if (check) {
+        missing("cmake", cmakeV ? "3.28+ needed, the system has " + std::to_string(cmakeV->first) + "." + std::to_string(cmakeV->second)
+                                : "not found");
+    } else {
+        std::string name = std::format("cmake-{}-linux-{}", kCmakeVersion, arm ? "aarch64" : "x86_64");
+        fs::create_directories(tools, ec);
+        fs::path archive = tools / (name + ".tar.gz");
+        if (!downloadTo(std::format("https://github.com/Kitware/CMake/releases/download/v{}/{}.tar.gz", kCmakeVersion, name), archive) ||
+            run({"tar", "xzf", archive.string(), "-C", tools.string()}, tools) != 0)
+            fail("install: couldn't download CMake");
+        fs::remove_all(tools / "cmake", ec);
+        fs::rename(tools / name, tools / "cmake", ec);
+        fs::remove(archive, ec);
+        ok("cmake", std::format("{} ({})", kCmakeVersion, (tools / "cmake").string()));
+    }
+
+    // Ninja: the system one, or a portable one.
+    if (fs::exists(tools / "ninja/ninja", ec)) {
+        ok("ninja", (tools / "ninja").string());
+    } else if (auto ninja = findOnPath("ninja")) {
+        ok("ninja", ninja->string() + " (system)");
+    } else if (check) {
+        missing("ninja", "not found");
+    } else {
+        fs::create_directories(tools / "ninja", ec);
+        fs::path archive = tools / "ninja.zip";
+        if (!downloadTo(std::format("https://github.com/ninja-build/ninja/releases/download/v{}/ninja-linux{}.zip",
+                                    kNinjaVersion, arm ? "-aarch64" : ""), archive) ||
+            run({"python3", "-m", "zipfile", "-e", archive.string(), (tools / "ninja").string()}, tools) != 0)
+            fail("install: couldn't download Ninja");
+        fs::permissions(tools / "ninja/ninja", fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec,
+                        fs::perm_options::add, ec);
+        fs::remove(archive, ec);
+        ok("ninja", std::format("{} ({})", kNinjaVersion, (tools / "ninja").string()));
+    }
+
+    // Emscripten: $EMSDK, an earlier install, a system emcc, or download emsdk.
+    if (auto emsdk = findEmsdk()) {
+        ok("emscripten", emsdk->string());
+    } else if (auto emcc = findOnPath("emcc"); emcc && fs::exists(fs::canonical(*emcc, ec).parent_path() / "cmake/Modules/Platform/Emscripten.cmake", ec)) {
+        fs::path root = fs::canonical(*emcc, ec).parent_path();
+        if (check) {
+            ok("emscripten", root.string() + " (system; reactx install links it)");
+        } else {
+            fs::path shim = home / "emsdk-system/upstream";
+            fs::create_directories(shim, ec);
+            fs::remove(shim / "emscripten", ec);
+            fs::create_directory_symlink(root, shim / "emscripten", ec);
+            if (ec) fail("install: can't link " + root.string() + ": " + ec.message());
+            ok("emscripten", root.string() + " (system)");
+        }
+    } else if (check) {
+        missing("emscripten", "not found (reactx install downloads it, ~1.5 GB)");
+    } else {
+        fs::path emsdk = home / "emsdk";
+        std::println("  Emscripten {} (the compiler for the browser, ~1.5 GB; a few minutes)", emVersion);
+        if (!fs::exists(emsdk / "emsdk", ec) &&
+            run({"git", "clone", "--depth", "1", "https://github.com/emscripten-core/emsdk.git", emsdk.string()}, home.parent_path()) != 0)
+            fail("install: couldn't download emsdk");
+        if (run({(emsdk / "emsdk").string(), "install", emVersion}, emsdk) != 0 ||
+            run({(emsdk / "emsdk").string(), "activate", emVersion}, emsdk) != 0)
+            fail("install: emsdk couldn't install Emscripten " + emVersion);
+        std::println("  (reactx build / dev find this Emscripten on their own: no need to source emsdk_env.sh)");
+        ok("emscripten", std::format("{} ({})", emVersion, emsdk.string()));
+    }
+
+    // GCC 16: only for terminal apps and `--native`; nothing portable to download.
+    if (int gcc = gccMajor(); gcc >= 16) ok("gcc", std::format("{} (terminal apps)", gcc));
+    else std::println("  note     {:<11} terminal apps need GCC 16+ (found {}): your package manager, or the image ghcr.io/sargisis/reactx",
+                      "gcc", gcc == 0 ? std::string("none") : std::to_string(gcc));
+
+    if (!ready) {
+        std::println("\nRun `reactx install` to get what is missing.");
+        return 1;
+    }
+    std::println("\nReady. Start a project:\n\n  reactx new my-app\n  cd my-app\n  reactx dev");
+    return 0;
+}
+
 // Configures (first time) and builds a preset; returns true on success.
 bool build(const fs::path& root, const std::string& preset) {
     if (preset == "web" && !std::getenv("EMSDK"))
-        fail("the web build needs Emscripten: install emsdk and `source emsdk_env.sh` (EMSDK is not set)");
+        fail("the web build needs Emscripten: run `reactx install` (or set EMSDK)");
     fs::path cache = root / "build" / preset / "CMakeCache.txt";
     std::error_code ec;
     bool fresh = !fs::exists(cache, ec);
@@ -984,6 +1221,7 @@ int usage(std::FILE* out, int code) {
            "  reactx add <name> <git-url> [--rev R] [--target T]   add a dependency\n"
            "  reactx remove <name>                       remove a dependency\n"
            "  reactx update [--check] [--to vX.Y.Z]      move to the newest ReactX release\n"
+           "  reactx install [--check]                   download the compiler and tools into ~/.reactx\n"
            "  reactx help | --version\n"
            "\n<command> --help (or reactx help <command>) explains one command.\n", kVersion);
     return code;
@@ -1021,6 +1259,14 @@ std::string_view commandHelp(std::string_view command) {
                "  --target T   CMake target to link the app with, e.g. fmt::fmt\n\n"
                "Example: reactx add fmt https://github.com/fmtlib/fmt.git --rev 11.0.2 --target fmt::fmt\n";
     if (command == "remove") return "reactx remove <name>\n\nRemoves a dependency from reactx.json.\n";
+    if (command == "install")
+        return "reactx install [--check] [--emscripten VERSION]\n\n"
+               "Downloads what web projects need into ~/.reactx, like npm, without sudo: Emscripten (the compiler\n"
+               "for the browser, via emsdk, ~1.5 GB) and, if the system has none or an old one, portable CMake and Ninja.\n"
+               "A system Emscripten or $EMSDK is used as it is. reactx build / dev then find the tools on their own.\n"
+               "Needs curl, git, python3 and tar. Terminal apps also need GCC 16+, which it can't download.\n\n"
+               "  --check                only show what is there and what is missing\n"
+               "  --emscripten VERSION   another Emscripten version (default 6.0.13)\n";
     if (command == "update")
         return "reactx update [--check] [--to vX.Y.Z]\n\n"
                "Moves the project to the newest ReactX release (by SemVer, skipping -rc) and writes it to reactx.json;\n"
@@ -1042,6 +1288,8 @@ int main(int argc, char** argv) {
         std::print("{}", commandHelp(command));
         return 0;
     }
+    userSetEmsdk = std::getenv("EMSDK") && *std::getenv("EMSDK");
+    useInstalledTools();
     try {
         if (command == "new") return cmdNew(args);
         if (command == "dev") return cmdDev(args);
@@ -1049,6 +1297,7 @@ int main(int argc, char** argv) {
         if (command == "add") return cmdAdd(args);
         if (command == "remove") return cmdRemove(args);
         if (command == "update") return cmdUpdate(args);
+        if (command == "install") return cmdInstall(args);
         if (command == "help" || command == "--help" || command == "-h") return usage(stdout, 0);
         if (command == "--version") {
             std::println("reactx {}", kVersion);

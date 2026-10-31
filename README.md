@@ -44,7 +44,15 @@ Don't invent anything that isn't there.
 
 ## Quick start
 
-Install `reactx` and the tools for your platform:
+**One line** (Linux x86-64):
+
+```sh
+curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh
+```
+
+It downloads the prebuilt `reactx` into `~/.local/bin`, then `reactx install` downloads the compiler for the browser (Emscripten) and, if your system lacks them, CMake and Ninja into `~/.reactx` — no sudo, like npm. `reactx build` and `reactx dev` find them on their own (no `source emsdk_env.sh`). It needs `curl`, `git`, `python3` and `tar`; `reactx install --check` shows what is there. Terminal apps also need GCC 16+ from your package manager.
+
+**By hand**, or on other platforms:
 
 - **Arch Linux**:
   ```sh
@@ -99,6 +107,7 @@ reactx build                        # build/web/dist — files for any static ho
                                     # and warns about std::format / printed doubles (~100 KB each)
 reactx add magic_enum https://github.com/Neargye/magic_enum.git --rev v0.9.8 --target magic_enum::magic_enum
 reactx update                       # move to the newest ReactX release
+reactx install [--check]            # download Emscripten (+ CMake, Ninja if missing) into ~/.reactx
 reactx dev --proxy http://127.0.0.1:5000   # /api goes to your backend (Flask, Django, Express, ...)
 ```
 

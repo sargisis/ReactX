@@ -6,6 +6,10 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+## [0.8.2] — 2026-10-31
+
+Smaller and faster in the browser, and easier to start: WebAssembly 2–3.5× smaller (a counter is 40 KB over the network), `reactx install` downloads the compiler without sudo, a one-line installer, `fetch` with headers, timeouts and cancelling, storage errors as values, strict JSON reading, a setter thread check, and the changelog in English. Apps update without changes, except the rare `return fetch(...)` from a `void` function (see Changed).
+
 ### Added
 
 - **The site in English**: all documentation, the home page and the interface are in English and Russian, with an EN/RU switch in the header (the choice is remembered). English by default, Russian if the browser is Russian. The page title and description for search engines and social previews are in English.
@@ -20,6 +24,8 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 - **Storage errors as values**: `rx::storageRead(key)` (`std::expected<std::optional<std::string>, std::string>`: a missing key is `std::nullopt`, not an empty string), `rx::storageWrite`, `rx::storageRemove`. `useLocalStorage(key, default, onError)` calls `onError` when saving fails (quota exceeded, private mode) — before, a failed write in the browser was lost silently. Found by an AI agent writing ForgeDesk.
 - **`reactx build` watches the WebAssembly size**: it prints the size of `index.wasm` and, if the app itself pulls in `std::format` / `std::print` or printing of floating-point numbers, names the files and what to use instead (`+` and `std::to_string`) — each adds ~100 KB that the browser downloads before the first paint. For this `reactx_add_app` writes a linker map, `<build>/<target>.link.map`.
 - **The changelog in English** (this file); the Russian one moved to `CHANGELOG.ru.md`. GitHub Release notes are now taken from the English file.
+- **`reactx install` — the compiler without sudo, like npm**: downloads Emscripten 6.0.13 (the compiler for the browser, via emsdk) into `~/.reactx` and, if the system has none or an old one, portable CMake and Ninja. A system Emscripten (like Arch's) or `$EMSDK` is used as it is. `reactx build` / `dev` then find the tools on their own — no `source emsdk_env.sh`. `--check` only shows what is there. Needs `curl`, `git`, `python3`, `tar`; GCC 16 for terminal apps can't be downloaded this way. Checked from scratch: a `PATH` without cmake, ninja and emcc → `reactx install` → `reactx new` + `reactx build` with no `EMSDK`.
+- **One-line install** on Linux x86-64: `curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh` puts the prebuilt `reactx` into `~/.local/bin` and runs `reactx install`. The script is `install.sh` in the repository and is published with the site.
 
 ### Changed
 
@@ -221,7 +227,8 @@ The first release.
 - **A documentation site** built with ReactX: https://sargisis.github.io/ReactX/, published by GitHub Actions through the `gh-pages` branch.
 - The version in one place (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; new projects from `reactx new` use ReactX by release tag.
 
-[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.8.2...HEAD
+[0.8.2]: https://github.com/sargisis/ReactX/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/sargisis/ReactX/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/sargisis/ReactX/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/sargisis/ReactX/compare/v0.6.0...v0.7.0

@@ -454,11 +454,9 @@ Element Home(const Props&) {
             h("div", {{"className", "steps"}}, {
                 h("div", {{"className", "step"}, {"key", "1"}}, {
                     h("div", {}, {h("h3", {}, {tr(en, "Install reactx", "Установите reactx")}),
-                                  h("p", {}, {tr(en, "Download it from GitHub Releases (Linux x86-64). Browser apps also need Emscripten.",
-                                                 "Скачайте из GitHub Releases (Linux x86-64). Для браузера нужен ещё Emscripten.")}),}),
-                    h(CodeBlock, {.code = "# github.com/sargisis/ReactX/releases\n"
-                                          "tar xzf reactx-*-linux-x86_64.tar.gz\n"
-                                          "cp reactx-*/bin/* ~/.local/bin/"}),
+                                  h("p", {}, {tr(en, "One line on Linux: reactx and the compiler, into your home folder, no sudo.",
+                                                 "Одна строка в Linux: reactx и компилятор, в домашнюю папку, без sudo.")}),}),
+                    h(CodeBlock, {.code = "curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh"}),
                 }),
                 h("div", {{"className", "step"}, {"key", "2"}}, {
                     h("div", {}, {h("h3", {}, {tr(en, "Create an app", "Создайте проект")}),

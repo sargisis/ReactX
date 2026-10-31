@@ -6,6 +6,10 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ## [Не выпущено]
 
+## [0.8.2] — 2026-10-31
+
+Меньше и быстрее в браузере, проще начать: WebAssembly в 2–3,5 раза меньше (счётчик — 40 КБ по сети), `reactx install` скачивает компилятор без sudo, установка одной строкой, `fetch` с заголовками, таймаутом и отменой, ошибки хранилища как значения, строгое чтение JSON, проверка потока у сеттеров и CHANGELOG на английском. Приложения обновляются без правок, кроме редкого `return fetch(...)` из функции, возвращающей `void` (см. «Изменено»).
+
 ### Добавлено
 
 - **Сайт на английском**: вся документация, главная и интерфейс — на английском и русском, переключатель EN/RU в шапке (выбор запоминается). По умолчанию английский, русский — если браузер русскоязычный. Заголовок и описание страницы для поисковиков и превью в соцсетях — на английском.
@@ -20,6 +24,8 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 - **Ошибки хранилища как значения**: `rx::storageRead(key)` (`std::expected<std::optional<std::string>, std::string>`: нет ключа — `std::nullopt`, а не пустая строка), `rx::storageWrite`, `rx::storageRemove`. `useLocalStorage(key, default, onError)` вызывает `onError`, если сохранить не удалось (переполнена квота, приватный режим) — раньше ошибка записи в браузере терялась молча. Нашёл ИИ-агент, писавший ForgeDesk.
 - **`reactx build` следит за размером WebAssembly**: печатает размер `index.wasm` и, если приложение само тянет `std::format` / `std::print` или печать дробных чисел, называет файлы и чем заменить (`+` и `std::to_string`) — каждое из них добавляет ~100 КБ, которые браузер скачивает до первой отрисовки. `reactx_add_app` для этого пишет карту компоновки `<build>/<target>.link.map`.
 - **CHANGELOG на английском** (`CHANGELOG.md`); русский переехал в этот файл, `CHANGELOG.ru.md`. Описания релизов на GitHub теперь берутся из английского.
+- **`reactx install` — компилятор без sudo, как npm**: скачивает Emscripten 6.0.13 (компилятор для браузера, через emsdk) в `~/.reactx` и, если в системе их нет или они старые, переносимые CMake и Ninja. Системный Emscripten (как в Arch) или `$EMSDK` используются как есть. `reactx build` / `dev` затем находят инструменты сами — без `source emsdk_env.sh`. `--check` только показывает, что есть. Нужны `curl`, `git`, `python3`, `tar`; GCC 16 для терминальных приложений так не скачать. Проверено с нуля: `PATH` без cmake, ninja и emcc → `reactx install` → `reactx new` + `reactx build` без `EMSDK`.
+- **Установка одной строкой** на Linux x86-64: `curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh` кладёт готовый `reactx` в `~/.local/bin` и запускает `reactx install`. Скрипт — `install.sh` в репозитории, публикуется вместе с сайтом.
 
 ### Изменено
 
@@ -221,7 +227,8 @@ ReactX без установки компиляторов: готовый `react
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.8.1...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.8.2...HEAD
+[0.8.2]: https://github.com/sargisis/ReactX/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/sargisis/ReactX/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/sargisis/ReactX/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/sargisis/ReactX/compare/v0.6.0...v0.7.0

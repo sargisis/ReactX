@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20...3.31)
 # The ReactX version — the only place it is written (Semantic Versioning:
 # MAJOR.MINOR.PATCH; release tags are vMAJOR.MINOR.PATCH, see CHANGELOG.md).
-project(ReactX VERSION 0.8.1 LANGUAGES CXX)
+project(ReactX VERSION 0.8.2 LANGUAGES CXX)
 
 # C++26: GCC 16+ natively, Emscripten 6+ for the web. We use the parts of
 # C++23/C++26 each standard library ships, and nothing it doesn't
@@ -206,8 +206,10 @@ if(EMSCRIPTEN)
             ${PROJECT_BINARY_DIR}/site/
     # The API summary for AI assistants: https://sargisis.github.io/ReactX/llms.txt
     COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_SOURCE_DIR}/llms.txt ${PROJECT_BINARY_DIR}/site/
+    # The installer: curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh
+    COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_SOURCE_DIR}/install.sh ${PROJECT_BINARY_DIR}/site/
     COMMAND ${CMAKE_COMMAND} -E touch ${PROJECT_BINARY_DIR}/site/.nojekyll
-    DEPENDS website web_counter web_ui_demo ${PROJECT_SOURCE_DIR}/llms.txt
+    DEPENDS website web_counter web_ui_demo ${PROJECT_SOURCE_DIR}/llms.txt ${PROJECT_SOURCE_DIR}/install.sh
     COMMENT "Assembling the website in ${PROJECT_BINARY_DIR}/site")
   # Start page with links to the demos (http://localhost:8090/).
   configure_file(${PROJECT_SOURCE_DIR}/web/index.html ${PROJECT_BINARY_DIR}/index.html COPYONLY)

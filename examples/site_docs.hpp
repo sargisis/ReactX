@@ -33,7 +33,17 @@ inline const std::vector<Page>& pages() {
                             "что действительно изменилось.\n\n"
                             "Один и тот же код компонентов работает в двух местах: в браузере (через WebAssembly) и в терминале "
                             "(текстовый интерфейс). JavaScript, Node и npm не нужны.", ""},
-                {"1. Установка: Arch Linux",
+                {"1. Установка (одна строка)",
+                 "На Linux (x86-64) всё ставится одной командой. Она скачивает reactx в ~/.local/bin, а затем reactx install "
+                 "скачивает компилятор для браузера (Emscripten) и, если в системе их нет, CMake и Ninja в ~/.reactx — без sudo, "
+                 "как npm. Нужны curl, git, python3 и tar, они есть почти в любом Linux.\n\n"
+                 "reactx install --check показывает, что уже есть. Терминальным приложениям нужен ещё GCC 16+ из пакетного "
+                 "менеджера. Другие системы — разделы ниже или Docker-образ.",
+                 "curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh\n\n"
+                 "# потом — проверить или доустановить:\n"
+                 "reactx install --check\n"
+                 "reactx install"},
+                {"Установка вручную: Arch Linux",
                  "В Arch Linux компилятор и инструменты сборки ставятся через pacman одной командой:\n\n"
                  "- Компилятор GCC 16, CMake, Ninja и Git\n"
                  "- Emscripten для сборки в WebAssembly\n"
@@ -105,10 +115,13 @@ inline const std::vector<Page>& pages() {
         {
             "cli", "CLI reactx", "Новый проект, разработка с автообновлением, сборка, зависимости.",
             {
-                {"Установка", "Готовый reactx для Linux x86-64 лежит в GitHub Releases: распакуйте архив и добавьте bin/ в PATH. "
+                {"Установка", "Одной строкой на Linux x86-64: готовый reactx, затем reactx install скачивает Emscripten (и CMake с Ninja, "
+                              "если нужно) в ~/.reactx; reactx build и dev находят их сами. "
+                              "Вручную: готовый reactx для Linux x86-64 лежит в GitHub Releases — распакуйте архив и добавьте bin/ в PATH. "
                               "Для веб-проектов хватит Emscripten, CMake и Ninja, для терминальных нужен ещё GCC 16. "
                               "Можно и собрать из исходников: cmake --install кладёт reactx и reactx_serve в bin.",
-                 "# github.com/sargisis/ReactX/releases → reactx-X.Y.Z-linux-x86_64.tar.gz\n"
+                 "curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh\n\n"
+                 "# вручную: github.com/sargisis/ReactX/releases → reactx-X.Y.Z-linux-x86_64.tar.gz\n"
                  "tar xzf reactx-*-linux-x86_64.tar.gz && cp reactx-*/bin/* ~/.local/bin/\n\n"
                  "# или из исходников\n"
                  "cmake --preset release && cmake --build --preset release\n"
@@ -126,7 +139,7 @@ inline const std::vector<Page>& pages() {
                  "code --install-extension llvm-vs-code-extensions.vscode-clangd\nreactx build   # пишет compile_commands.json для clangd"},
                 {"Новый проект", "reactx new создаёт папку с reactx.json (манифест, как package.json), CMakeLists.txt, "
                                  "CMakePresets.json и src/main.cpp. ReactX подключается с GitHub по тегу релиза "
-                                 "(например, v0.8.1), а не по ветке, поэтому проект не сломается от новых изменений; --local — из исходников, "
+                                 "(например, v0.8.2), а не по ветке, поэтому проект не сломается от новых изменений; --local — из исходников, "
                                  "из которых собран сам CLI. --terminal — терминальное приложение вместо веба.",
                  "reactx new my-app\ncd my-app"},
                 {"reactx dev", "Собирает веб-версию, запускает встроенный сервер на C++ (тот же, что reactx_serve) и следит за "
@@ -155,15 +168,15 @@ inline const std::vector<Page>& pages() {
                 {"reactx update", "Переводит проект на новейший релиз ReactX: находит теги в репозитории из reactx.json, "
                                   "выбирает самый новый по SemVer (без -rc) и записывает его в rev. --check только проверяет, "
                                   "--to — конкретная версия. Следующий reactx build скачает её сам.",
-                 "reactx update --check   # ReactX v0.8.0 → v0.8.1 is available\n"
-                 "reactx update           # записывает v0.8.1 в reactx.json\n"
+                 "reactx update --check   # ReactX v0.8.1 → v0.8.2 is available\n"
+                 "reactx update           # записывает v0.8.2 в reactx.json\n"
                  "reactx update --to v0.3.0\n"
                  "reactx build"},
                 {"reactx.json", "Всё, что нужно проекту, в одном файле.",
                  "{\n"
                  "  \"name\": \"my-app\",\n"
                  "  \"template\": \"web\",\n"
-                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.8.1\" },\n"
+                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.8.2\" },\n"
                  "  \"dependencies\": { \"fmt\": { \"git\": \"...\", \"rev\": \"11.0.2\", \"target\": \"fmt::fmt\" } },\n"
                  "  \"web\": { \"base\": \"/\", \"proxy\": { \"/api\": \"http://127.0.0.1:5000\" } }\n"
                  "}"},
@@ -178,11 +191,11 @@ inline const std::vector<Page>& pages() {
                            "Что изменилось в каждой версии — в CHANGELOG.ru.md.", ""},
                 {"Версия в коде", "Номер версии записан в одном месте — project(ReactX VERSION ...) в CMakeLists.txt; "
                                   "из него генерируется reactx/version.hpp.",
-                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"0.8.1\"\n"
+                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"0.8.2\"\n"
                  "static_assert(REACTX_VERSION_MAJOR == 0);"},
                 {"Обновиться", "reactx update находит новейший релиз и записывает его в reactx.json; reactx build скачивает его. "
                                "Вручную — поменяйте rev на новый тег.",
-                 "reactx update\n# или в reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.8.1\" }"},
+                 "reactx update\n# или в reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.8.2\" }"},
             },
         },
         {

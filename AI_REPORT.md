@@ -207,39 +207,6 @@ Dual main (#ifdef __EMSCRIPTEN__ mountDom vs TerminalApp)
 
 Important caveat: The sandbox environment has only GCC 13 and no Emscripten / Ninja / Docker. Therefore the project was not compiled or executed. It is a faithful exercise of the public API as documented in llms.txt + examples (web_app.cpp, todo.cpp, etc.). Minor API mismatches (exact method names on store, textarea support, some ui:: field names) may exist; they would surface immediately under a real reactx build.Existing official complex examples already cover a lot of the same ground (examples/web_app.cpp is a full-stack todo with router + API server + ui::).3. Problems & Limitations Found3.1 Toolchain & Ecosystem (Critical for adoption)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 IssueSeverityNotesRequires GCC 16+ (C++26)HighExtremely bleeding-edge. Most distros / CI images still on 13–15. macOS needs Homebrew GCC. Windows effectively only via WSL.Emscripten 6+ required for webHighNon-trivial install; version pinning matters.No official binary packages for all platforms yetMediumPrebuilt reactx CLI exists for Linux x86_64; otherwise build from source.clangd vs MSVC/IntelliSenseMediumProject templates now ship .clangd (good). Older projects need manual copy.Module + sanitizers / reflection interactionsMediumDocumented traps in AGENTS.md (inplace_vector in modules, -freflection breaks import, sanitizers disable modules).Impact: “Just try it” friction is high compared with Preact/React or even Qt.3.2 Runtime / Feature Gaps (from code + TODO.md + docs)
 No mouse hover / move / drag / wheel beyond basic scroll
 Documented: only onClick, onInput/onChange, onKey, onFocus/onBlur, onScroll, onSubmit.

@@ -658,6 +658,53 @@ bool build(const fs::path& root, const std::string& preset) {
     return run({"cmake", "--build", "--preset", preset}, root) == 0;
 }
 
+// What makes a web build big, from the linker map reactx_add_app writes
+// (wasm-ld -Map). Release builds strip names from the .wasm, the map keeps
+// them: which object files instantiate std::format, and whether libc++'s
+// floating-point tables (d2fixed) are in.
+std::vector<std::string> sizeAdvice(std::string_view map) {
+    std::vector<std::string> formatUsers;
+    bool floatTables = false;
+    for (auto part : std::views::split(map, '\n')) {
+        std::string_view line(part.begin(), part.end());
+        if (line.contains("(d2fixed.o)")) floatTables = true;
+        auto open = line.find(".o:(");
+        if (open == std::string_view::npos) continue;
+        std::string_view symbol = line.substr(open + 4);
+        if (!symbol.contains("__format") && !symbol.contains("vformat")) continue;
+        std::string_view object = line.substr(0, open);  // "...  CMakeFiles/app.dir/src/main.cpp"
+        object = object.substr(object.find_last_of(" \t") + 1);
+        if (object.contains(".a(") || object.empty()) continue;  // a library, not the app's code
+        if (auto dir = object.find(".dir/"); dir != std::string_view::npos) object = object.substr(dir + 5);
+        if (!std::ranges::contains(formatUsers, object)) formatUsers.emplace_back(object);
+    }
+    std::vector<std::string> advice;
+    if (!formatUsers.empty()) {
+        std::string files;
+        for (const auto& f : formatUsers) files += (files.empty() ? "" : ", ") + f;
+        advice.push_back("std::format / std::print add ~100 KB to the .wasm (used in " + files +
+                         "). In browser code build strings with + and std::to_string.");
+    } else if (floatTables) {
+        advice.push_back("printing a float or double (std::to_chars, std::format) adds ~110 KB of tables to the .wasm. "
+                         "std::to_string(x) (6 decimals) or rounding to an integer costs almost nothing.");
+    }
+    return advice;
+}
+
+// After a web build: the size of each .wasm and what to do if it is avoidably big.
+void reportWebSize(const fs::path& root) {
+    std::error_code ec;
+    fs::path dist = root / "build/web/dist";
+    if (auto size = fs::file_size(dist / "index.wasm", ec); !ec)
+        std::println("index.wasm: {} KB (the page shows nothing until it is downloaded)", (size + 1023) / 1024);
+    for (const auto& entry : fs::directory_iterator(root / "build/web", ec)) {
+        if (!entry.path().string().ends_with(".link.map")) continue;
+        std::ifstream in(entry.path(), std::ios::binary);
+        std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        for (const auto& line : sizeAdvice(text)) std::println("reactx: size: {}", line);
+    }
+}
+
 int cmdBuild(const std::vector<std::string>& args) {
     fs::path root = projectRoot();
     Manifest manifest = readManifest(root).manifest;
@@ -669,6 +716,7 @@ int cmdBuild(const std::vector<std::string>& args) {
     std::string preset = native ? "native" : "web";
     if (!build(root, preset)) fail("build failed");
     std::println("Built: {}", (root / (native ? "build/native" : "build/web/dist")).string());
+    if (!native) reportWebSize(root);
     return 0;
 }
 

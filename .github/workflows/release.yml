@@ -61,8 +61,8 @@ jobs:
             echo "::error::CHANGELOG.md has no section ## [$v]"
             exit 1
           fi
-          printf '\n---\n\nУстановка: архив `reactx-%s-linux-x86_64.tar.gz` ниже (`bin/reactx` — в PATH) или образ `ghcr.io/%s/reactx:%s` с GCC 16 и Emscripten.\n' \
-            "$v" "${GITHUB_REPOSITORY_OWNER,,}" "$v" >> notes.md
+          printf '\n---\n\nInstall: the `reactx-%s-linux-x86_64.tar.gz` archive below (put `bin/reactx` on your PATH) or the `ghcr.io/%s/reactx:%s` image with GCC 16 and Emscripten. На русском: [CHANGELOG.ru.md](https://github.com/%s/blob/%s/CHANGELOG.ru.md).\n' \
+            "$v" "${GITHUB_REPOSITORY_OWNER,,}" "$v" "$GITHUB_REPOSITORY" "$TAG" >> notes.md
           cat notes.md
 
       - uses: actions/upload-artifact@v4
@@ -99,7 +99,7 @@ jobs:
           name="reactx-${{ needs.notes.outputs.version }}-linux-x86_64"
           mkdir -p "dist/$name/bin"
           install -s build/reactx build/reactx_serve "dist/$name/bin/"
-          cp LICENSE-MIT LICENSE-APACHE README.md README.ru.md CHANGELOG.md "dist/$name/"
+          cp LICENSE-MIT LICENSE-APACHE README.md README.ru.md CHANGELOG.md CHANGELOG.ru.md "dist/$name/"
           tar -C dist -czf "dist/$name.tar.gz" "$name"
           (cd dist && sha256sum "$name.tar.gz" > "$name.tar.gz.sha256")
 

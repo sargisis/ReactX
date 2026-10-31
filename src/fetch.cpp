@@ -58,7 +58,7 @@ void pollAnswer(std::shared_ptr<NativeRequest> request, std::shared_ptr<bool> ca
         }
         if (answer) done(*answer);
         else if (deadline && Clock::now() >= *deadline)
-            done(FetchResponse{.status = 0, .body = {}, .error = std::format("timeout after {} ms", timeout.count())});
+            done(FetchResponse{.status = 0, .body = {}, .error = "timeout after " + std::to_string(timeout.count()) + " ms"});
         else pollAnswer(std::move(request), std::move(cancelled), deadline, timeout, std::move(done));
     });
 }

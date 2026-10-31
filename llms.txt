@@ -152,6 +152,7 @@ server.run();
 - Numbers from text: `rx::parseNumber<int>(s)` / `rx::parsePort(s)` (`reactx/parse.hpp`), not `std::stoi`.
 - Never change state from another thread (natively a setter called off the UI thread stops the program with `precondition failed: ... onOwnThread()`). Timers: `useTimeout`, `useInterval`, `useDebounce`; the UI thread runs them.
 - Prefer the standard library (`std::format`, `std::print`, `std::ranges`, `std::flat_map`, `std::expected`) over hand-written helpers or extra libraries.
+- Code built for the browser: build strings with `+` and `std::to_string`, not `std::format` / `std::print` — any use adds ~100 KB to the `.wasm` (a whole counter app is 91 KB without it). Natively `std::format` is fine. `reactx build` prints the `.wasm` size and names the files that pull these in (`reactx: size: ...`).
 - Code built for the browser must not use reflection, `std::generator`, `<stacktrace>`, threads, sockets or the file system.
 
 ## Testing components (no terminal, no browser)

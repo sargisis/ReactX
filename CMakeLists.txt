@@ -181,6 +181,11 @@ if(EMSCRIPTEN)
          "<script src=\"https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js\"></script>\n  {{{ SCRIPT }}}"
          _rx_shell "${_rx_shell}")
   file(WRITE ${PROJECT_BINARY_DIR}/chart_shell.html "${_rx_shell}")
+  # The kanban board: the same source as the terminal example `kanban`.
+  add_executable(web_kanban examples/kanban.cpp)
+  target_link_libraries(web_kanban PRIVATE reactx)
+  set_target_properties(web_kanban PROPERTIES SUFFIX ".html")
+  target_link_options(web_kanban PRIVATE "SHELL:--shell-file ${PROJECT_SOURCE_DIR}/web/shell.html")
   add_executable(web_chart examples/web_chart.cpp)
   target_link_libraries(web_chart PRIVATE reactx reactx::js)
   set_target_properties(web_chart PROPERTIES SUFFIX ".html")
@@ -232,13 +237,14 @@ if(EMSCRIPTEN)
             ${PROJECT_BINARY_DIR}/web_counter.html ${PROJECT_BINARY_DIR}/web_counter.js ${PROJECT_BINARY_DIR}/web_counter.wasm
             ${PROJECT_BINARY_DIR}/web_ui_demo.html ${PROJECT_BINARY_DIR}/web_ui_demo.js ${PROJECT_BINARY_DIR}/web_ui_demo.wasm
             ${PROJECT_BINARY_DIR}/web_chart.html ${PROJECT_BINARY_DIR}/web_chart.js ${PROJECT_BINARY_DIR}/web_chart.wasm
+            ${PROJECT_BINARY_DIR}/web_kanban.html ${PROJECT_BINARY_DIR}/web_kanban.js ${PROJECT_BINARY_DIR}/web_kanban.wasm
             ${PROJECT_BINARY_DIR}/site/
     # The API summary for AI assistants: https://sargisis.github.io/ReactX/llms.txt
     COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_SOURCE_DIR}/llms.txt ${PROJECT_BINARY_DIR}/site/
     # The installer: curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh
     COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_SOURCE_DIR}/install.sh ${PROJECT_BINARY_DIR}/site/
     COMMAND ${CMAKE_COMMAND} -E touch ${PROJECT_BINARY_DIR}/site/.nojekyll
-    DEPENDS website site_prerender web_counter web_ui_demo web_chart ${PROJECT_SOURCE_DIR}/llms.txt ${PROJECT_SOURCE_DIR}/install.sh
+    DEPENDS website site_prerender web_counter web_ui_demo web_chart web_kanban ${PROJECT_SOURCE_DIR}/llms.txt ${PROJECT_SOURCE_DIR}/install.sh
     COMMENT "Assembling the website in ${PROJECT_BINARY_DIR}/site")
   # Start page with links to the demos (http://localhost:8090/).
   configure_file(${PROJECT_SOURCE_DIR}/web/index.html ${PROJECT_BINARY_DIR}/index.html COPYONLY)
@@ -401,6 +407,7 @@ if(REACTX_BUILD_EXAMPLES)
   reactx_example(todo)
   reactx_example(todo_tui)
   reactx_example(ui_demo)
+  reactx_example(kanban)
 endif()
 
 if(NOT REACTX_BUILD_TESTS)

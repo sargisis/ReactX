@@ -5,6 +5,8 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <unordered_map>
+#include <variant>
 #include <vector>
 
 #include "reactx/element.hpp"
@@ -19,6 +21,23 @@ namespace rx {
 // "Enter", "Tab" (shift = Shift+Tab), "Backspace", "Delete", "Escape",
 // "Up", "Down", "Left", "Right", "Home", "End", Ctrl+letter, Alt+key.
 std::vector<KeyEvent> decodeKeys(std::string_view bytes);
+
+// A mouse report (the terminal's SGR mode, which TerminalApp turns on):
+// what happened and where, in cells counted from 0.
+struct MouseInput {
+    enum class Action { Down, Up, Move, WheelUp, WheelDown };
+    Action action = Action::Move;
+    int x = 0, y = 0;
+    int button = 0;     // 0 left, 1 middle, 2 right (like the DOM)
+    bool held = false;  // a button is down during this Move (a drag)
+    bool ctrl = false, alt = false, shift = false;
+
+    bool operator==(const MouseInput&) const = default;
+};
+using TerminalInput = std::variant<KeyEvent, MouseInput>;
+
+// Keys and mouse reports, in the order they came.
+std::vector<TerminalInput> decodeInput(std::string_view bytes);
 
 // ---- rendering ----
 
@@ -88,7 +107,7 @@ public:
     // ---- focus ----
     NodeHandle focused() const { return focused_; }
     std::vector<NodeHandle> focusable() const;
-    bool focus(NodeHandle node);
+    bool focus(NodeHandle node) override;
     void focusNext();
     void focusPrev();
 
@@ -102,6 +121,16 @@ public:
     // When focus moves this way, the node that lost it gets "onBlur" and the
     // one that got it "onFocus".
     bool handleKey(Root& root, const KeyEvent& key);
+
+    // Mouse, like the browser: the topmost node under the pointer gets
+    // onPointerDown / onPointerMove / onPointerUp (bubbling; PointerEvent in
+    // cells), a press and release over it is an onClick, onMouseEnter /
+    // onMouseLeave follow the pointer, and a press focuses the nearest
+    // focusable node. After a press inside a node with pointerCapture=true
+    // the moves and the release go to that node until the button is up.
+    bool handleMouse(Root& root, const MouseInput& mouse);
+    // The topmost node drawn at a cell in the last repaint, 0 if none.
+    NodeHandle nodeAt(int x, int y) const;
     // The focus is in an input (keys that type text belong to it).
     bool editingText() const;
 
@@ -144,6 +173,21 @@ private:
     std::size_t focusIndex_ = 0;  // where focus was, to recover after removal
     NodeHandle trap_ = 0;         // current focus trap
     NodeHandle savedFocus_ = 0;   // focus before the trap appeared
+
+    // Mouse: where each node was drawn in the last repaint, in drawing order
+    // (later = on top), and what the pointer is doing.
+    struct Hit {
+        Rect visible;
+        NodeHandle node = 0;
+    };
+    std::vector<Hit> hits_;
+    std::unordered_map<NodeHandle, std::pair<int, int>> origins_;  // top-left corner of each node
+    std::vector<NodeHandle> hovered_;  // the node under the pointer and its ancestors
+    NodeHandle pressed_ = 0;           // where the button went down
+    NodeHandle captured_ = 0;          // gets moves and the release (pointer capture)
+    std::vector<NodeHandle> pathOf(NodeHandle h) const;
+    bool sendPointer(Root& root, const std::vector<NodeHandle>& path, const char* event, PointerEvent e);
+    void hover(Root& root, NodeHandle node);
 };
 
 // ---- terminal ----
@@ -164,6 +208,11 @@ public:
     int height() const;
     // Waits up to timeoutMs for input; returns the decoded keys (maybe none).
     std::vector<KeyEvent> readKeys(int timeoutMs);
+    // The same with mouse reports (after setMouse(true)).
+    std::vector<TerminalInput> readInput(int timeoutMs);
+    // Ask the terminal for mouse reports: clicks, drags and moves (SGR mode).
+    // While it's on, selecting text needs Shift in most terminals.
+    void setMouse(bool on);
 
 private:
     struct State;
@@ -179,6 +228,9 @@ public:
 
     void run(Element element);
     void quit() { running_ = false; }
+    // The mouse works by default (clicks, hover, drag); setMouse(false) before
+    // run() leaves it to the terminal, e.g. for selecting text without Shift.
+    void setMouse(bool on) { mouse_ = on; }
 
     TerminalRenderer& renderer() { return *renderer_; }
     Root& root() { return *root_; }
@@ -188,6 +240,7 @@ private:
     std::unique_ptr<TerminalRenderer> renderer_;
     std::unique_ptr<Root> root_;
     bool running_ = false;
+    bool mouse_ = true;
 };
 
 }  // namespace rx

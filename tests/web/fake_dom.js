@@ -40,6 +40,9 @@
     setAttribute(n, v) { this.attributes.set(n, String(v)); }
     removeAttribute(n) { this.attributes.delete(n); }
     getAttribute(n) { return this.attributes.has(n) ? this.attributes.get(n) : null; }
+    // Layout doesn't exist here: rxTest.rect() places an element.
+    getBoundingClientRect() { return this.rect || { left: 0, top: 0, width: 0, height: 0 }; }
+    setPointerCapture() { globalThis.__rxCaptured = this; }
     addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
     dispatchEvent(e) {
       e.target ||= this;
@@ -228,6 +231,19 @@
       el.dispatchEvent(event("scroll"));
     },
     focusIn: (id) => byId(id).dispatchEvent(event("focusin")),
+    rect: (id, left, top) => { byId(id).rect = { left, top, width: 10, height: 10 }; },
+    // A pointer event like a browser sends it: to the captured element if any.
+    pointer: (type, id, x, y, buttons) => {
+      const target = globalThis.__rxCaptured || byId(id);
+      target.dispatchEvent(event(type, { clientX: x, clientY: y, button: 0, buttons, pointerId: 1, pointerType: "mouse" }));
+      if (type === "pointerup") globalThis.__rxCaptured = null;
+    },
+    // The pointer goes from one element to another ("" = outside the page).
+    hover: (fromId, toId) => {
+      const from = fromId ? byId(fromId) : null, to = toId ? byId(toId) : null;
+      if (from) from.dispatchEvent(event("mouseout", { relatedTarget: to }));
+      if (to) to.dispatchEvent(event("mouseover", { relatedTarget: from }));
+    },
     focusOut: (id) => byId(id).dispatchEvent(event("focusout")),
     ns: (id) => byId(id).namespaceURI,
     tag: (id) => byId(id).tagName,

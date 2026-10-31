@@ -25,6 +25,15 @@
 //   onFocus,
 //   onBlur    Callback                   focusin / focusout (they bubble, like React)
 //   onScroll  ScrollHandler(ScrollEvent) the element itself scrolled (doesn't bubble)
+//   onPointerDown, onPointerMove,
+//   onPointerUp  PointerHandler(PointerEvent)  mouse, touch or pen; a cancelled
+//                touch ends with onPointerUp. For dragging on phones give the
+//                element touch-action: none (CSS).
+//   pointerCapture (bool prop) after a press on the element, moves and the
+//                release go to it even outside (data-rx-capture)
+//   onMouseEnter,
+//   onMouseLeave Callback                 the pointer came over / left the element
+//                                        (don't bubble, like React)
 // App-wide keyboard shortcuts: useKeyboard (hooks.hpp).
 // SVG: svg, rect, circle, path, g, ... are created in the SVG namespace;
 // "svg:text", "svg:a", "svg:title", "svg:style" for the tags HTML also has.
@@ -58,6 +67,7 @@ public:
     void insertChild(NodeHandle parent, NodeHandle child, std::size_t index) override;
     void removeChild(NodeHandle parent, NodeHandle child) override;
     void destroyNode(NodeHandle node) override;
+    bool focus(NodeHandle node) override;
 
 private:
     NodeHandle root_;

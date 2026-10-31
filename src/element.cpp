@@ -1,4 +1,5 @@
 #include "reactx/element.hpp"
+#include "reactx/renderer.hpp"
 
 #include "reactx/contract.hpp"
 #include "number_text.hpp"
@@ -35,10 +36,14 @@ std::string numberText(double x) {
 
 }  // namespace detail
 
+bool NodeRef::focus() const {
+    return state_ && state_->node && state_->renderer && state_->renderer->focus(state_->node);
+}
+
 bool isHandler(const PropValue& value) {
     return std::holds_alternative<Callback>(value) || std::holds_alternative<KeyHandler>(value) ||
            std::holds_alternative<InputHandler>(value) || std::holds_alternative<ScrollHandler>(value) ||
-           std::holds_alternative<RefHandler>(value);
+           std::holds_alternative<RefHandler>(value) || std::holds_alternative<PointerHandler>(value);
 }
 
 namespace {

@@ -97,7 +97,10 @@ Reconciler::~Reconciler() {
     try {
         reconcileChildren(*root_, {});
         effects_.clear();
-        refsOff_.clear();  // the app is going away: nobody reads them
+        // The app is going away: user callbacks aren't called, but NodeRefs
+        // forget the node, so focus() can't reach a destroyed backend.
+        for (auto& ref : std::exchange(refsOff_, {}))
+            if (const auto* r = ref.target<NodeRef>()) r->attach(0, nullptr);
         refsOn_.clear();
         commit();
     } catch (...) {
@@ -183,6 +186,10 @@ bool Reconciler::dispatch(NodeHandle node, const std::string& event, const Event
         const auto* text = std::get_if<std::string>(&data);
         if (!text) return false;
         call = [h = *ih, t = *text] { h(t); };
+    } else if (const auto* ph = std::get_if<PointerHandler>(value); ph && *ph) {
+        const auto* pointer = std::get_if<PointerEvent>(&data);
+        if (!pointer) return false;
+        call = [h = *ph, p = *pointer] { h(p); };
     } else {
         return false;
     }
@@ -521,6 +528,12 @@ Fiber& Reconciler::nearestHost(Fiber& f) {
     return *p;
 }
 
+// A NodeRef also learns the backend (for NodeRef::focus); other refs get the node.
+void Reconciler::callRef(const RefHandler& ref, NodeHandle node) {
+    if (const auto* r = ref.target<NodeRef>()) r->attach(node, &renderer_);
+    else ref(node);
+}
+
 void Reconciler::commit() {
     for (NodeHandle n : std::exchange(toDestroy_, {})) renderer_.destroyNode(n);
     renderer_.commit();
@@ -533,9 +546,9 @@ void Reconciler::commit() {
 
     // Refs before effects, so an effect can use the node. Off first: a keyed
     // element that was replaced hands its ref to the new node.
-    for (auto& ref : std::exchange(refsOff_, {})) ref(0);
+    for (auto& ref : std::exchange(refsOff_, {})) callRef(ref, 0);
     for (auto& [ref, node] : std::exchange(refsOn_, {}))
-        if (hosts_.contains(node)) ref(node);  // skip a node removed in the same batch
+        if (hosts_.contains(node)) callRef(ref, node);  // skip a node removed in the same batch
 
     for (auto& [weak, index] : std::exchange(effects_, {})) {
         auto f = weak.lock();

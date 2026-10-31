@@ -8,6 +8,17 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ### Добавлено
 
+- **Мышь, касания и перетаскивание**: `onPointerDown` / `onPointerMove` / `onPointerUp` (`PointerHandler`, `PointerEvent` с `x`, `y`, `localX`, `localY`, `button`, `buttons`, `type`) и `onMouseEnter` / `onMouseLeave` (не всплывают) — в браузере и в терминале. `{"pointerCapture", true}` после нажатия держит указатель на элементе (слайдеры); без него движения и отпускание получает элемент под указателем (куда бросают).
+- **Мышь в терминале**: `TerminalApp` включает SGR-отчёты мыши — клик нажимает кнопки и даёт фокус, наведение, перетаскивание; `app.setMouse(false)` выключает. `decodeInput` / `Terminal::readInput` дают клавиши и `MouseInput`; `TerminalRenderer::handleMouse` и `nodeAt(x, y)`.
+- **`ref.focus()`**: `NodeRef` даёт фокус своему элементу из кода, в обоих бэкендах (`Renderer::focus`).
+- **Демо: канбан-доска** (`examples/kanban.cpp`): карточки перетаскиваются между колонками мышью или пальцем либо стрелками ← →; один исходник для браузера (`web_kanban`, на странице demos сайта) и терминала (`kanban`).
+
+### Изменено
+
+- В `PropValue` ещё одна альтернатива, `PointerHandler`, в `EventData` — `PointerEvent`. `TerminalRenderer::focus` теперь переопределяет `Renderer::focus`.
+
+### Добавлено
+
 - **`useNodeRef()` и prop `ref`**: `{"ref", ref}` на HTML-элементе даёт C++ его узел — после коммита, до запуска эффектов, и снова 0, когда элемент убран; копии `NodeRef` видят один и тот же узел. Любой `RefHandler` (`std::function<void(NodeHandle)>`) работает как callback ref. Работает со всеми бэкендами.
 - **`reactx/js.hpp`** (браузер): `rx::domElement(ref)` — элемент страницы как `emscripten::val`, чтобы вызывать его методы или отдать JavaScript-библиотеке; `rx::jsValue(json)` — JS-объект из JSON. Линкуйте `reactx::js` (embind); приложения без него embind не несут.
 - **Демо: Chart.js из C++** (`examples/web_chart.cpp`, на странице demos сайта): данные — в состоянии C++, график создаётся, обновляется и удаляется из эффектов.

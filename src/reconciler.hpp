@@ -101,6 +101,7 @@ private:
     void collectNodes(const Fiber& fiber, std::vector<NodeHandle>& out) const;
     Fiber& nearestHost(Fiber& fiber);
     void commit();
+    void callRef(const RefHandler& ref, NodeHandle node);
     void runUpdates();
     void notifyConsumers(Fiber& provider);
 

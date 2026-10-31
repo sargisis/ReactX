@@ -47,6 +47,7 @@ EM_JS(void, rx_js_init, (), {
     Module.rxSetProp = function(el, name, kind, str, num) {
         if (name === "className") name = "class";
         if (name === "htmlFor") name = "for";
+        if (name === "pointerCapture") name = "data-rx-capture";
         if (kind === 3 && Module.rxUrlAttrs.has(name) && Module.rxIsJsUrl(str)) {
             // Text from users must not run as code when clicked: block it, like React.
             console.error("ReactX blocked a javascript: URL in " + name + ": " + str);
@@ -112,7 +113,7 @@ EM_JS(void, rx_js_remove_prop, (double id, const char* name), {
     if (n === "style") el.style.cssText = "";
     else if (n === "value") { delete el.__rxValue; el.value = ""; }
     else if (n === "checked" || n === "disabled" || n === "selected") { el[n] = false; if (n === "checked") delete el.__rxChecked; }
-    else el.removeAttribute(n === "className" ? "class" : n === "htmlFor" ? "for" : n);
+    else el.removeAttribute(n === "className" ? "class" : n === "htmlFor" ? "for" : n === "pointerCapture" ? "data-rx-capture" : n);
 });
 
 // Focusable elements inside `el`, in tab order (enough for dialogs).
@@ -150,6 +151,13 @@ EM_JS(void, rx_js_remove, (double parentId, double childId), {
     // A dialog closed: give focus back to where it was.
     const prev = child.__rxPrevFocus;
     if (prev && prev.focus && prev.isConnected !== false) prev.focus();
+});
+
+EM_JS(int, rx_js_focus, (double id), {
+    const el = Module.rxNodes.get(id);
+    if (!el || !el.focus || !el.isConnected) return 0;
+    el.focus();
+    return document.activeElement === el ? 1 : 0;
 });
 
 EM_JS(void, rx_js_destroy, (double id), {
@@ -237,6 +245,62 @@ EM_JS(void, rx_js_listen, (int app, double rootId), {
         send(e, "onKey", keyName(e.key));
     });
     root.addEventListener("submit", function(e) { e.preventDefault(); send(e, "onSubmit", ""); });
+    // Pointer: bubbles like the others, with the position relative to each
+    // element in turn ("x,y,localX,localY,button,buttons,type", whole pixels).
+    const sendPointer = function(e, name) {
+        const path = [];
+        for (let el = e.target; el; el = el.parentNode) {
+            if (el.__rxId !== undefined) path.push(el);
+            if (el === root) break;
+        }
+        let handled = false;
+        for (const el of path) {
+            if (!Module.rxNodes.has(el.__rxId)) continue;
+            const r = el.getBoundingClientRect ? el.getBoundingClientRect() : { left: 0, top: 0 };
+            const text = [e.clientX, e.clientY, e.clientX - r.left, e.clientY - r.top].map(Math.round)
+                .concat([e.button, e.buttons, e.pointerType || "mouse"]).join(",");
+            handled = Module.ccall("rx_dom_event", "number",
+                ["number", "number", "string", "string", "number", "number", "number"],
+                [app, el.__rxId, name, text, e.ctrlKey ? 1 : 0, e.altKey ? 1 : 0, e.shiftKey ? 1 : 0]) !== 0 || handled;
+        }
+        return handled;
+    };
+    // pointerCapture (data-rx-capture): a press keeps the pointer there until
+    // the release, even outside the element, so a slider doesn't break.
+    root.addEventListener("pointerdown", function(e) {
+        for (let el = e.target; el && el !== root; el = el.parentNode) {
+            if (el.getAttribute && el.getAttribute("data-rx-capture") !== null) {
+                try { el.setPointerCapture(e.pointerId); } catch (err) {}
+                break;
+            }
+        }
+        sendPointer(e, "onPointerDown");
+    });
+    root.addEventListener("pointermove", function(e) { sendPointer(e, "onPointerMove"); });
+    root.addEventListener("pointerup", function(e) { sendPointer(e, "onPointerUp"); });
+    root.addEventListener("pointercancel", function(e) { sendPointer(e, "onPointerUp"); });  // a touch became a scroll
+    // onMouseEnter / onMouseLeave don't bubble (like React): each element the
+    // pointer entered or left gets its own, outer first on enter, inner first on leave.
+    const hoverOne = function(el, name) {
+        if (el.__rxId !== undefined && Module.rxNodes.has(el.__rxId))
+            Module.ccall("rx_dom_event", "number", ["number", "number", "string", "string", "number", "number", "number"],
+                         [app, el.__rxId, name, "", 0, 0, 0]);
+    };
+    const outside = function(from, other) {  // from and its ancestors up to root that don't hold `other`
+        const list = [];
+        for (let el = from; el; el = el.parentNode) {
+            if (other && el.contains && el.contains(other)) break;
+            list.push(el);
+            if (el === root) break;
+        }
+        return list;
+    };
+    root.addEventListener("mouseout", function(e) {
+        for (const el of outside(e.target, e.relatedTarget)) hoverOne(el, "onMouseLeave");
+    });
+    root.addEventListener("mouseover", function(e) {
+        for (const el of outside(e.target, e.relatedTarget).reverse()) hoverOne(el, "onMouseEnter");
+    });
     // Focus: focusin / focusout bubble (like React's onFocus / onBlur).
     root.addEventListener("focusin", function(e) { send(e, "onFocus", ""); });
     root.addEventListener("focusout", function(e) { send(e, "onBlur", ""); });
@@ -285,6 +349,26 @@ rx::ScrollEvent scrollEvent(std::string_view text) {
             .clientHeight = values[4], .clientWidth = values[5]};
 }
 
+// "x,y,localX,localY,button,buttons,type" from the page.
+rx::PointerEvent pointerEvent(std::string_view text) {
+    rx::PointerEvent e;
+    int values[6] = {};
+    std::size_t i = 0;
+    for (auto part : std::views::split(text, ',')) {
+        std::string_view v(part.begin(), part.end());
+        if (i < 6) values[i] = rx::parseNumber<int>(v).value_or(0);
+        else if (i == 6 && !v.empty()) e.type = std::string(v);
+        ++i;
+    }
+    e.x = values[0];
+    e.y = values[1];
+    e.localX = values[2];
+    e.localY = values[3];
+    e.button = values[4];
+    e.buttons = values[5];
+    return e;
+}
+
 }  // namespace
 
 // Called from JavaScript for every DOM event. Returns 1 if a handler ran.
@@ -301,6 +385,13 @@ extern "C" EMSCRIPTEN_KEEPALIVE int rx_dom_event(int app, double node, const cha
         data = std::string(text);
     else if (name == "onScroll")
         data = scrollEvent(text);
+    else if (name.starts_with("onPointer")) {
+        auto e = pointerEvent(text);
+        e.ctrl = ctrl != 0;
+        e.alt = alt != 0;
+        e.shift = shift != 0;
+        data = std::move(e);
+    }
     return root.dispatch(handle, name, data) ? 1 : 0;
 }
 
@@ -353,6 +444,8 @@ void DomRenderer::destroyNode(NodeHandle node) { rx_js_destroy(js(node)); }
 void flushDom() {
     for (Root* root : apps()) root->flush();
 }
+
+bool DomRenderer::focus(NodeHandle node) { return rx_js_focus(js(node)) != 0; }
 
 Root& mountDom(Element element, const std::string& container) {
     REACTX_PRE(!container.empty());

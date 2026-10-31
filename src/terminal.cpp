@@ -108,6 +108,60 @@ KeyEvent decodeEscape(std::string_view bytes, std::size_t i, std::size_t& len) {
 
 }  // namespace
 
+namespace {
+
+// SGR mouse report: ESC [ < button ; column ; row (M press/move, m release),
+// column and row from 1. Button bits: 0-1 which (3 = none), 4 Shift, 8 Alt,
+// 16 Ctrl, 32 motion, 64 wheel. Returns its length, 0 if it isn't one.
+std::size_t decodeMouse(std::string_view bytes, std::size_t i, MouseInput& out) {
+    if (bytes.substr(i, 3) != "\x1b[<") return 0;
+    std::size_t j = i + 3;
+    int nums[3] = {0, 0, 0};
+    for (int k = 0; k < 3; ++k) {
+        std::size_t start = j;
+        while (j < bytes.size() && bytes[j] >= '0' && bytes[j] <= '9') nums[k] = nums[k] * 10 + (bytes[j++] - '0');
+        if (j == start || j >= bytes.size()) return 0;
+        char sep = bytes[j];
+        if (k < 2 ? sep != ';' : sep != 'M' && sep != 'm') return 0;
+        ++j;
+    }
+    int b = nums[0];
+    bool release = bytes[j - 1] == 'm';
+    out = MouseInput{.x = nums[1] - 1, .y = nums[2] - 1,
+                     .ctrl = (b & 16) != 0, .alt = (b & 8) != 0, .shift = (b & 4) != 0};
+    int which = b & 3;
+    if (b & 64) {
+        out.action = which == 0 ? MouseInput::Action::WheelUp : MouseInput::Action::WheelDown;
+    } else if (b & 32) {
+        out.action = MouseInput::Action::Move;
+        out.held = which != 3;
+        out.button = which == 3 ? 0 : which == 1 ? 1 : which == 2 ? 2 : 0;
+    } else {
+        out.action = release ? MouseInput::Action::Up : MouseInput::Action::Down;
+        out.button = which == 1 ? 1 : which == 2 ? 2 : 0;
+    }
+    return j - i;
+}
+
+}  // namespace
+
+std::vector<TerminalInput> decodeInput(std::string_view bytes) {
+    std::vector<TerminalInput> out;
+    for (std::size_t i = 0; i < bytes.size();) {
+        MouseInput mouse;
+        if (std::size_t n = decodeMouse(bytes, i, mouse)) {
+            out.emplace_back(mouse);
+            i += n;
+            continue;
+        }
+        std::size_t len = 1;
+        KeyEvent key = decodeOne(bytes, i, len);
+        if (!key.key.empty()) out.emplace_back(std::move(key));
+        i += std::max<std::size_t>(len, 1);
+    }
+    return out;
+}
+
 std::vector<KeyEvent> decodeKeys(std::string_view bytes) {
     std::vector<KeyEvent> keys;
     for (std::size_t i = 0; i < bytes.size();) {
@@ -123,6 +177,7 @@ std::vector<KeyEvent> decodeKeys(std::string_view bytes) {
 
 struct Terminal::State {
     termios original{};
+    bool mouse = false;
 };
 
 bool Terminal::isInteractive() { return ::isatty(STDIN_FILENO) && ::isatty(STDOUT_FILENO); }
@@ -145,6 +200,7 @@ Terminal::Terminal() : state_(std::make_unique<State>()) {
 }
 
 Terminal::~Terminal() {
+    setMouse(false);
     write("\x1b[0m\x1b[?25h\x1b[?1049l");  // reset colors, show cursor, main screen
     ::tcsetattr(STDIN_FILENO, TCSAFLUSH, &state_->original);
 }
@@ -170,6 +226,22 @@ int Terminal::height() const {
     return ::ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0 && ws.ws_row ? ws.ws_row : 24;
 }
 
+void Terminal::setMouse(bool on) {
+    if (on == state_->mouse) return;
+    state_->mouse = on;
+    // 1000 clicks, 1002 drags, 1003 every move (hover), 1006 the SGR format.
+    write(on ? "\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h" : "\x1b[?1006l\x1b[?1003l\x1b[?1002l\x1b[?1000l");
+}
+
+std::vector<TerminalInput> Terminal::readInput(int timeoutMs) {
+    pollfd fd{.fd = STDIN_FILENO, .events = POLLIN, .revents = 0};
+    if (::poll(&fd, 1, timeoutMs) <= 0) return {};
+    char buf[1024];  // a fast mouse sends many reports at once
+    ssize_t n = ::read(STDIN_FILENO, buf, sizeof buf);
+    if (n <= 0) return {};
+    return decodeInput(std::string_view(buf, static_cast<std::size_t>(n)));
+}
+
 std::vector<KeyEvent> Terminal::readKeys(int timeoutMs) {
     pollfd fd{.fd = STDIN_FILENO, .events = POLLIN, .revents = 0};
     if (::poll(&fd, 1, timeoutMs) <= 0) return {};
@@ -193,6 +265,7 @@ TerminalApp::~TerminalApp() = default;
 
 void TerminalApp::run(Element element) {
     renderer_->setSize(terminal_.width(), terminal_.height());
+    terminal_.setMouse(mouse_);
     root_->render(std::move(element));
     running_ = true;
     while (running_) {
@@ -202,7 +275,13 @@ void TerminalApp::run(Element element) {
             detail::notifyResize({w, h});  // useWindowSize; re-rendered by the flush below
             renderer_->repaint();
         }
-        for (const KeyEvent& key : terminal_.readKeys(100)) {
+        for (const TerminalInput& input : terminal_.readInput(100)) {
+            if (const auto* mouse = std::get_if<MouseInput>(&input)) {
+                renderer_->handleMouse(*root_, *mouse);
+                if (!running_) break;
+                continue;
+            }
+            const KeyEvent& key = std::get<KeyEvent>(input);
             if (key.ctrl && key.key == "c") {
                 running_ = false;
                 break;

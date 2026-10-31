@@ -195,7 +195,6 @@ void quick(const fs::path& tmp) {
 
     std::cout << "install: --check lists the tools without downloading anything\n";
     {
-        ::setenv("REACTX_HOME", (tmp / "rx-home").c_str(), 1);
         auto checked = reactx({"install", "--check"}, tmp);
         CHECK(checked.code == 0 || checked.code == 1);  // 1: something is missing on this machine
         for (const char* tool : {"cmake", "ninja", "emscripten", "gcc"}) CHECK(contains(checked.out, tool));
@@ -203,7 +202,6 @@ void quick(const fs::path& tmp) {
         CHECK(contains(reactx({"install", "--help"}, tmp).out, "Emscripten"));
         auto bad = reactx({"install", "--nope"}, tmp);
         CHECK(bad.code != 0 && contains(bad.out, "unknown option --nope"));
-        ::unsetenv("REACTX_HOME");
     }
 }
 
@@ -380,6 +378,9 @@ int main(int argc, char** argv) {
     try {
         if (e2e) endToEnd(tmp.path);
         else {
+            // Quick tests don't see the tools `reactx install` put into ~/.reactx:
+            // with them, `reactx new` writes their path instead of ${env:EMSDK}.
+            ::setenv("REACTX_HOME", (tmp.path / "rx-home").c_str(), 1);
             quick(tmp.path);
             update(tmp.path);
         }

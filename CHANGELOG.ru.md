@@ -6,6 +6,10 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ## [Не выпущено]
 
+## [0.8.3] — 2026-10-31
+
+Страницы, которые видны до загрузки WebAssembly: `rx::renderToString` превращает компоненты в HTML без браузера, и главная страница сайта теперь пререндерится (LCP на замедленном телефоне ~1,2 с → ~0,3 с). Приложения обновляются без правок; `mountDom` теперь заменяет то, что было в контейнере (см. «Изменено»).
+
 ### Добавлено
 
 - **`rx::renderToString(element)`** (`reactx/html.hpp`) — HTML компонентов без браузера: чтобы пререндерить страницу при сборке или отдавать её из C++. Props становятся атрибутами так же, как их ставит DOM-бэкенд (`className` → `class`, `true` — атрибут есть, `value` у `<textarea>` / `<select>`), текст экранируется, ссылки `javascript:` блокируются; эффекты не запускаются, как в React. Под ним — бэкенд `HtmlRenderer`.
@@ -15,6 +19,10 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 - `mountDom` заменяет то, что было в контейнере (текст загрузки, пререндер), а не добавляет приложение после него.
 - Роутер работает без страницы (под Node): путь — `/`, пока `reset` или `setBase` не скажут иначе.
+
+### Исправлено
+
+- `install.sh` больше не падает с `unknown command install`, если получил релиз старше 0.8.2: вместо этого объясняет, как поставить компилятор.
 
 ## [0.8.2] — 2026-10-31
 
@@ -237,7 +245,8 @@ ReactX без установки компиляторов: готовый `react
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.8.2...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.8.3...HEAD
+[0.8.3]: https://github.com/sargisis/ReactX/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/sargisis/ReactX/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/sargisis/ReactX/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/sargisis/ReactX/compare/v0.7.0...v0.8.0

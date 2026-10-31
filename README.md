@@ -165,7 +165,7 @@ For a terminal: `#include "reactx/terminal.hpp"` and `TerminalApp().run(h(App))`
 - `useReducer(reducer, initial)` → `[state, dispatch]`: state changed by actions; the newest reducer is used.
 - `useTimeout(fn, std::optional(5s))`, `useInterval(fn, 1s)` — timers on the UI thread; `std::nullopt` switches them off, unmounting cancels them.
 - `useKeyboard(handler)` — keyboard shortcuts for the whole app, wherever the focus is: runs before the element's `onKey`, `return true` consumes the key; while a text field has focus, keys that type text don't reach it.
-- `useDebounce(value, 300ms)`, `useLocalStorage("key", default)` (`localStorage` in the browser; natively only in memory, lost on exit), `useWindowSize()`.
+- `useDebounce(value, 300ms)`, `useLocalStorage("key", default)` (`localStorage` in the browser; natively only in memory, lost on exit; an optional third argument hears about failed saves), `useWindowSize()`.
 - **Shared state** (like Zustand): `const auto Cart = createStore<std::vector<Item>>({});`, `Cart.set(v)` / `Cart.update([](auto items) { ...; return items; })` anywhere on the UI thread; `useStore(Cart)` re-renders on every change, `useStore(Cart, [](const auto& c) { return c.size(); })` only when the selected part changes.
 - `useId()` — an id unique in the app and the same on every render: for `<label for>` and `aria-*`.
 - **Error boundaries**: `errorBoundary([](const RenderError& e) { return h("p", {}, {e.message}); }, {children})` — when the children throw while rendering (also later, on a state update), the fallback shows instead and the rest of the app keeps working; `e.retry()` tries again. Exceptions in event handlers and effects aren't caught (as in React).
@@ -318,11 +318,20 @@ if (todos.loading) ...; if (!todos.ok()) ... todos.errorText();
 if (auto list = todos.tryJson()) for (const auto& t : list->asArray()) ...
 fetch({.method = "POST", .url = "/api/todos", .body = json::object({{"title", "Milk"}}).dump()},
       [](const FetchResponse& r) { ... });
+
+// Headers, a deadline, response headers, cancelling:
+auto me = useFetch({.url = "/api/me", .headers = {{"Authorization", "Bearer " + token}}, .timeout = 5s});
+FetchHandle req = fetch({.url = "/api/items", .timeout = 3s}, [](const FetchResponse& r) { r.header("etag"); });
+req.cancel();                                    // the callback never runs; the browser aborts the request
 ```
+
+A timeout answers with status 0 and `error == "timeout after N ms"`. `useFetch` cancels the request it replaces (new url, `reload()`) and the one of an unmounted component.
 
 In the terminal build `fetch` and `useFetch` use the network too (since v0.7): give a full `http://` URL; the request runs on its own thread and the answer arrives on the UI thread at the next `flush()` (`TerminalApp` does it). No HTTPS there.
 
 `setLocalFetch` is a "server inside the app": requests go to a C++ handler first, no network needed (static sites without a backend, API tests).
+
+**Storage**: `rx::storageRead(key)` (`std::expected<std::optional<std::string>, std::string>`: no key is `std::nullopt`, an error is an error), `storageWrite`, `storageRemove` — localStorage in the browser, where writes can fail (`QuotaExceededError`, private mode). `useLocalStorage("draft", std::string(), onError)` calls `onError(reason)` when saving fails.
 
 Working with an external backend (e.g. Python / Flask, Node.js, Go) is supported out of the box via `reactx dev --proxy http://127.0.0.1:5000` (forwarding `/api/*` to your API server). See the [Backend and Flask documentation](https://sargisis.github.io/ReactX/#backend) for integration guides and current limitations.
 
@@ -517,7 +526,7 @@ AGENTS.md         rules and checks for anyone changing ReactX itself
 - Terminal: every character counts as 1 column (emoji and CJK can shift a line); the `input` cursor is always at the end; no scrolling — what doesn't fit is cut off; POSIX only (Linux/macOS).
 - `rx::ui`: switching tabs with arrows and "select on focus" aren't done yet; long lists don't scroll.
 - Browser: `import reactx;` is off in the web build; no mouse events except clicks (hover, drag); `onScroll` only on a scrolling element; the page is built in the browser (no server-side rendering).
-- `useFetch` / `fetch` in the terminal build: `http://` with a full URL only (`http://127.0.0.1:8090/api/todos`), no HTTPS. Custom request headers (e.g. `Authorization: Bearer`), response headers access, timeouts/cancellation, and WebSockets/SSE are not supported yet.
+- `useFetch` / `fetch` in the terminal build: `http://` with a full URL only (`http://127.0.0.1:8090/api/todos`), no HTTPS. WebSockets and Server-Sent Events are not supported yet; a cancelled request in the terminal build finishes on its own thread (its answer is dropped).
 - Reflection (`json::to` / `from`) works in native builds only.
 - The terminal layout is recomputed fully on every re-render.
 - `memo` doesn't compare children; hooks can't be called in a loop with a varying number of iterations (like in React) — list items need their own component.

@@ -274,7 +274,9 @@ inline const std::vector<Page>& pages() {
                  "auto [query, setQuery] = useState(std::string{});\n"
                  "std::string debounced = useDebounce(query, 300ms);"},
                 {"useLocalStorage", "Состояние, которое переживает перезагрузку страницы: хранится в localStorage. "
-                                    "Нативно — в памяти, пока работает программа. Поддерживает строки, числа, bool.",
+                                    "Нативно — в памяти, пока работает программа. Поддерживает строки, числа, bool. Третий аргумент "
+                                    "узнаёт о неудачном сохранении (квота, приватный режим); rx::storageRead / storageWrite "
+                                    "возвращают ошибки как std::expected.",
                  "auto [theme, setTheme] = useLocalStorage(\"rx-theme\", std::string(\"dark\"));"},
                 {"useWindowSize", "Размер окна браузера (в пикселях) или терминала (в ячейках); компонент перерисовывается при изменении.",
                  "WindowSize size = useWindowSize();"},
@@ -425,6 +427,12 @@ inline const std::vector<Page>& pages() {
                 {"fetch", "Любой метод и тело; ответ приходит в колбэк.",
                  "fetch({.method = \"POST\", .url = \"/api/todos\", .body = json::object({{\"title\", \"Молоко\"}}).dump()},\n"
                  "      [](const FetchResponse& r) { if (r.ok()) ... });"},
+                {"Заголовки, таймаут, отмена", "У запроса бывают заголовки и срок ожидания (тогда статус 0 и error \"timeout after N ms\"); "
+                                               "заголовки ответа — r.header(имя). fetch возвращает FetchHandle: после cancel() колбэк не "
+                                               "вызовется. useFetch принимает и целый запрос и отменяет те, что заменил.",
+                 "auto me = useFetch({.url = \"/api/me\", .headers = {{\"Authorization\", \"Bearer \" + token}}, .timeout = 5s});\n"
+                 "FetchHandle req = fetch({.url = \"/api/items\"}, [](const FetchResponse& r) { r.header(\"etag\"); });\n"
+                 "req.cancel();"},
                 {"setLocalFetch", "«Сервер внутри приложения»: запросы сначала идут в обработчик на C++; если он вернул ответ, "
                                   "сеть не нужна. Подходит для статических сайтов без бэкенда, офлайн-режима и тестов.",
                  "setLocalFetch([&store](const FetchRequest& r) -> std::optional<FetchResponse> {\n"

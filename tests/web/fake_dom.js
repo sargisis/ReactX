@@ -131,14 +131,33 @@
   // fetch: answers come from rxTest.mock(); every request is recorded.
   const mocks = {};
   const requests = [];
+  // A mock may wait `delay` ms and send `headers`; an AbortSignal rejects it.
   globalThis.fetch = (url, opts) => {
     const method = (opts && opts.method) || "GET";
-    requests.push(method + " " + url + (opts && opts.body ? " " + opts.body : ""));
+    const sent = Object.entries((opts && opts.headers) || {}).map(([n, v]) => " [" + n + ": " + v + "]").join("");
+    requests.push(method + " " + url + (opts && opts.body ? " " + opts.body : "") + sent);
     const m = mocks[method + " " + url];
-    return new Promise((resolve, reject) => setTimeout(() => {
-      if (!m) return reject(new Error("no route " + method + " " + url));
-      resolve({ status: m.status, text: () => Promise.resolve(m.body) });
-    }, 0));
+    const signal = opts && opts.signal;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        if (!m) return reject(new Error("no route " + method + " " + url));
+        const hs = new Map(Object.entries(m.headers || {}));
+        resolve({ status: m.status, headers: hs, text: () => Promise.resolve(m.body) });
+      }, (m && m.delay) || 0);
+      if (signal) signal.addEventListener("abort", () => { clearTimeout(timer); aborted.push(method + " " + url); reject(new Error("aborted")); });
+    });
+  };
+  const aborted = [];
+  // localStorage; rxTest.storageFull(true) makes setItem throw like a full quota.
+  const store = new Map();
+  let full = false;
+  globalThis.localStorage = {
+    getItem: (k) => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => {
+      if (full) { const e = new Error("the quota has been exceeded"); e.name = "QuotaExceededError"; throw e; }
+      store.set(k, String(v));
+    },
+    removeItem: (k) => store.delete(k),
   };
 
   // Helpers the C++ tests call through emscripten_run_script.
@@ -167,7 +186,9 @@
       setLocation(path);
       entries[0] = path;
     },
-    mock: (method, url, status, body) => { mocks[method + " " + url] = { status, body }; },
+    mock: (method, url, status, body, extra) => { mocks[method + " " + url] = Object.assign({ status, body }, extra || {}); },
+    aborted: () => aborted.join("\n"),
+    storageFull: (on) => { full = on; },
     requests: () => requests.join("\n"),
     path: () => location.pathname + location.search,
     back: () => history.back(),

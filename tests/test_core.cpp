@@ -230,6 +230,16 @@ TEST(default_dispatch_does_nothing) {
     CHECK((seen == std::vector<bool>{true, false}));
 }
 
+TEST(storage_reports_missing_keys_and_removes) {
+    CHECK(storageRead("rx-test-key").value() == std::optional<std::string>{});  // missing: no error, no value
+    CHECK(storageWrite("rx-test-key", "").has_value());
+    CHECK(storageRead("rx-test-key").value() == std::optional<std::string>{""});  // an empty value is a value
+    CHECK(storageWrite("rx-test-key", "42").has_value());
+    CHECK(storageRead("rx-test-key").value() == std::optional<std::string>{"42"});
+    CHECK(storageRemove("rx-test-key").has_value());
+    CHECK(storageRead("rx-test-key").value() == std::optional<std::string>{});
+}
+
 TEST(version_is_semver) {
     std::string v = rx::version();
     CHECK(v == std::to_string(REACTX_VERSION_MAJOR) + "." + std::to_string(REACTX_VERSION_MINOR) + "." +

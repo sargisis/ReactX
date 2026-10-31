@@ -6,6 +6,10 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-10-31
+
+C++ meets the page: `useNodeRef` and the `ref` prop give the real element, `reactx/js.hpp` drives JavaScript libraries from C++ state (a Chart.js demo), and pointer events bring hover, drag and drop and focus from code — the same in the browser and, with the mouse, in the terminal (a kanban demo built from one source for both). `reactx install` now checks for `xz`. A MINOR release because `PropValue` and `EventData` got new alternatives: code that `std::visit`s all of them needs branches for `RefHandler` / `PointerHandler` / `PointerEvent`; other apps update without changes.
+
 ### Added
 
 - **Mouse, touch and drag**: `onPointerDown` / `onPointerMove` / `onPointerUp` (`PointerHandler`, `PointerEvent` with `x`, `y`, `localX`, `localY`, `button`, `buttons`, `type`) and `onMouseEnter` / `onMouseLeave` (don't bubble), in the browser and in the terminal. `{"pointerCapture", true}` keeps the pointer on an element after a press (sliders); without it the element under the pointer gets moves and the release (drop targets).
@@ -268,7 +272,8 @@ The first release.
 - **A documentation site** built with ReactX: https://sargisis.github.io/ReactX/, published by GitHub Actions through the `gh-pages` branch.
 - The version in one place (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; new projects from `reactx new` use ReactX by release tag.
 
-[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.8.3...HEAD
+[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/sargisis/ReactX/compare/v0.8.3...v0.9.0
 [0.8.3]: https://github.com/sargisis/ReactX/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/sargisis/ReactX/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/sargisis/ReactX/compare/v0.8.0...v0.8.1

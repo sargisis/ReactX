@@ -6,6 +6,10 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ## [Не выпущено]
 
+## [0.9.0] — 2026-10-31
+
+C++ встречается со страницей: `useNodeRef` и prop `ref` дают настоящий элемент, `reactx/js.hpp` управляет JavaScript-библиотеками из состояния C++ (демо с Chart.js), а события указателя приносят наведение, перетаскивание и фокус из кода — одинаково в браузере и, с мышью, в терминале (демо-канбан из одного исходника для обоих). `reactx install` теперь проверяет `xz`. MINOR-релиз, потому что в `PropValue` и `EventData` появились новые альтернативы: код, который делает `std::visit` по всем, должен учесть `RefHandler` / `PointerHandler` / `PointerEvent`; остальные приложения обновляются без правок.
+
 ### Добавлено
 
 - **Мышь, касания и перетаскивание**: `onPointerDown` / `onPointerMove` / `onPointerUp` (`PointerHandler`, `PointerEvent` с `x`, `y`, `localX`, `localY`, `button`, `buttons`, `type`) и `onMouseEnter` / `onMouseLeave` (не всплывают) — в браузере и в терминале. `{"pointerCapture", true}` после нажатия держит указатель на элементе (слайдеры); без него движения и отпускание получает элемент под указателем (куда бросают).
@@ -268,7 +272,8 @@ ReactX без установки компиляторов: готовый `react
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.8.3...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/sargisis/ReactX/compare/v0.8.3...v0.9.0
 [0.8.3]: https://github.com/sargisis/ReactX/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/sargisis/ReactX/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/sargisis/ReactX/compare/v0.8.0...v0.8.1

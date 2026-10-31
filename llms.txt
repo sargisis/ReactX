@@ -6,7 +6,7 @@ Native (terminal) builds need GCC 16+ (the C++26 standard library); browser buil
 
 ## Which version has what
 
-`reactx new` pins the project to the CLI's release (`"rev"` in `reactx.json`). Latest release: v0.8.3 (renderToString). Only on `main` until v0.9.0 is released: `useNodeRef` / the `ref` prop / `ref.focus()`, `reactx/js.hpp` (`domElement`, `jsValue`, `reactx::js`), pointer and hover events (`onPointerDown/Move/Up`, `onMouseEnter/Leave`, `pointerCapture`) and the mouse in the terminal. To use them now, set `"rev": "main"` in `reactx.json` and rebuild. If a name from this file doesn't exist ("'useNodeRef' was not declared in this scope", "'PointerEvent' was not declared in this scope"), the project is on an older release.
+`reactx new` pins the project to the CLI's release (`"rev"` in `reactx.json`). Everything in this file is in v0.9.0: `useNodeRef` / the `ref` prop / `ref.focus()`, `reactx/js.hpp` (`domElement`, `jsValue`, `reactx::js`), pointer and hover events (`onPointerDown/Move/Up`, `onMouseEnter/Leave`, `pointerCapture`) and the mouse in the terminal came in v0.9.0, `renderToString` in v0.8.3. If a name from this file doesn't exist ("'useNodeRef' was not declared in this scope", "'PointerEvent' was not declared in this scope"), the project is on an older release: `reactx update` moves it to the newest one (`reactx --version` shows the CLI's).
 
 ## A complete program
 

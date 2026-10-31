@@ -6,6 +6,10 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ## [Не выпущено]
 
+## [0.12.0] — 2026-11-01
+
+Страницы, видные до загрузки `.wasm`, одной строкой в `reactx.json` (`"web": {"prerender": ["/", "/docs/faq"]}`), API позиции прокрутки для чатов и лент (`ref.scrollMetrics()` / `scrollTo()` / `scrollBy()`, оба бэкенда) и исправление собранных сайтов, которые опрашивали dev-сервер — бесконечно на хостингах с SPA-fallback. Найдено при написании чата, монитора процессов и сайта документации на ReactX. MINOR-релиз, потому что у `Renderer` появились виртуальные функции, а SPA-fallback `serveDirectory` сначала берёт `200.html`; приложения обновляются без правок (пересоберите, чтобы убрать скрипт перезагрузки из опубликованных страниц).
+
 ### Добавлено
 
 - **Пререндер из `reactx.json`**: `"web": {"prerender": ["/", "/docs/faq"]}`. Сборка запускает ту же программу под Node, где `mountDom` пишет HTML каждого маршрута (вместе с CSS `rx::ui`) в `dist/index.html`, `dist/docs/faq.html`, … и завершается; страница видна до загрузки `.wasm`. Код менять не нужно. `200.html` / `404.html` остаются пустой страницей для других маршрутов. `reactx_add_app(... PRERENDER <маршруты>)` для CMake, `reactx::prerender`.
@@ -315,7 +319,8 @@ ReactX без установки компиляторов: готовый `react
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.11.0...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/sargisis/ReactX/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/sargisis/ReactX/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/sargisis/ReactX/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/sargisis/ReactX/compare/v0.8.3...v0.9.0

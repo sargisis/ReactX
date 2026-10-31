@@ -6,6 +6,10 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-11-01
+
+Pages that show before the `.wasm` arrives with one line in `reactx.json` (`"web": {"prerender": ["/", "/docs/faq"]}`), a scroll position API for chats and feeds (`ref.scrollMetrics()` / `scrollTo()` / `scrollBy()`, both backends), and a fix for built sites that kept polling the dev server — forever on hosts with an SPA fallback. Found by writing a chat, a process monitor and a documentation site on ReactX. A MINOR release because `Renderer` got virtuals and `serveDirectory`'s SPA fallback prefers `200.html`; apps update without changes (rebuild to drop the reload script from published pages).
+
 ### Added
 
 - **Prerendering from `reactx.json`**: `"web": {"prerender": ["/", "/docs/faq"]}`. The build runs the same program under Node, where `mountDom` writes each route's HTML (with the `rx::ui` CSS) into `dist/index.html`, `dist/docs/faq.html`, … and stops; the page shows before the `.wasm` arrives. No code changes. `200.html` / `404.html` stay the empty page for other routes. `reactx_add_app(... PRERENDER <routes>)` for CMake, `reactx::prerender`.
@@ -315,7 +319,8 @@ The first release.
 - **A documentation site** built with ReactX: https://sargisis.github.io/ReactX/, published by GitHub Actions through the `gh-pages` branch.
 - The version in one place (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; new projects from `reactx new` use ReactX by release tag.
 
-[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/sargisis/ReactX/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/sargisis/ReactX/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/sargisis/ReactX/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/sargisis/ReactX/compare/v0.8.3...v0.9.0

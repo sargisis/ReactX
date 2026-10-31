@@ -73,6 +73,7 @@ EM_JS(void, rx_js_root, (double id, const char* selector), {
     const sel = UTF8ToString(selector);
     const el = document.querySelector(sel);
     if (!el) throw new Error("ReactX: no element matches " + sel);
+    el.textContent = "";  // the app replaces a loading text or prerendered HTML
     el.__rxId = id;
     Module.rxNodes.set(id, el);
 });

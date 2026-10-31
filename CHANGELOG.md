@@ -6,6 +6,16 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Added
+
+- **`rx::renderToString(element)`** (`reactx/html.hpp`) — the HTML of components without a browser, to prerender a page at build time or serve it from C++. Props become attributes the way the DOM backend sets them (`className` → `class`, `true` → a present attribute, the `value` of a `<textarea>` / `<select>`), text is escaped, `javascript:` URLs are blocked; effects don't run, like in React. `HtmlRenderer` is the backend behind it.
+- **The site's home page is prerendered**: `index.html` holds its HTML in English and Russian, so the page shows before `index.wasm` arrives (on a throttled phone LCP went from ~1.2 s to ~0.3 s, the same as the first paint).
+
+### Changed
+
+- `mountDom` replaces what the container showed (a loading text, prerendered HTML) instead of adding the app after it.
+- The router works without a page (under Node): the path is `/` until `reset` or `setBase` say otherwise.
+
 ## [0.8.2] — 2026-10-31
 
 Smaller and faster in the browser, and easier to start: WebAssembly 2–3.5× smaller (a counter is 40 KB over the network), `reactx install` downloads the compiler without sudo, a one-line installer, `fetch` with headers, timeouts and cancelling, storage errors as values, strict JSON reading, a setter thread check, and the changelog in English. Apps update without changes, except the rare `return fetch(...)` from a `void` function (see Changed).

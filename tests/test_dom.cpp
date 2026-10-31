@@ -89,9 +89,12 @@ Element App(const Props&) {
 }  // namespace
 
 int main() {
+    js("document.querySelector('#app').textContent = 'loading'");  // a loading text or prerendered HTML
     mountDom(h(App));
 
-    std::cout << "mount\n";
+    std::cout << "mount replaces what the container showed\n";
+    CHECK(!has("loading"));
+    CHECK(html().starts_with("<div class=\"card\">"));
     CHECK(has("<div class=\"card\"><button class id=\"inc\">count=0</button>"));
 
     std::cout << "click updates text and attributes\n";

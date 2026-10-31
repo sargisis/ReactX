@@ -4,6 +4,7 @@ module;
 
 #include "reactx/contract.hpp"
 #include "reactx/fetch.hpp"
+#include "reactx/html.hpp"
 #include "reactx/json.hpp"
 #include "reactx/path.hpp"
 #include "reactx/reactx.hpp"
@@ -82,7 +83,9 @@ using rx::memo;
 
 // renderer.hpp, root.hpp, text_renderer.hpp
 using rx::NodeHandle;
+using rx::HtmlRenderer;
 using rx::Renderer;
+using rx::renderToString;
 using rx::Root;
 using rx::TextRenderer;
 

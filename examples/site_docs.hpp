@@ -384,8 +384,13 @@ inline const std::vector<Page>& pages() {
         {
             "browser", "Браузер", "WebAssembly, DOM, CSS.",
             {
-                {"mountDom", "Монтирует приложение в <div id=\"app\"> страницы и живёт после main().",
+                {"mountDom", "Монтирует приложение в <div id=\"app\"> страницы (заменяя то, что там было: текст загрузки, пререндер) "
+                             "и живёт после main().",
                  "int main() { mountDom(h(App)); }"},
+                {"Пререндер", "rx::renderToString (reactx/html.hpp) даёт HTML компонентов без браузера; эффекты не запускаются. "
+                              "Вставьте его в <div id=\"app\"> при сборке — и страница видна до загрузки .wasm; потом mountDom "
+                              "заменяет его живым приложением, так что первый рендер должен рисовать то же. Так сделана главная этого сайта.",
+                 "std::string html = renderToString(h(Home));\n// \"<main class=\\\"home\\\"><h1>Hello</h1>...</main>\""},
                 {"Props в DOM", "className → class, style — строка CSS, value — управляемое поле ввода, checked/disabled — "
                                 "свойства, остальное — атрибуты (true — есть, false — убрать). onChange флажка получает \"true\" или "
                                 "\"false\"; rx::boolHandler превращает это в bool.",

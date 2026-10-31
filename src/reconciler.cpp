@@ -503,6 +503,10 @@ Fiber& Reconciler::nearestHost(Fiber& f) {
 void Reconciler::commit() {
     for (NodeHandle n : std::exchange(toDestroy_, {})) renderer_.destroyNode(n);
     renderer_.commit();
+    if (!runEffects_) {
+        effects_.clear();
+        return;
+    }
 
     for (auto& [weak, index] : std::exchange(effects_, {})) {
         auto f = weak.lock();

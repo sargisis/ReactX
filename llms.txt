@@ -8,7 +8,7 @@ Native builds need GCC 16+ (the C++26 standard library); browser builds need Ems
 
 Every file needs the includes, `using namespace rx;` and a `main`. A component alone does not build.
 
-`reactx/reactx.hpp` is the core only: `Element`, `h`, hooks, context, `memo`, stores, `Root`. Everything else has its own header: `router.hpp`, `ui.hpp`, `fetch.hpp`, `json.hpp`, `dom.hpp` (`mountDom`), `terminal.hpp` (`TerminalApp`), `text_renderer.hpp` (tests), `http.hpp` (server), `path.hpp` (`urlEncode`), `parse.hpp` (`parseNumber`), all under `reactx/`.
+`reactx/reactx.hpp` is the core only: `Element`, `h`, hooks, context, `memo`, stores, `Root`. Everything else has its own header: `router.hpp`, `ui.hpp`, `fetch.hpp`, `json.hpp`, `dom.hpp` (`mountDom`), `terminal.hpp` (`TerminalApp`), `html.hpp` (`renderToString`), `text_renderer.hpp` (tests), `http.hpp` (server), `path.hpp` (`urlEncode`), `parse.hpp` (`parseNumber`), all under `reactx/`.
 
 ```cpp
 // Browser app (reactx new my-app)
@@ -154,6 +154,10 @@ server.run();
 - Prefer the standard library (`std::format`, `std::print`, `std::ranges`, `std::flat_map`, `std::expected`) over hand-written helpers or extra libraries.
 - Code built for the browser: build strings with `+` and `std::to_string`, not `std::format` / `std::print` — any use adds ~100 KB to the `.wasm` (a whole counter app is 91 KB without it). Natively `std::format` is fine. `reactx build` prints the `.wasm` size and names the files that pull these in (`reactx: size: ...`).
 - Code built for the browser must not use reflection, `std::generator`, `<stacktrace>`, threads, sockets or the file system.
+
+## HTML without a browser (prerender)
+
+`rx::renderToString(h(Home))` (`reactx/html.hpp`) returns the HTML string of components: `className` -> `class`, `true` -> a present attribute, text escaped, handlers left out. Effects don't run. Put it into `<div id="app">` of the page at build time; `mountDom` replaces the container's content with the live app (no hydration), so the first render must draw the same markup.
 
 ## Testing components (no terminal, no browser)
 

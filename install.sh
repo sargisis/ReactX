@@ -43,4 +43,10 @@ case ":$PATH:" in
 esac
 
 # The compiler and tools (reactx install asks nothing, so a pipe is fine).
-"$bin/reactx" install || echo "reactx: run \`reactx install\` again to finish"
+# Releases before 0.8.2 have no `reactx install`: say what to do instead.
+if "$bin/reactx" help install > /dev/null 2>&1; then
+  "$bin/reactx" install || echo "reactx: run \`reactx install\` again to finish"
+else
+  echo "reactx $version can't install the compiler itself: install Emscripten 6+ (https://emscripten.org/docs/getting_started/downloads.html),"
+  echo "or get a newer release:  curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh"
+fi

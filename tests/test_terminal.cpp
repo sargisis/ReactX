@@ -418,6 +418,164 @@ TEST(children_are_clipped_by_the_border) {
     CHECK(lines[2] == "└────┘");
 }
 
+// ---- mouse ----
+
+TEST(decodes_sgr_mouse_reports) {
+    auto in = decodeInput("a\x1b[<0;5;3M\x1b[<32;9;4M\x1b[<0;9;4m\x1b[<35;2;2M\x1b[<64;1;1M\x1b[<18;1;1M");
+    CHECK(in.size() == 7);
+    CHECK(std::get<KeyEvent>(in[0]).key == "a");
+    auto m = [&](std::size_t i) { return std::get<MouseInput>(in[i]); };
+    CHECK((m(1) == MouseInput{.action = MouseInput::Action::Down, .x = 4, .y = 2}));
+    CHECK((m(2) == MouseInput{.action = MouseInput::Action::Move, .x = 8, .y = 3, .held = true}));
+    CHECK((m(3) == MouseInput{.action = MouseInput::Action::Up, .x = 8, .y = 3}));
+    CHECK((m(4) == MouseInput{.action = MouseInput::Action::Move, .x = 1, .y = 1}));
+    CHECK(m(5).action == MouseInput::Action::WheelUp);
+    CHECK(m(6).action == MouseInput::Action::Down && m(6).button == 2 && m(6).ctrl);
+    CHECK(decodeKeys("\x1b[<0;5;3Mb") == std::vector<KeyEvent>{key("b")});  // keys alone skip the mouse
+}
+
+// Where `text` is on screen (ASCII), to aim the mouse at it.
+std::pair<int, int> where(const TerminalRenderer& r, const std::string& text) {
+    auto lines = r.frameLines();
+    for (std::size_t y = 0; y < lines.size(); ++y)
+        if (auto x = lines[y].find(text); x != std::string::npos) return {static_cast<int>(x), static_cast<int>(y)};
+    return {-1, -1};
+}
+
+MouseInput mouse(MouseInput::Action action, std::pair<int, int> at, bool held = false) {
+    return MouseInput{.action = action, .x = at.first, .y = at.second, .held = held};
+}
+
+TEST(mouse_click_presses_and_focuses_a_button) {
+    TerminalRenderer r;
+    r.setSize(30, 6);
+    Root root(r);
+    root.render(h(Form));
+    auto ok = where(r, "[ ok ]");
+    CHECK(r.handleMouse(root, mouse(MouseInput::Action::Down, ok)));
+    CHECK(r.focused() == r.nodeAt(ok.first, ok.second));
+    CHECK(r.handleMouse(root, mouse(MouseInput::Action::Up, ok)));
+    CHECK(contains(r.frameText(), "clicks=1"));
+    // Press on the button, release elsewhere: no click.
+    r.handleMouse(root, mouse(MouseInput::Action::Down, ok));
+    r.handleMouse(root, mouse(MouseInput::Action::Up, {29, 5}));
+    CHECK(contains(r.frameText(), "clicks=1"));
+}
+
+Element Slider(const Props&) {
+    auto [pos, setPos] = useState(0);
+    auto [grab, setGrab] = useState(-1);  // where in the knob it was taken
+    return h("box", {}, {
+        h("box", {{"direction", "row"}, {"height", 1}}, {
+            h("box", {{"width", pos}}),
+            h("box", {{"width", 3}, {"height", 1}, {"pointerCapture", true},
+                      {"onPointerDown", [setGrab](const PointerEvent& e) { setGrab(static_cast<int>(e.localX)); }},
+                      {"onPointerMove", [grab, setPos](const PointerEvent& e) {
+                           if (grab >= 0 && e.buttons) setPos(std::max(0, static_cast<int>(e.x) - grab));
+                       }},
+                      {"onPointerUp", [setGrab](const PointerEvent&) { setGrab(-1); }}},
+              {h("text", {}, {"[#]"})}),
+        }),
+        h("text", {}, {"pos=" + std::to_string(pos) + (grab >= 0 ? " dragging" : "")}),
+    });
+}
+
+TEST(mouse_drag_keeps_the_pointer_outside_the_node) {
+    TerminalRenderer r;
+    r.setSize(30, 6);
+    Root root(r);
+    root.render(h(Slider));
+    auto knob = where(r, "[#]");
+    CHECK((knob == std::pair(0, 0)));
+    r.handleMouse(root, mouse(MouseInput::Action::Down, {1, 0}));  // the middle of the knob
+    CHECK(contains(r.frameText(), "pos=0 dragging"));
+    r.handleMouse(root, mouse(MouseInput::Action::Move, {11, 4}, true));  // far below: still captured
+    CHECK(contains(r.frameText(), "pos=10 dragging"));
+    CHECK((where(r, "[#]") == std::pair(10, 0)));
+    r.handleMouse(root, mouse(MouseInput::Action::Up, {11, 4}));
+    CHECK(contains(r.frameText(), "pos=10") && !contains(r.frameText(), "dragging"));
+    r.handleMouse(root, mouse(MouseInput::Action::Move, {20, 0}));  // no button: nothing moves
+    CHECK(contains(r.frameText(), "pos=10"));
+}
+
+// Without pointerCapture the release goes to what is under the pointer: a drop target.
+Element DropZone(const Props&) {
+    auto [dragging, setDragging] = useState(false);
+    auto [dropped, setDropped] = useState(std::string("-"));
+    return h("box", {{"direction", "row"}, {"height", 3}}, {
+        h("box", {{"width", 6}, {"onPointerDown", [setDragging](const PointerEvent&) { setDragging(true); }}},
+          {h("text", {}, {"card"})}),
+        h("box", {{"width", 16}, {"onPointerUp", [dragging, setDragging, setDropped](const PointerEvent& e) {
+                       if (dragging) setDropped("done@" + std::to_string(static_cast<int>(e.localX)));
+                       setDragging(false);
+                   }}},
+          {h("text", {}, {"column " + dropped})}),
+    });
+}
+
+TEST(mouse_drop_goes_to_the_node_under_the_pointer) {
+    TerminalRenderer r;
+    r.setSize(30, 4);
+    Root root(r);
+    root.render(h(DropZone));
+    r.handleMouse(root, mouse(MouseInput::Action::Down, where(r, "card")));
+    r.handleMouse(root, mouse(MouseInput::Action::Move, {9, 1}, true));
+    r.handleMouse(root, mouse(MouseInput::Action::Up, {9, 1}));
+    CHECK(contains(r.frameText(), "column done@3"));  // localX inside the column (it starts at 6)
+}
+
+Element HoverPair(const Props&) {
+    auto [hovered, setHovered] = useState(std::string{});
+    auto [events, setEvents] = useState(0);
+    auto zone = [&](std::string name) {
+        return h("box", {{"key", name}, {"width", 5}, {"height", 1},
+                         {"onMouseEnter", [setHovered, setEvents, name] { setHovered(name); setEvents([](int n) { return n + 1; }); }},
+                         {"onMouseLeave", [setHovered, setEvents] { setHovered(std::string{}); setEvents([](int n) { return n + 1; }); }}},
+                 {h("text", {}, {name})});
+    };
+    return h("box", {}, {
+        h("box", {{"direction", "row"}, {"height", 1}}, {zone("aaaaa"), zone("bbbbb")}),
+        h("text", {}, {"hover=" + hovered + " events=" + std::to_string(events)}),
+    });
+}
+
+TEST(mouse_enter_and_leave_follow_the_pointer) {
+    TerminalRenderer r;
+    r.setSize(30, 4);
+    Root root(r);
+    root.render(h(HoverPair));
+    r.handleMouse(root, mouse(MouseInput::Action::Move, {1, 0}));
+    CHECK(contains(r.frameText(), "hover=aaaaa events=1"));
+    r.handleMouse(root, mouse(MouseInput::Action::Move, {2, 0}));  // same node: nothing new
+    CHECK(contains(r.frameText(), "events=1"));
+    r.handleMouse(root, mouse(MouseInput::Action::Move, {6, 0}));  // leave a, enter b
+    CHECK(contains(r.frameText(), "hover=bbbbb events=3"));
+    r.handleMouse(root, mouse(MouseInput::Action::Move, {20, 3}));
+    CHECK(contains(r.frameText(), "hover= events=4"));
+}
+
+NodeHandle focusedByRef = 0;
+
+Element FocusOnOpen(const Props&) {
+    auto second = useNodeRef();
+    useEffect([second] {
+        if (second.focus()) focusedByRef = second.get();
+    }, deps());
+    return h("box", {}, {
+        h("input", {{"value", "first"}}),
+        h("input", {{"value", "second"}, {"ref", second}}),
+    });
+}
+
+TEST(node_ref_focus_moves_the_terminal_focus) {
+    TerminalRenderer r;
+    r.setSize(30, 4);
+    Root root(r);
+    root.render(h(FocusOnOpen));
+    CHECK(focusedByRef != 0);
+    CHECK(r.focused() == focusedByRef);
+}
+
 }  // namespace
 
 int main() {

@@ -28,6 +28,8 @@ using rx::KeyHandler;
 using rx::InputHandler;
 using rx::ScrollHandler;
 using rx::RefHandler;
+using rx::PointerHandler;
+using rx::PointerEvent;
 using rx::NodeRef;
 using rx::ScrollEvent;
 using rx::EventData;

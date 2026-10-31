@@ -172,7 +172,7 @@ For a terminal: `#include "reactx/terminal.hpp"` and `TerminalApp().run(h(App))`
 |---|---|
 | **Core** | `h()` elements, fragments, keys; function components; props structs; a reconciler that reuses nodes; batched updates |
 | **Hooks** | `useState`, `useEffect`, `useRef`, `useNodeRef`, `useMemo`, `useCallback`, `useContext`, `useReducer`, `useStore`, `useId`, `useTimeout`, `useInterval`, `useKeyboard`, `useDebounce`, `useLocalStorage`, `useWindowSize`, `memo<C>`, `errorBoundary` |
-| **Events** | `onClick`, `onInput`, `onChange`, `onKey`, `onSubmit`, `onFocus`, `onBlur`, `onScroll`; bubbling like in React |
+| **Events** | `onClick`, `onInput`, `onChange`, `onKey`, `onSubmit`, `onFocus`, `onBlur`, `onScroll`, `onPointerDown/Move/Up`, `onMouseEnter/Leave` (browser and terminal); bubbling like in React |
 | **Terminal** | ANSI drawing of changed lines only, Flexbox on Yoga, borders, colors, focus, Unicode/ASCII by locale |
 | **Browser** | WebAssembly + DOM, controlled inputs, SVG, event delegation |
 | **Components** | `rx::ui`: buttons, inputs, checkboxes, tabs, modals, lists — themed |
@@ -200,7 +200,7 @@ For a terminal: `#include "reactx/terminal.hpp"` and `TerminalApp().run(h(App))`
 - **memo**: `h(memo<Item>, props)` skips re-rendering with the same props. For a props struct — its `operator==`; for `Props` — values with `==`, handlers equal only if they come from the same `useCallback`; elements with children always re-render.
 - **Batching**: `setState` only marks the component; re-rendering happens in `flush()` (on its own after `render`, `dispatch`, `fetch` responses and timers), parents before children.
 
-**Events** — four kinds of handlers: `Callback` (`void()`: `onClick`, `onFocus`, `onBlur`, `onSubmit`), `KeyHandler` (`void(const KeyEvent&)`: `onKey`), `InputHandler` (`void(const std::string&)`: `onInput`, `onChange`; a checkbox sends `"true"` / `"false"`, `rx::boolHandler([](bool on) { ... })` makes it a bool) and `ScrollHandler` (`void(const ScrollEvent&)`: `onScroll`, with `nearBottom()` for loading more). A backend sends the data with `Root::dispatch(node, "onKey", KeyEvent{"Enter"})`; if the data doesn't fit the handler, `dispatch` returns `false`. Handlers stay in the core and are never sent to the backend.
+**Events** — five kinds of handlers: `Callback` (`void()`: `onClick`, `onFocus`, `onBlur`, `onSubmit`), `KeyHandler` (`void(const KeyEvent&)`: `onKey`), `InputHandler` (`void(const std::string&)`: `onInput`, `onChange`; a checkbox sends `"true"` / `"false"`, `rx::boolHandler([](bool on) { ... })` makes it a bool) `ScrollHandler` (`void(const ScrollEvent&)`: `onScroll`, with `nearBottom()` for loading more) and `PointerHandler` (`void(const PointerEvent&)`: `onPointerDown`, `onPointerMove`, `onPointerUp` — `x`, `y`, `localX`, `localY`, `button`, `buttons`, `type`; pixels in the browser, cells in a terminal). `onMouseEnter` / `onMouseLeave` are `Callback`s and don't bubble. A backend sends the data with `Root::dispatch(node, "onKey", KeyEvent{"Enter"})`; if the data doesn't fit the handler, `dispatch` returns `false`. Handlers stay in the core and are never sent to the backend.
 
 </details>
 
@@ -306,6 +306,15 @@ The [`DomRenderer`](include/reactx/dom.hpp) backend renders into the real DOM: t
 | `svg`, `rect`, `circle`, `path`, `g`, … | SVG in its own namespace; `svg:text`, `svg:a` for the tags HTML also has |
 | `data-rx-self` | the element only gets clicks on itself, not on its children (dialog backdrops) |
 | `data-rx-trap` | Tab stays inside the element; it takes focus when it appears and gives it back when removed |
+
+**Mouse, touch and drag.** `onPointerDown` / `onPointerMove` / `onPointerUp` get a `PointerEvent` (`x`, `y`, and `localX`, `localY` from the element's corner), `onMouseEnter` / `onMouseLeave` follow the pointer; the same handlers work in a terminal, where `TerminalApp` turns the mouse on (cells instead of pixels; `app.setMouse(false)` leaves it to the terminal). `{"pointerCapture", true}` keeps moves and the release on the element after a press, even outside it (sliders); without it they go to what is under the pointer (drop targets). `ref.focus()` moves the keyboard focus from code. The kanban demo [`examples/kanban.cpp`](examples/kanban.cpp) is one source for both:
+
+```cpp
+h("div", {{"className", "card"}, {"onPointerDown", [setDragging, id](const PointerEvent&) { setDragging(id); }}}, {title}),
+// ...the column under the pointer takes it:
+h("div", {{"onMouseEnter", [setOver, col] { setOver(col); }},
+          {"onPointerUp", [drop, col](const PointerEvent&) { drop(col); }}}, cards)
+```
 
 **Refs and JavaScript.** `useNodeRef()` gives the element itself: pass it as `{"ref", ref}` and use it in `useEffect` (it is set before effects run, and back to `0` when the element goes; any `RefHandler` works as a callback ref). In the browser [`reactx/js.hpp`](include/reactx/js.hpp) turns it into an `emscripten::val`: `rx::domElement(ref).call<void>("focus")`, or hand it to a JavaScript library; `rx::jsValue(json)` makes a JS object from JSON. Link with `reactx::js` (it adds embind, ~12 KB of JS; apps without it don't carry it). The demo [`examples/web_chart.cpp`](examples/web_chart.cpp) drives Chart.js from C++ state:
 
@@ -564,7 +573,7 @@ AGENTS.md         rules and checks for anyone changing ReactX itself
 - In tests, after `setState` outside `dispatch`, call `root.flush()` yourself (the browser and `TerminalApp` do it on their own).
 - Terminal: every character counts as 1 column (emoji and CJK can shift a line); the `input` cursor is always at the end; no scrolling — what doesn't fit is cut off; POSIX only (Linux/macOS).
 - `rx::ui`: switching tabs with arrows and "select on focus" aren't done yet; long lists don't scroll.
-- Browser: `import reactx;` is off in the web build; no mouse events except clicks (hover, drag); `onScroll` only on a scrolling element; the page is built in the browser (no server-side rendering).
+- Browser: `import reactx;` is off in the web build; no wheel or double-click events yet; `onScroll` only on a scrolling element; `renderToString` has no hydration (the app replaces the prerendered HTML).
 - `useFetch` / `fetch` in the terminal build: `http://` with a full URL only (`http://127.0.0.1:8090/api/todos`), no HTTPS. WebSockets and Server-Sent Events are not supported yet; a cancelled request in the terminal build finishes on its own thread (its answer is dropped).
 - Reflection (`json::to` / `from`) works in native builds only.
 - The terminal layout is recomputed fully on every re-render.

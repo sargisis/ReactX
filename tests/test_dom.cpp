@@ -100,6 +100,27 @@ Element RefProbe(const Props&) {
     return h("section", {{"id", "probe"}, {"ref", box}});
 }
 
+// Pointer, hover and focus from code.
+Element PointerProbe(const Props&) {
+    auto [log, setLog] = useState(std::string{});
+    auto add = [setLog](std::string s) { setLog([s](std::string l) { return l + s + ";"; }); };
+    auto field = useNodeRef();
+    auto n = [](double v) { return std::to_string(static_cast<int>(v)); };
+    return h("div", {{"id", "outer"}, {"onMouseEnter", [add] { add("enter-outer"); }}, {"onMouseLeave", [add] { add("leave-outer"); }}}, {
+        h("div", {{"id", "knob"}, {"pointerCapture", true},
+                  {"onMouseEnter", [add] { add("enter-knob"); }},
+                  {"onMouseLeave", [add] { add("leave-knob"); }},
+                  {"onPointerDown", [add, n](const PointerEvent& e) { add("down " + n(e.localX) + "," + n(e.localY) + " b" + std::to_string(e.buttons) + " " + e.type); }},
+                  {"onPointerMove", [add, n](const PointerEvent& e) { add("move " + n(e.x)); }},
+                  {"onPointerUp", [add](const PointerEvent&) { add("up"); }}},
+          {"knob"}),
+        h("div", {{"id", "other"}}, {"other"}),
+        h("input", {{"id", "field"}, {"ref", field}}),
+        h("button", {{"id", "focus-field"}, {"onClick", [field] { field.focus(); }}}, {"focus"}),
+        h("p", {{"id", "log"}}, {log}),
+    });
+}
+
 }  // namespace
 
 int main() {
@@ -176,6 +197,21 @@ int main() {
     mountDom(h(RefProbe));  // replaces the app above: the last check
     CHECK(refTag == "SECTION#probe");
     CHECK(has("data-seen=\"yes\""));
+
+    std::cout << "pointer events, capture, hover and focus from code\n";
+    mountDom(h(PointerProbe));
+    js("rxTest.rect('knob', 10, 20)");
+    js("rxTest.hover('', 'knob')");
+    js("rxTest.pointer('pointerdown', 'knob', 15, 27, 1)");
+    js("rxTest.pointer('pointermove', 'other', 100, 0, 1)");  // captured: still the knob's
+    js("rxTest.pointer('pointerup', 'other', 100, 0, 0)");
+    js("rxTest.pointer('pointermove', 'other', 50, 0, 0)");   // released: not the knob's any more
+    js("rxTest.hover('knob', 'other')");
+    js("rxTest.hover('other', '')");
+    CHECK(js("document.getElementById('log').textContent") ==
+          "enter-outer;enter-knob;down 5,7 b1 mouse;move 100;up;leave-knob;leave-outer;");
+    js("rxTest.click('focus-field')");
+    CHECK(js("document.activeElement && document.activeElement.getAttribute('id')") == "field");
 
     std::cout << (failures ? "FAILED: " + std::to_string(failures) : std::string("OK, all tests passed")) << '\n';
     return failures ? 1 : 0;

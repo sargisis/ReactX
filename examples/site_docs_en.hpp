@@ -338,6 +338,17 @@ inline const std::vector<Page>& pagesEn() {
                               "Put it into <div id=\"app\"> at build time and the page shows before the .wasm arrives; mountDom then "
                               "replaces it with the live app, so the first render must draw the same. This site's home page is built so.",
                  "std::string html = renderToString(h(Home));\n// \"<main class=\\\"home\\\"><h1>Hello</h1>...</main>\""},
+                {"Mouse, touch and drag", "onPointerDown, onPointerMove and onPointerUp get a PointerEvent: x and y in the window, "
+                                          "localX and localY from the element's corner, button, buttons and type (mouse, touch, pen). "
+                                          "onMouseEnter and onMouseLeave follow the pointer and don't bubble. The same handlers work in a "
+                                          "terminal (in cells). {\"pointerCapture\", true} keeps moves and the release on the element after "
+                                          "a press, even outside it (sliders); without it the element under the pointer gets them (drop "
+                                          "targets). ref.focus() focuses an element from code. The kanban demo is one source for both.",
+                 "h(\"div\", {{\"pointerCapture\", true},\n"
+                 "          {\"onPointerDown\", [setGrab](const PointerEvent& e) { setGrab(e.localX); }},\n"
+                 "          {\"onPointerMove\", [grab, setPos](const PointerEvent& e) {\n"
+                 "              if (e.buttons) setPos(e.x - grab);\n"
+                 "          }}})"},
                 {"Refs and JavaScript", "useNodeRef() gives the real element: pass it as the ref prop and use it in useEffect "
                                         "(it is set before effects run, and back to 0 when the element goes). rx::domElement "
                                         "(reactx/js.hpp) turns it into an emscripten::val, the page's own object: call its methods, "

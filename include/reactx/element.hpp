@@ -19,6 +19,10 @@ namespace rx {
 
 struct Element;
 class Props;
+class Renderer;
+namespace detail {
+class Reconciler;
+}
 
 // A node of the backend (a DOM element, a terminal box); 0 means none.
 using NodeHandle = std::uint64_t;
@@ -87,6 +91,23 @@ struct ScrollEvent {
     bool operator==(const ScrollEvent&) const = default;
 };
 
+// A mouse, touch or pen pointer: onPointerDown, onPointerMove, onPointerUp.
+// In the browser in CSS pixels, in a terminal in cells (column and row from 0).
+// They bubble and go to the element under the pointer. Give an element
+// {"pointerCapture", true} and after a press on it the moves and the release
+// go to it even when the pointer runs outside (sliders, drawing); without it
+// the element under the pointer gets them (drop targets of a drag).
+struct PointerEvent {
+    double x = 0, y = 0;            // in the window (clientX / clientY)
+    double localX = 0, localY = 0;  // from the top-left corner of the element whose handler runs
+    int button = 0;                 // the button that changed: 0 left, 1 middle, 2 right
+    int buttons = 0;                // buttons held now: 1 left, 2 right, 4 middle
+    std::string type = "mouse";     // "mouse", "touch" or "pen"
+    bool ctrl = false, alt = false, shift = false;
+
+    bool operator==(const PointerEvent&) const = default;
+};
+
 // Event handlers stored in props. They stay in the core and are never sent
 // to the renderer.
 using Callback = std::function<void()>;                         // onClick, onFocus, onBlur, ...
@@ -94,6 +115,7 @@ using KeyHandler = std::function<void(const KeyEvent&)>;        // onKey
 using InputHandler = std::function<void(const std::string&)>;   // onInput, onChange
 using ScrollHandler = std::function<void(const ScrollEvent&)>;  // onScroll
 using RefHandler = std::function<void(NodeHandle)>;             // ref
+using PointerHandler = std::function<void(const PointerEvent&)>;  // onPointerDown, onPointerMove, onPointerUp
 
 // The node a host element became, for code that needs the real thing (focus,
 // measure, a JavaScript library): pass it as the "ref" prop and read it in
@@ -104,24 +126,42 @@ using RefHandler = std::function<void(NodeHandle)>;             // ref
 // get() is 0 before the first commit and after the element is removed. Copies
 // share the node, like React's ref object. Any RefHandler works as "ref" too
 // (a callback ref): it gets the node after the commit and 0 on removal.
+//
+// focus() moves the keyboard focus there, in the browser and in a terminal:
+//   auto search = useNodeRef();
+//   useEffect([search] { search.focus(); }, deps());   // focused on open
+//   return h("input", {{"ref", search}, ...});
 class NodeRef {
 public:
     NodeRef() = default;  // empty: ignores the node; useNodeRef() makes a real one
     static NodeRef create() {
         NodeRef r;
-        r.node_ = std::make_shared<NodeHandle>(0);
+        r.state_ = std::make_shared<State>();
         return r;
     }
 
-    NodeHandle get() const { return node_ ? *node_ : 0; }
+    NodeHandle get() const { return state_ ? state_->node : 0; }
     explicit operator bool() const { return get() != 0; }
     void operator()(NodeHandle node) const {
-        if (node_) *node_ = node;
+        if (state_) state_->node = node;
     }
     bool operator==(const NodeRef&) const = default;  // the same ref, not the same node
 
+    // Focus the element (it must be able to take focus: an input, a button,
+    // tabindex in the browser, focusable=true in a terminal). False if it
+    // can't or isn't on the page.
+    bool focus() const;
+
 private:
-    std::shared_ptr<NodeHandle> node_;
+    friend class detail::Reconciler;
+    struct State {
+        NodeHandle node = 0;
+        Renderer* renderer = nullptr;  // the backend the node belongs to
+    };
+    void attach(NodeHandle node, Renderer* renderer) const {
+        if (state_) *state_ = {node, node ? renderer : nullptr};
+    }
+    std::shared_ptr<State> state_;
 };
 
 // A checkbox's onChange with a bool instead of the text "true" / "false":
@@ -130,13 +170,13 @@ inline InputHandler boolHandler(std::function<void(bool)> handler) {
     return [handler = std::move(handler)](const std::string& value) { handler(value == "true"); };
 }
 
-// Data a backend sends with an event: nothing, a key press, text, or a scroll position.
-using EventData = std::variant<std::monostate, KeyEvent, std::string, ScrollEvent>;
+// Data a backend sends with an event: nothing, a key press, text, a scroll position or a pointer.
+using EventData = std::variant<std::monostate, KeyEvent, std::string, ScrollEvent, PointerEvent>;
 
 using PropValue = std::variant<std::monostate, bool, std::int64_t, double, std::string,
-                               Callback, KeyHandler, InputHandler, ScrollHandler, RefHandler>;
+                               Callback, KeyHandler, InputHandler, ScrollHandler, RefHandler, PointerHandler>;
 
-// True for any handler type (Callback, KeyHandler, InputHandler, ScrollHandler, RefHandler).
+// True for any handler type (Callback, KeyHandler, InputHandler, ScrollHandler, RefHandler, PointerHandler).
 bool isHandler(const PropValue& value);
 
 // A component is a plain function: props in, element tree out.

@@ -8,6 +8,17 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ### Added
 
+- **Mouse, touch and drag**: `onPointerDown` / `onPointerMove` / `onPointerUp` (`PointerHandler`, `PointerEvent` with `x`, `y`, `localX`, `localY`, `button`, `buttons`, `type`) and `onMouseEnter` / `onMouseLeave` (don't bubble), in the browser and in the terminal. `{"pointerCapture", true}` keeps the pointer on an element after a press (sliders); without it the element under the pointer gets moves and the release (drop targets).
+- **The mouse in the terminal**: `TerminalApp` turns on SGR mouse reports — clicks press buttons and focus, hover, drag; `app.setMouse(false)` turns it off. `decodeInput` / `Terminal::readInput` give keys and `MouseInput`s; `TerminalRenderer::handleMouse` and `nodeAt(x, y)`.
+- **`ref.focus()`**: a `NodeRef` focuses its element from code, in both backends (`Renderer::focus`).
+- **Demo: a kanban board** (`examples/kanban.cpp`): drag cards between columns with the mouse or a finger, or move them with ← →; one source for the browser (`web_kanban`, on the site's demos page) and the terminal (`kanban`).
+
+### Changed
+
+- `PropValue` has one more alternative, `PointerHandler`, and `EventData` one more, `PointerEvent`. `TerminalRenderer::focus` now overrides `Renderer::focus`.
+
+### Added
+
 - **`useNodeRef()` and the `ref` prop**: `{"ref", ref}` on a host element gives C++ its node — set after the commit, before effects run, and back to 0 when the element goes; copies of a `NodeRef` share it. Any `RefHandler` (`std::function<void(NodeHandle)>`) works as a callback ref. Works with every backend.
 - **`reactx/js.hpp`** (browser): `rx::domElement(ref)` — the page's element as an `emscripten::val`, to call its methods or hand it to a JavaScript library; `rx::jsValue(json)` — a JS object from JSON. Link `reactx::js` (embind); apps without it don't carry embind.
 - **Demo: Chart.js from C++** (`examples/web_chart.cpp`, on the site's demos page): the data lives in C++ state, the chart is created, updated and destroyed from effects.

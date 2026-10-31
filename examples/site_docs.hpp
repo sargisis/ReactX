@@ -388,6 +388,17 @@ inline const std::vector<Page>& pages() {
                               "Вставьте его в <div id=\"app\"> при сборке — и страница видна до загрузки .wasm; потом mountDom "
                               "заменяет его живым приложением, так что первый рендер должен рисовать то же. Так сделана главная этого сайта.",
                  "std::string html = renderToString(h(Home));\n// \"<main class=\\\"home\\\"><h1>Hello</h1>...</main>\""},
+                {"Мышь, касания и перетаскивание", "onPointerDown, onPointerMove и onPointerUp получают PointerEvent: x и y в окне, "
+                                          "localX и localY от угла элемента, button, buttons и type (mouse, touch, pen). "
+                                          "onMouseEnter и onMouseLeave следят за указателем и не всплывают. Те же обработчики работают в "
+                                          "терминале (в клетках). {\"pointerCapture\", true} держит движения и отпускание на элементе после "
+                                          "нажатия, даже за его пределами (слайдеры); без него их получает элемент под указателем (куда "
+                                          "бросают). ref.focus() даёт фокус элементу из кода. Демо-канбан — один исходник для обоих.",
+                 "h(\"div\", {{\"pointerCapture\", true},\n"
+                 "          {\"onPointerDown\", [setGrab](const PointerEvent& e) { setGrab(e.localX); }},\n"
+                 "          {\"onPointerMove\", [grab, setPos](const PointerEvent& e) {\n"
+                 "              if (e.buttons) setPos(e.x - grab);\n"
+                 "          }}})"},
                 {"Ref и JavaScript", "useNodeRef() даёт настоящий элемент: передайте его в prop ref и пользуйтесь в useEffect "
                                      "(он заполнен до эффектов и снова 0, когда элемент убран). rx::domElement (reactx/js.hpp) "
                                      "превращает его в emscripten::val — объект самой страницы: вызывайте его методы, читайте "

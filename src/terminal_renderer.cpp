@@ -1,6 +1,7 @@
 #include <yoga/Yoga.h>
 
 #include <algorithm>
+#include <ranges>
 #include <charconv>
 #include <cmath>
 #include <deque>
@@ -438,6 +439,10 @@ void TerminalRenderer::draw(const Layout& layout, NodeHandle h, float originX, f
     int hgt = cells(fy + YGNodeLayoutGetHeight(y)) - y0;
     Rect rect{x0, y0, x0 + w, y0 + hgt};
     Rect visible = rect.intersect(clip);
+    if (!n->isText && h != kRoot) {  // for the mouse: what is where
+        hits_.push_back(Hit{.visible = visible, .node = h});
+        origins_[h] = {x0, y0};
+    }
 
     // Content box: inside border and padding.
     auto inset = [&](YGEdge e) {
@@ -584,6 +589,8 @@ void TerminalRenderer::repaint() {
     YGNodeCalculateLayout(layout.root, static_cast<float>(width_), static_cast<float>(height_), YGDirectionLTR);
 
     frame_ = std::make_unique<Frame>(static_cast<std::size_t>(height_), static_cast<std::size_t>(width_));
+    hits_.clear();
+    origins_.clear();
     draw(layout, kRoot, 0, 0, Style{}, Rect{0, 0, width_, height_}, *frame_);
     if (!output_) return;
 
@@ -764,6 +771,108 @@ bool TerminalRenderer::handleKeyNow(Root& root, const KeyEvent& key) {
     }
     if (key.key == "Enter" || key.key == " ") return root.dispatch(target, "onClick") || handled;
     return handled;
+}
+
+// ---- mouse ----
+
+NodeHandle TerminalRenderer::nodeAt(int x, int y) const {
+    for (const Hit& hit : hits_ | std::views::reverse) {  // drawn last = on top
+        const Rect& r = hit.visible;
+        if (x >= r.left && x < r.right && y >= r.top && y < r.bottom) return hit.node;
+    }
+    return 0;
+}
+
+std::vector<NodeHandle> TerminalRenderer::pathOf(NodeHandle h) const {
+    std::vector<NodeHandle> path;  // the node, then its ancestors
+    for (const Node* n = nullptr; h && h != kRoot && (n = findNode(h)); h = n->parent) path.push_back(h);
+    return path;
+}
+
+// Bubbles like the DOM; localX / localY are relative to each node in turn.
+bool TerminalRenderer::sendPointer(Root& root, const std::vector<NodeHandle>& path, const char* event,
+                                   PointerEvent e) {
+    bool handled = false;
+    for (NodeHandle h : path) {
+        if (!findNode(h)) continue;  // removed by an earlier handler
+        auto it = origins_.find(h);
+        e.localX = it == origins_.end() ? 0 : e.x - it->second.first;
+        e.localY = it == origins_.end() ? 0 : e.y - it->second.second;
+        handled = root.dispatch(h, event, e) || handled;
+    }
+    return handled;
+}
+
+// onMouseLeave for the nodes the pointer left (inner first), then onMouseEnter
+// for those it entered (outer first); neither bubbles, like React.
+void TerminalRenderer::hover(Root& root, NodeHandle node) {
+    std::vector<NodeHandle> now = pathOf(node);
+    if (now == hovered_) return;
+    std::vector<NodeHandle> before = std::exchange(hovered_, now);
+    for (NodeHandle h : before)
+        if (std::ranges::find(now, h) == now.end() && findNode(h)) root.dispatch(h, "onMouseLeave");
+    for (NodeHandle h : now | std::views::reverse)
+        if (std::ranges::find(before, h) == before.end() && findNode(h)) root.dispatch(h, "onMouseEnter");
+}
+
+bool TerminalRenderer::handleMouse(Root& root, const MouseInput& m) {
+    using Action = MouseInput::Action;
+    if (m.action == Action::WheelUp || m.action == Action::WheelDown) return false;
+    NodeHandle hit = nodeAt(m.x, m.y);
+    PointerEvent e{.x = static_cast<double>(m.x), .y = static_cast<double>(m.y), .button = m.button,
+                   .buttons = 0, .type = "mouse", .ctrl = m.ctrl, .alt = m.alt, .shift = m.shift};
+    int bit = m.button == 1 ? 4 : m.button == 2 ? 2 : 1;  // the DOM's `buttons` bits
+
+    switch (m.action) {
+        case Action::Down: {
+            hover(root, hit);
+            e.buttons = bit;
+            pressed_ = hit;
+            auto path = pathOf(hit);
+            captured_ = 0;
+            for (NodeHandle h : path)
+                if (const Node* n = findNode(h); n && flag(n->props, "pointerCapture")) {
+                    captured_ = h;
+                    break;
+                }
+            sendPointer(root, path, "onPointerDown", e);
+            // A press focuses the nearest node that can take focus, like a browser.
+            for (NodeHandle h : path) {
+                const Node* n = findNode(h);
+                if (!n || !isFocusable(*n)) continue;
+                NodeHandle before = focused_;
+                if (h != before && focus(h)) {
+                    if (before && findNode(before)) root.dispatch(before, "onBlur");
+                    if (findNode(h)) root.dispatch(h, "onFocus");
+                }
+                break;
+            }
+            return true;
+        }
+        case Action::Move: {
+            hover(root, hit);
+            e.buttons = m.held ? bit : 0;
+            return sendPointer(root, pathOf(captured_ && findNode(captured_) ? captured_ : hit), "onPointerMove", e);
+        }
+        case Action::Up: {
+            NodeHandle target = captured_ && findNode(captured_) ? captured_ : hit;
+            bool handled = sendPointer(root, pathOf(target), "onPointerUp", e);
+            // A click is a press and a release over the same node (or inside
+            // it): it goes to their nearest common ancestor and bubbles.
+            auto down = pathOf(pressed_);
+            for (NodeHandle h : pathOf(hit)) {
+                if (std::ranges::find(down, h) == down.end()) continue;
+                bool clicked = false;
+                for (NodeHandle c : pathOf(h)) clicked = (findNode(c) && root.dispatch(c, "onClick")) || clicked;
+                handled = handled || clicked;
+                break;
+            }
+            pressed_ = captured_ = 0;
+            hover(root, nodeAt(m.x, m.y));  // the tree may have changed under the pointer
+            return handled;
+        }
+        default: return false;
+    }
 }
 
 }  // namespace rx

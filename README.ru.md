@@ -160,7 +160,7 @@ int main() { mountDom(h(App)); }
 |---|---|
 | **Ядро** | элементы `h()`, фрагменты, ключи; компоненты-функции; props-структуры; reconciler с переиспользованием узлов; пакетные обновления |
 | **Хуки** | `useState`, `useEffect`, `useRef`, `useNodeRef`, `useMemo`, `useCallback`, `useContext`, `useReducer`, `useStore`, `useId`, `useTimeout`, `useInterval`, `useKeyboard`, `useDebounce`, `useLocalStorage`, `useWindowSize`, `memo<C>`, `errorBoundary` |
-| **События** | `onClick`, `onInput`, `onChange`, `onKey`, `onSubmit`, `onFocus`, `onBlur`, `onScroll`; всплытие как в React |
+| **События** | `onClick`, `onInput`, `onChange`, `onKey`, `onSubmit`, `onFocus`, `onBlur`, `onScroll`, `onPointerDown/Move/Up`, `onMouseEnter/Leave` (браузер и терминал); всплытие как в React |
 | **Терминал** | ANSI-отрисовка только изменённых строк, Flexbox на Yoga, рамки, цвета, фокус, Unicode/ASCII по локали |
 | **Браузер** | WebAssembly + DOM, управляемые поля, SVG, делегирование событий |
 | **Компоненты** | `rx::ui`: кнопки, поля, флажки, вкладки, модальные окна, списки — с темой |
@@ -188,7 +188,7 @@ int main() { mountDom(h(App)); }
 - **memo**: `h(memo<Item>, props)` пропускает перерисовку при тех же props. Для props-структуры — её `operator==`; для `Props` — значения через `==`, обработчики равны, только если из одного `useCallback`; элементы с детьми перерисовываются всегда.
 - **Батчинг**: `setState` только помечает компонент; перерисовка в `flush()` (сама — после `render`, `dispatch`, ответов `fetch` и таймеров), родители раньше детей.
 
-**События** — четыре вида обработчиков: `Callback` (`void()`: `onClick`, `onFocus`, `onBlur`, `onSubmit`), `KeyHandler` (`void(const KeyEvent&)`: `onKey`), `InputHandler` (`void(const std::string&)`: `onInput`, `onChange`; флажок присылает `"true"` / `"false"`, `rx::boolHandler([](bool on) { ... })` делает из этого bool) и `ScrollHandler` (`void(const ScrollEvent&)`: `onScroll`, с `nearBottom()` для подгрузки). Бэкенд передаёт данные через `Root::dispatch(node, "onKey", KeyEvent{"Enter"})`; если данные не подходят обработчику, `dispatch` вернёт `false`. Обработчики остаются в ядре и в бэкенд не передаются.
+**События** — пять видов обработчиков: `Callback` (`void()`: `onClick`, `onFocus`, `onBlur`, `onSubmit`), `KeyHandler` (`void(const KeyEvent&)`: `onKey`), `InputHandler` (`void(const std::string&)`: `onInput`, `onChange`; флажок присылает `"true"` / `"false"`, `rx::boolHandler([](bool on) { ... })` делает из этого bool) `ScrollHandler` (`void(const ScrollEvent&)`: `onScroll`, с `nearBottom()` для подгрузки) и `PointerHandler` (`void(const PointerEvent&)`: `onPointerDown`, `onPointerMove`, `onPointerUp` — `x`, `y`, `localX`, `localY`, `button`, `buttons`, `type`; в браузере пиксели, в терминале клетки). `onMouseEnter` / `onMouseLeave` — это `Callback`, они не всплывают. Бэкенд передаёт данные через `Root::dispatch(node, "onKey", KeyEvent{"Enter"})`; если данные не подходят обработчику, `dispatch` вернёт `false`. Обработчики остаются в ядре и в бэкенд не передаются.
 
 </details>
 
@@ -294,6 +294,15 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 | `svg`, `rect`, `circle`, `path`, `g`, … | SVG в своём пространстве имён; `svg:text`, `svg:a` — для тегов, которые есть и в HTML |
 | `data-rx-self` | элемент получает только клики по себе, не по детям (фон окна) |
 | `data-rx-trap` | Tab не выходит из элемента; при появлении он забирает фокус, при удалении — возвращает |
+
+**Мышь, касания и перетаскивание.** `onPointerDown` / `onPointerMove` / `onPointerUp` получают `PointerEvent` (`x`, `y` и `localX`, `localY` от угла элемента), `onMouseEnter` / `onMouseLeave` следят за указателем; те же обработчики работают в терминале — там `TerminalApp` включает мышь (клетки вместо пикселей; `app.setMouse(false)` оставляет её терминалу). `{"pointerCapture", true}` после нажатия держит движения и отпускание на элементе, даже за его пределами (слайдеры); без него их получает то, что под указателем (куда бросают). `ref.focus()` переводит фокус клавиатуры из кода. Демо-канбан [`examples/kanban.cpp`](examples/kanban.cpp) — один исходник для обоих:
+
+```cpp
+h("div", {{"className", "card"}, {"onPointerDown", [setDragging, id](const PointerEvent&) { setDragging(id); }}}, {title}),
+// ...её забирает колонка под указателем:
+h("div", {{"onMouseEnter", [setOver, col] { setOver(col); }},
+          {"onPointerUp", [drop, col](const PointerEvent&) { drop(col); }}}, cards)
+```
 
 **Ref и JavaScript.** `useNodeRef()` даёт сам элемент: передайте его как `{"ref", ref}` и пользуйтесь в `useEffect` (он заполнен до эффектов и снова `0`, когда элемент убран; любой `RefHandler` тоже работает — как callback ref). В браузере [`reactx/js.hpp`](include/reactx/js.hpp) превращает его в `emscripten::val`: `rx::domElement(ref).call<void>("focus")` — или отдайте его JavaScript-библиотеке; `rx::jsValue(json)` делает JS-объект из JSON. Линкуйте с `reactx::js` (подключает embind, ~12 КБ JS; приложения без него его не несут). Демо [`examples/web_chart.cpp`](examples/web_chart.cpp) управляет Chart.js из состояния C++:
 
@@ -555,7 +564,7 @@ AGENTS.md         правила и проверки для тех, кто ме�
 - В тестах после `setState` вне `dispatch` нужно самому вызвать `root.flush()` (в браузере и `TerminalApp` это происходит само).
 - Терминал: ширина символа считается за 1 колонку (эмодзи и иероглифы могут сдвигать строку); курсор в `input` только в конце текста; нет прокрутки — что не влезло, обрезается; только POSIX (Linux/macOS).
 - `rx::ui`: переключение вкладок стрелками и выбор «по фокусу» пока не сделаны; нет прокрутки длинных списков.
-- Браузер: `import reactx;` в веб-сборке выключен; нет событий мыши кроме клика (наведение, перетаскивание); `onScroll` — только у элемента с прокруткой; страница строится в браузере (нет серверного рендеринга).
+- Браузер: `import reactx;` в веб-сборке выключен; пока нет колёсика и двойного клика; `onScroll` — только у элемента с прокруткой; у `renderToString` нет гидратации (приложение заменяет пререндер).
 - `useFetch` / `fetch` в терминальной сборке: только `http://` и полный URL (`http://127.0.0.1:8090/api/todos`), без HTTPS. WebSockets и Server-Sent Events пока нет; отменённый запрос в терминальной сборке дорабатывает в своём потоке (его ответ отбрасывается).
 - Рефлексия (`json::to` / `from`) — только в нативной сборке.
 - Раскладка терминала пересчитывается целиком на каждую перерисовку.

@@ -173,7 +173,10 @@ void HtmlRenderer::print(std::string& out, NodeHandle h, std::string_view parent
             hasValue = true;
             continue;
         }
-        std::string_view attr = name == "className" ? "class" : name == "htmlFor" ? "for" : std::string_view(name);
+        std::string_view attr = name == "className" ? "class"
+                                : name == "htmlFor" ? "for"
+                                : name == "pointerCapture" ? "data-rx-capture"
+                                                           : std::string_view(name);
         if (const bool* b = std::get_if<bool>(&v)) {
             if (*b) {
                 out += ' ';

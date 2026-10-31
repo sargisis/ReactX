@@ -34,6 +34,10 @@ public:
 
     // Called once after each batch of changes.
     virtual void commit() {}
+
+    // Move the keyboard focus to `node` (NodeRef::focus). False if the
+    // backend has no focus or the node can't take it.
+    virtual bool focus(NodeHandle) { return false; }
 };
 
 }  // namespace rx

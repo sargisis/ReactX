@@ -45,7 +45,7 @@ Element Home(const Props&) {
         return h("div", {{"className", "stat"}}, {h("b", {}, {std::to_string(n)}), h("span", {}, {label})});
     };
     return page({
-        h("h1", {}, {"ReactX — React на C++20"}),
+        h("h1", {}, {"ReactX — React на C++26"}),
         h("p", {{"className", "lead"}},
           {"Эта страница — ReactX, скомпилированный в WebAssembly. Задачи хранятся на сервере на C++."}),
         status(todos),
@@ -183,7 +183,7 @@ Element App(const Props&) {
                 {"*", h(NotFound)},
             }),
         }),
-        h("footer", {{"className", "footer-note"}}, {"ReactX · C++20 · WebAssembly"}),
+        h("footer", {{"className", "footer-note"}}, {"ReactX · C++26 · WebAssembly"}),
     });
 }
 

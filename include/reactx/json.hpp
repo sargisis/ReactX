@@ -1,6 +1,6 @@
 #pragma once
 
-// rx::json — a small JSON library (C++20): parse, build, read, write.
+// rx::json — a small JSON library: parse, build, read, write.
 //
 //   auto v = rx::json::parse(R"({"title": "Buy milk", "done": false, "tags": ["home"]})");
 //   std::string title = v["title"].asString();
@@ -9,6 +9,7 @@
 //   v["tags"].push("shop");
 //   std::string text = v.dump();              // {"done":true,"tags":["home","shop"],"title":"Buy milk"}
 //   auto maybe = rx::json::tryParse(input);   // std::expected<Value, json::Error>, no exceptions
+//   auto id = v.require<int>("id");           // std::expected: missing, wrong type and 2.9 are errors
 //
 //   rx::json::Value todo = rx::json::object({{"id", 1}, {"title", "Read"}});
 //
@@ -23,10 +24,12 @@
 // Numbers are doubles (integers up to 2^53 are exact and printed without ".0").
 // Object keys are kept sorted, so dump() is stable.
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
 #include <initializer_list>
+#include <limits>
 #include <map>
 #include <stdexcept>
 #include <string>
@@ -38,9 +41,7 @@
 #include <version>
 
 #if defined(__cpp_lib_reflection)
-#include <cmath>
 #include <concepts>
-#include <limits>
 #include <meta>
 #include <optional>
 #include <ranges>
@@ -112,6 +113,13 @@ public:
     // v.get<int>("count", 0), v.get<std::string>("name").
     template <class T>
     T get(std::string_view key, T fallback = T{}) const;
+    // Strict typed read for data from outside (an import, a server): a
+    // missing key, another type, 2.9 for an int or 300 for a std::uint8_t is
+    // an error that names the field, never a fallback:
+    //   auto points = task.require<int>("points");   // "field \"points\": expected an integer that fits"
+    // T is bool, a number, std::string or Value. Works in the browser build too.
+    template <class T>
+    std::expected<T, Error> require(std::string_view key) const;
 
     // Array access.
     Value& operator[](std::size_t index);
@@ -164,6 +172,38 @@ T Value::get(std::string_view key, T fallback) const {
     }
 }
 
+template <class T>
+std::expected<T, Error> Value::require(std::string_view key) const {
+    auto fail = [key](std::string_view what) {
+        return std::unexpected(Error("field \"" + std::string(key) + "\": expected " + std::string(what)));
+    };
+    if (!isObject()) return std::unexpected(Error("expected an object with field \"" + std::string(key) + "\""));
+    const Object& o = std::get<Object>(data_);
+    auto it = o.find(key);
+    if (it == o.end()) return std::unexpected(Error("missing field \"" + std::string(key) + "\""));
+    const Value& v = it->second;
+    if constexpr (std::is_same_v<T, bool>) {
+        if (!v.isBool()) return fail("true or false");
+        return v.asBool();
+    } else if constexpr (std::is_integral_v<T>) {
+        if (!v.isNumber()) return fail("a number");
+        double d = v.asNumber();
+        if (d != std::trunc(d) || d < static_cast<double>(std::numeric_limits<T>::min()) ||
+            d > static_cast<double>(std::numeric_limits<T>::max()))
+            return fail("an integer that fits");
+        return static_cast<T>(d);
+    } else if constexpr (std::is_floating_point_v<T>) {
+        if (!v.isNumber()) return fail("a number");
+        return static_cast<T>(v.asNumber());
+    } else if constexpr (std::is_same_v<T, std::string>) {
+        if (!v.isString()) return fail("a string");
+        return v.asString();
+    } else if constexpr (std::is_same_v<T, Value>) {
+        return v;
+    } else {
+        static_assert(sizeof(T) == 0, "json::Value::require: unsupported type");
+    }
+}
 
 // ---- structs <-> JSON with C++26 reflection ----
 

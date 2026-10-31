@@ -56,7 +56,7 @@ Install `reactx` and the tools for your platform:
   ```sh
   brew install cmake ninja git gcc emscripten
   ```
-  Build `reactx` from source: `cmake --preset release -DCMAKE_CXX_COMPILER=g++-14 && cmake --build --preset release && cmake --install build/release --prefix ~/.local`.
+  Build `reactx` from source: `cmake --preset release -DCMAKE_CXX_COMPILER=g++-16 && cmake --build --preset release && cmake --install build/release --prefix ~/.local` (Homebrew names the compiler by its major version: `brew install gcc` gives `g++-16`; check with `ls $(brew --prefix)/bin/g++-*`).
 
 - **Windows (WSL 2)**:
   In an elevated PowerShell run `wsl --install`. Inside WSL (Ubuntu/Arch), install `sudo apt install cmake ninja-build gcc-16 git` and Emscripten. The dev server `http://127.0.0.1:8090/` opens right in your Windows browser.
@@ -165,7 +165,7 @@ For a terminal: `#include "reactx/terminal.hpp"` and `TerminalApp().run(h(App))`
 - `useReducer(reducer, initial)` → `[state, dispatch]`: state changed by actions; the newest reducer is used.
 - `useTimeout(fn, std::optional(5s))`, `useInterval(fn, 1s)` — timers on the UI thread; `std::nullopt` switches them off, unmounting cancels them.
 - `useKeyboard(handler)` — keyboard shortcuts for the whole app, wherever the focus is: runs before the element's `onKey`, `return true` consumes the key; while a text field has focus, keys that type text don't reach it.
-- `useDebounce(value, 300ms)`, `useLocalStorage("key", default)` (`localStorage` in the browser, memory natively), `useWindowSize()`.
+- `useDebounce(value, 300ms)`, `useLocalStorage("key", default)` (`localStorage` in the browser; natively only in memory, lost on exit), `useWindowSize()`.
 - **Shared state** (like Zustand): `const auto Cart = createStore<std::vector<Item>>({});`, `Cart.set(v)` / `Cart.update([](auto items) { ...; return items; })` anywhere on the UI thread; `useStore(Cart)` re-renders on every change, `useStore(Cart, [](const auto& c) { return c.size(); })` only when the selected part changes.
 - `useId()` — an id unique in the app and the same on every render: for `<label for>` and `aria-*`.
 - **Error boundaries**: `errorBoundary([](const RenderError& e) { return h("p", {}, {e.message}); }, {children})` — when the children throw while rendering (also later, on a state update), the fallback shows instead and the rest of the app keeps working; `e.retry()` tries again. Exceptions in event handlers and effects aren't caught (as in React).
@@ -175,7 +175,7 @@ For a terminal: `#include "reactx/terminal.hpp"` and `TerminalApp().run(h(App))`
 - **memo**: `h(memo<Item>, props)` skips re-rendering with the same props. For a props struct — its `operator==`; for `Props` — values with `==`, handlers equal only if they come from the same `useCallback`; elements with children always re-render.
 - **Batching**: `setState` only marks the component; re-rendering happens in `flush()` (on its own after `render`, `dispatch`, `fetch` responses and timers), parents before children.
 
-**Events** — four kinds of handlers: `Callback` (`void()`: `onClick`, `onFocus`, `onBlur`, `onSubmit`), `KeyHandler` (`void(const KeyEvent&)`: `onKey`), `InputHandler` (`void(const std::string&)`: `onInput`, `onChange`) and `ScrollHandler` (`void(const ScrollEvent&)`: `onScroll`, with `nearBottom()` for loading more). A backend sends the data with `Root::dispatch(node, "onKey", KeyEvent{"Enter"})`; if the data doesn't fit the handler, `dispatch` returns `false`. Handlers stay in the core and are never sent to the backend.
+**Events** — four kinds of handlers: `Callback` (`void()`: `onClick`, `onFocus`, `onBlur`, `onSubmit`), `KeyHandler` (`void(const KeyEvent&)`: `onKey`), `InputHandler` (`void(const std::string&)`: `onInput`, `onChange`; a checkbox sends `"true"` / `"false"`, `rx::boolHandler([](bool on) { ... })` makes it a bool) and `ScrollHandler` (`void(const ScrollEvent&)`: `onScroll`, with `nearBottom()` for loading more). A backend sends the data with `Root::dispatch(node, "onKey", KeyEvent{"Enter"})`; if the data doesn't fit the handler, `dispatch` returns `false`. Handlers stay in the core and are never sent to the backend.
 
 </details>
 
@@ -277,7 +277,7 @@ The [`DomRenderer`](include/reactx/dom.hpp) backend renders into the real DOM: t
 | `checked`, `disabled`, `selected` | DOM properties |
 | anything else | attributes (`true` — present, `false` — removed) |
 | `onClick`, `onInput(text)`, `onChange`, `onKey(KeyEvent)`, `onSubmit`, `onFocus`, `onBlur` | events; they bubble like in React; `onSubmit` doesn't reload the page |
-| `onScroll(ScrollEvent)` | the element scrolled (doesn't bubble): `top`, `scrollHeight`, `clientHeight`, `nearBottom()` |
+| `onScroll(ScrollEvent)` | the element scrolled (doesn't bubble): `top` (also `scrollTop()`), `scrollHeight`, `clientHeight`, `nearBottom()` |
 | `svg`, `rect`, `circle`, `path`, `g`, … | SVG in its own namespace; `svg:text`, `svg:a` for the tags HTML also has |
 | `data-rx-self` | the element only gets clicks on itself, not on its children (dialog backdrops) |
 | `data-rx-trap` | Tab stays inside the element; it takes focus when it appears and gives it back when removed |
@@ -412,7 +412,7 @@ Supported: `bool`, numbers, strings, `std::optional`, sequences, maps with strin
 
 - **Hardening** (`REACTX_HARDENING`, on): out-of-bounds `v[i]`, `s[i]`, `front()` on an empty container stop the program instead of corrupting memory. Applies to programs linking ReactX too.
 - **Preconditions** `REACTX_PRE(condition)` ([`reactx/contract.hpp`](include/reactx/contract.hpp)) — for programmer errors. On GCC 16 it is a C++26 `contract_assert`; without contracts the macro prints the condition, the place and the call stack.
-- **Errors are values** (`std::expected`) where failure is normal: `json::tryParse`, `FetchResponse::tryJson`, `HttpServer::tryStart`, `net::parseRequestHead`, `rx::parseNumber` / `rx::parsePort` instead of `std::stoi`, files in the CLI.
+- **Errors are values** (`std::expected`) where failure is normal: `json::tryParse`, `json::Value::require<T>` (strict reading of outside data), `FetchResponse::tryJson`, `HttpServer::tryStart`, `net::parseRequestHead`, `rx::parseNumber` / `rx::parsePort` instead of `std::stoi`, files in the CLI.
 - **Sanitizers in CI**: every push runs all tests under ASan + UBSan + LeakSanitizer and under ThreadSanitizer.
 
 </details>
@@ -487,6 +487,25 @@ cmake/            ReactXApp.cmake — reactx_add_app(); version.hpp.in
 llms.txt          the API for AI assistants writing apps with ReactX
 AGENTS.md         rules and checks for anyone changing ReactX itself
 ```
+
+</details>
+
+<details>
+<summary><b>Common errors and what they mean</b></summary>
+
+| You see | Why | Fix |
+|---|---|---|
+| `'router' is not a member of 'rx'` (or `ui`, `fetch`, `json`, `mountDom`, `TerminalApp`, `TextRenderer`) | `reactx/reactx.hpp` is the core only: elements, hooks, context, memo, store, `Root` | Include the part you use: `reactx/router.hpp`, `ui.hpp`, `fetch.hpp`, `json.hpp`, `dom.hpp`, `terminal.hpp`, `text_renderer.hpp`, `http.hpp`, `path.hpp`, `parse.hpp` — or, in a native build, `import reactx;` |
+| `missing initializer for member 'CardProps::onClick'` with `-Wextra -Werror` | a props field without a default | give every field one: `Callback onClick{};`, `std::string title{};` |
+| `memo<C>: the props struct needs operator==` | `memo` compares props, and `= default` is impossible when the struct holds handlers (`std::function` has no `==`) | write `operator==` yourself and compare only the data fields; pass handlers made with `useCallback` so they keep their identity |
+| `use of deleted function 'rx::mountDom'` in a native build | `mountDom` is browser-only | put it under `#ifdef __EMSCRIPTEN__` and use `TerminalApp` otherwise (see "Quick start") |
+| a long error about `TypedComponent` / `h(...)` with a lambda | a lambda with captures can't be a component | pass the data in props; a captureless lambda or a function works |
+| `no matching function for call to 'println'` | `std::println` lives in `<print>` | `#include <print>` |
+| `no matching ... PropValue` for a `size_t` / `unsigned` prop | props hold `int64_t`, `double`, `bool`, strings and handlers | `static_cast<std::int64_t>(n)` |
+| run time: `component called more hooks than on its previous render` | a hook inside an `if` or a loop | call hooks at the top of the component; give list items their own component |
+| run time: `precondition failed: ... onOwnThread()` | a setter was called from another thread | change state only on the UI thread: from handlers, effects, `fetch` callbacks, `useTimeout` / `useInterval` |
+| CMake: `invalid reference: v0.x.y` while fetching ReactX | `"rev"` in `reactx.json` names a tag that doesn't exist | `reactx update` (or set an existing tag from GitHub Releases) |
+| a test passes but checks nothing | after `setState` outside `dispatch` the tree isn't re-rendered yet | call `root.flush()` before reading `r.toString()` |
 
 </details>
 

@@ -8,6 +8,8 @@ Native builds need GCC 16+ (the C++26 standard library); browser builds need Ems
 
 Every file needs the includes, `using namespace rx;` and a `main`. A component alone does not build.
 
+`reactx/reactx.hpp` is the core only: `Element`, `h`, hooks, context, `memo`, stores, `Root`. Everything else has its own header: `router.hpp`, `ui.hpp`, `fetch.hpp`, `json.hpp`, `dom.hpp` (`mountDom`), `terminal.hpp` (`TerminalApp`), `text_renderer.hpp` (tests), `http.hpp` (server), `path.hpp` (`urlEncode`), `parse.hpp` (`parseNumber`), all under `reactx/`.
+
 ```cpp
 // Browser app (reactx new my-app)
 #include <string>
@@ -62,7 +64,7 @@ int main() {
 - `T& r = useRef(initial);` — mutable, no re-render. `const auto& x = useMemo([&] { ... }, deps(a));` `useCallback(handler, deps(...))`.
 - Context: `const auto Theme = createContext<std::string>("dark");` → `Theme.provide(value, {children})`, `useContext(Theme)`.
 - `useDebounce(value, 300ms)` — the value after it stopped changing (timers run on the UI thread).
-- `auto [v, setV] = useLocalStorage("key", default);` — `std::string`, `bool` or numbers; localStorage in the browser, memory natively.
+- `auto [v, setV] = useLocalStorage("key", default);` — `std::string`, `bool` or numbers; localStorage in the browser; natively only in memory (lost when the program exits). Errors writing localStorage (quota, private mode) are ignored.
 - `WindowSize s = useWindowSize();` — browser window (px) or terminal (cells); re-renders on resize.
 - `auto [state, dispatch] = useReducer([](const State& s, Action a) { ...; return next; }, State{});` — `dispatch(action)`; the newest reducer is used.
 - `useTimeout(fn, std::optional(5s))` once, `useInterval(fn, 1s)` repeatedly; `std::nullopt` switches off; unmounting cancels.
@@ -73,7 +75,7 @@ int main() {
 
 ## Events
 
-Handler props: `onClick` (`Callback = std::function<void()>`), `onInput` / `onChange` (`InputHandler`, gets the text; a checkbox's onChange gets "true"/"false"), `onKey` (`KeyHandler`, gets `KeyEvent{.key, .ctrl, .alt, .shift}`; keys like "Enter", "Escape", "Up", "a"), `onSubmit` (forms), `onFocus` / `onBlur` (`Callback`; browser, and terminal focus moves), `onScroll` (`ScrollHandler`, gets `ScrollEvent{.top, .left, .scrollHeight, .scrollWidth, .clientHeight, .clientWidth}` with `nearBottom(margin = 100)`; browser only, doesn't bubble). The fields are `top` / `left`, not the DOM's `scrollTop` / `scrollLeft`. Other events bubble to ancestors. There are no mouse move, hover or drag events.
+Handler props: `onClick` (`Callback = std::function<void()>`), `onInput` / `onChange` (`InputHandler`, gets the text; a checkbox's onChange gets "true"/"false"; `rx::boolHandler([setDone](bool on) { setDone(on); })` turns it into a bool), `onKey` (`KeyHandler`, gets `KeyEvent{.key, .ctrl, .alt, .shift}`; keys like "Enter", "Escape", "Up", "a"), `onSubmit` (forms), `onFocus` / `onBlur` (`Callback`; browser, and terminal focus moves), `onScroll` (`ScrollHandler`, gets `ScrollEvent{.top, .left, .scrollHeight, .scrollWidth, .clientHeight, .clientWidth}` with `nearBottom(margin = 100)`; browser only, doesn't bubble). The fields are `top` / `left`; `e.scrollTop()` / `e.scrollLeft()` return the same. Other events bubble to ancestors. There are no mouse move, hover or drag events.
 
 Controlled input: `h("input", {{"value", text}, {"onInput", [setText](const std::string& t) { setText(t); }}})`. `checked` and a `<select>`'s `value` are controlled too: if the handler doesn't change the state, the page goes back to it. `href` / `src` with a `javascript:` URL are blocked.
 
@@ -117,8 +119,20 @@ A server (`rx::net::HttpServer`) is native-only: keep it in its own CMake target
 
 ## Data (`reactx/fetch.hpp`, `reactx/json.hpp`)
 
-- `FetchState f = useFetch("/api/todos");` → `f.loading`, `f.ok()`, `f.tryJson()` (`std::expected`), `f.errorText()`, `f.reload()`. `fetch({.method = "POST", .url = "/api/todos", .body = json.dump()}, [](const FetchResponse& r) { ... })`. `setLocalFetch(handler)` answers requests inside the app (no server). Build query strings with `rx::urlEncode` (`reactx/path.hpp`): `"/api/logs?q=" + rx::urlEncode(text)`; `rx::urlDecode` / `rx::queryParam` read them. Terminal build: a full `http://host:port/...` URL (no https); the answer arrives on the UI thread at the next flush.
-- JSON: `auto v = json::tryParse(text);` (`std::expected<Value, Error>`), `v["title"].asString()`, `v.get<int>("count", 0)`, `json::object({{"id", 1}})`, `json::array({...})`, `v.dump(2)`.
+- `FetchState f = useFetch("/api/todos");` → `f.loading`, `f.ok()`, `f.tryJson()` (`std::expected`), `f.errorText()`, `f.reload()`. While a reload is loading, `f.ok()` is false but the previous answer stays in `f.response`: show `f.response.ok()` data to avoid a flash of empty content. `fetch({.method = "POST", .url = "/api/todos", .body = json.dump()}, [](const FetchResponse& r) { ... })` (`FetchRequest{.method = "GET", .url, .body, .contentType = "application/json"}`, `FetchResponse{.status, .body, .error}` with `ok()`, `tryJson()`).
+- `setLocalFetch(handler)` answers requests inside the app (no server; static sites, tests). The handler is `std::function<std::optional<FetchResponse>(const FetchRequest&)>`: return a response to answer, `std::nullopt` to let the request go to the network; `setLocalFetch({})` removes it. The answer arrives later in the browser (like a network one) and right away natively.
+
+```cpp
+setLocalFetch([](const FetchRequest& r) -> std::optional<FetchResponse> {
+    if (r.method == "GET" && r.url == "/api/todos")
+        return FetchResponse{.status = 200, .body = json::array({json::object({{"id", 1}, {"title", "Milk"}})}).dump()};
+    return std::nullopt;
+});
+```
+
+- Build query strings with `rx::urlEncode` (`reactx/path.hpp`): `"/api/logs?q=" + rx::urlEncode(text)`; `rx::urlDecode` / `rx::queryParam` read them. Terminal build: a full `http://host:port/...` URL (no https); the answer arrives on the UI thread at the next flush.
+- JSON: `auto v = json::tryParse(text);` (`std::expected<Value, Error>`), `v["title"].asString()`, `v.get<int>("count", 0)` (a fallback for missing or wrong-typed keys; 2.9 becomes 2), `json::object({{"id", 1}})`, `json::array({...})`, `v.push(x)`, `v.dump(2)`. Arrays: `for (const json::Value& t : v.asArray()) t["title"].asString();`, `v.size()`, `v[0]`; objects: `for (const auto& [key, item] : v.asObject())`. `as*()` throw `json::Error` on another type.
+- Data from outside (imports, servers): `v.require<int>("id")` → `std::expected<int, json::Error>`; a missing key, another type, 2.9 for an int or a number that doesn't fit is an error naming the field. Works in the browser build too.
 - Natively with reflection (link `reactx::reflection` in CMake): `json::to(myStruct)`, `json::from<MyStruct>(value)` → `std::expected<MyStruct, json::Error>` with a path in the error.
 
 ## Server (native, `reactx/http.hpp`)
@@ -136,7 +150,7 @@ server.run();
 
 - Errors that happen at run time (input, network, files) are values: `std::expected`. `REACTX_PRE(cond)` is only for programmer errors.
 - Numbers from text: `rx::parseNumber<int>(s)` / `rx::parsePort(s)` (`reactx/parse.hpp`), not `std::stoi`.
-- Never change state from another thread. Timers: `useTimeout`, `useInterval`, `useDebounce`; the UI thread runs them.
+- Never change state from another thread (natively a setter called off the UI thread stops the program with `precondition failed: ... onOwnThread()`). Timers: `useTimeout`, `useInterval`, `useDebounce`; the UI thread runs them.
 - Prefer the standard library (`std::format`, `std::print`, `std::ranges`, `std::flat_map`, `std::expected`) over hand-written helpers or extra libraries.
 - Code built for the browser must not use reflection, `std::generator`, `<stacktrace>`, threads, sockets or the file system.
 
@@ -151,6 +165,17 @@ root.render(h(Counter, {.start = 1}));
 root.dispatch(*r.findByProp("id", "inc"), "onClick");   // or "onInput", std::string("text")
 assert(r.toString().find("Count: 2") != std::string::npos);
 ```
+
+`dispatch` and `render` re-render on their own. After a setter or `Store::set` called outside them (a captured setter, a `setLocalFetch` answer, a timer) call `root.flush()` before reading `r.toString()`, or the test checks the old tree.
+
+## Common errors
+
+- `'router' is not a member of 'rx'` (or `ui`, `json`, `mountDom`, ...): include its header (see "A complete program").
+- `missing initializer for member ...` under `-Wextra -Werror`: give every props field a default (`Callback onClick{};`).
+- `memo<C>: the props struct needs operator==`: `= default` doesn't work when the struct holds handlers (`std::function` has no `==`); write `operator==` comparing the data fields only and make handlers with `useCallback`.
+- A long error about `TypedComponent` / `h(...)`: the component is a lambda with captures; pass the data in props.
+- `std::println` not found: `#include <print>`. `size_t` in props: `static_cast<std::int64_t>(n)`.
+- `component called more hooks than on its previous render`: a hook inside an `if` or a loop.
 
 ## CLI
 

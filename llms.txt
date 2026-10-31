@@ -4,6 +4,10 @@
 
 Native builds need GCC 16+ (the C++26 standard library); browser builds need Emscripten 6+. Code that also builds for the browser may only use what Emscripten's libc++ has (no reflection, `std::generator`, `<stacktrace>`). Docs: https://sargisis.github.io/ReactX/docs. Source: https://github.com/sargisis/ReactX.
 
+## Which version has what
+
+`reactx new` pins the project to the CLI's release (`"rev"` in `reactx.json`). Latest release: v0.8.3 (renderToString). Only on `main` until v0.9.0 is released: `useNodeRef` / the `ref` prop / `ref.focus()`, `reactx/js.hpp` (`domElement`, `jsValue`, `reactx::js`), pointer and hover events (`onPointerDown/Move/Up`, `onMouseEnter/Leave`, `pointerCapture`) and the mouse in the terminal. To use them now, set `"rev": "main"` in `reactx.json` and rebuild. If a name from this file doesn't exist ("'useNodeRef' was not declared in this scope", "'PointerEvent' was not declared in this scope"), the project is on an older release.
+
 ## A complete program
 
 Every file needs the includes, `using namespace rx;` and a `main`. A component alone does not build.
@@ -76,6 +80,17 @@ int main() {
 ## Events
 
 Handler props: `onClick` (`Callback = std::function<void()>`), `onInput` / `onChange` (`InputHandler`, gets the text; a checkbox's onChange gets "true"/"false"; `rx::boolHandler([setDone](bool on) { setDone(on); })` turns it into a bool), `onKey` (`KeyHandler`, gets `KeyEvent{.key, .ctrl, .alt, .shift}`; keys like "Enter", "Escape", "Up", "a"), `onSubmit` (forms), `onFocus` / `onBlur` (`Callback`; browser, and terminal focus moves), `onScroll` (`ScrollHandler`, gets `ScrollEvent{.top, .left, .scrollHeight, .scrollWidth, .clientHeight, .clientWidth}` with `nearBottom(margin = 100)`; browser only, doesn't bubble). The fields are `top` / `left`; `e.scrollTop()` / `e.scrollLeft()` return the same. Other events bubble to ancestors. `onPointerDown` / `onPointerMove` / `onPointerUp` (`PointerHandler`, gets `PointerEvent{.x, .y, .localX, .localY, .button, .buttons, .type}`; pixels in the browser, cells in a terminal, bubble) and `onMouseEnter` / `onMouseLeave` (`Callback`, don't bubble) work in the browser and in `TerminalApp` (mouse on by default; `app.setMouse(false)`). `{"pointerCapture", true}` on an element: after a press there, moves and the release stay on it (sliders); without it they go to the element under the pointer (drop targets). Give draggable elements `touch-action: none` (CSS) for phones. `ref.focus()` (a `NodeRef` from `useNodeRef`) focuses an element from code, in both backends.
+
+Drag and drop (one source works in both backends; see `examples/kanban.cpp`): the item's `onPointerDown` remembers what is dragged, the target's `onMouseEnter` marks where it would land, the target's `onPointerUp` drops it; no `pointerCapture`, so the release reaches the target. A slider is the other case: `pointerCapture` on the knob, position from `e.x - grab` in `onPointerMove` while `e.buttons != 0`.
+
+```cpp
+h("div", {{"className", "card"}, {"style", "touch-action: none"},
+          {"onPointerDown", [setDragging, id](const PointerEvent& e) { if (e.button == 0) setDragging(id); }}}, {title});
+h("div", {{"onMouseEnter", [setOver, col] { setOver(col); }},
+          {"onPointerUp", [drop, col](const PointerEvent&) { drop(col); }}}, std::move(cards));  // drop(col) moves the card, clears dragging
+```
+
+Focus on open: `auto field = useNodeRef(); useEffect([field] { field.focus(); }, deps()); return h("input", {{"ref", field}});`
 
 Controlled input: `h("input", {{"value", text}, {"onInput", [setText](const std::string& t) { setText(t); }}})`. `checked` and a `<select>`'s `value` are controlled too: if the handler doesn't change the state, the page goes back to it. `href` / `src` with a `javascript:` URL are blocked.
 
@@ -177,6 +192,14 @@ assert(r.toString().find("Count: 2") != std::string::npos);
 
 `dispatch` and `render` re-render on their own. After a setter or `Store::set` called outside them (a captured setter, a `setLocalFetch` answer, a timer) call `root.flush()` before reading `r.toString()`, or the test checks the old tree.
 
+## Known limits
+
+- No hydration: `mountDom` replaces prerendered HTML with a fresh render.
+- No wheel, double-click or drag-and-drop-API (`dragstart`) events; use pointer events.
+- C++26 reflection (`json::to` / `json::from`, `reactx::reflection`) is native-only: Emscripten has none. In code built for the browser read JSON with `get` / `require`.
+- In the terminal the mouse is on by default; selecting text then needs Shift (or `app.setMouse(false)`).
+- `onScroll` is browser-only; the terminal has no scrolling containers.
+
 ## Common errors
 
 - `'router' is not a member of 'rx'` (or `ui`, `json`, `mountDom`, ...): include its header (see "A complete program").
@@ -185,6 +208,10 @@ assert(r.toString().find("Count: 2") != std::string::npos);
 - A long error about `TypedComponent` / `h(...)`: the component is a lambda with captures; pass the data in props.
 - `std::println` not found: `#include <print>`. `size_t` in props: `static_cast<std::int64_t>(n)`.
 - `component called more hooks than on its previous render`: a hook inside an `if` or a loop.
+- A handler prop that doesn't compile ("no matching constructor ... PropValue" / ambiguous): write the parameter type out — `[](const PointerEvent& e)`, `[](const KeyEvent& k)`, `[](const std::string& t)` — not `auto`.
+- `rx::domElement(ref)` is `undefined`: it was called during render or before the commit; use it in `useEffect` or a handler.
+- `undefined symbol: _emval_...` when linking: the app uses `reactx/js.hpp` but doesn't link `reactx::js`.
+- `#error "reactx/js.hpp works only in the browser build"`: the header was included in a native build; guard it with `#ifdef __EMSCRIPTEN__`.
 
 ## CLI
 

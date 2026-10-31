@@ -6,10 +6,21 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Added
+
+- **`useNodeRef()` and the `ref` prop**: `{"ref", ref}` on a host element gives C++ its node — set after the commit, before effects run, and back to 0 when the element goes; copies of a `NodeRef` share it. Any `RefHandler` (`std::function<void(NodeHandle)>`) works as a callback ref. Works with every backend.
+- **`reactx/js.hpp`** (browser): `rx::domElement(ref)` — the page's element as an `emscripten::val`, to call its methods or hand it to a JavaScript library; `rx::jsValue(json)` — a JS object from JSON. Link `reactx::js` (embind); apps without it don't carry embind.
+- **Demo: Chart.js from C++** (`examples/web_chart.cpp`, on the site's demos page): the data lives in C++ state, the chart is created, updated and destroyed from effects.
+
+### Changed
+
+- `PropValue` has one more alternative, `RefHandler`: code that `std::visit`s all of `PropValue` needs a branch for it. `NodeHandle` now lives in `reactx/element.hpp` (still available through `renderer.hpp`).
+
 ### Fixed
 
 - `install.sh` tells how to add `reactx` to PATH for the user's shell (zsh: `~/.zshrc`, fish: `fish_add_path`; before, always `~/.bashrc`, which zsh doesn't read) and prints it last, after the output of `reactx install`.
 - The install command on the site copies as one line: comment lines in it broke in zsh (`command not found: #`).
+- The site's Demos and 404 pages had no side margins on a phone (the text touched the screen edge).
 
 ## [0.8.3] — 2026-10-31
 

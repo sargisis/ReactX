@@ -35,6 +35,7 @@ struct Fiber : std::enable_shared_from_this<Fiber> {
     struct HostPart {
         Props props;
         std::vector<NodeHandle> attached;  // children currently in the backend
+        bool hasRef = false;               // a "ref" prop: unmount tells it (rare, so no lookup otherwise)
     };
     struct ComponentPart {
         Component component = nullptr;
@@ -108,6 +109,9 @@ private:
     std::vector<std::weak_ptr<Fiber>> dirty_;
     std::vector<std::pair<std::weak_ptr<Fiber>, std::size_t>> effects_;
     std::vector<NodeHandle> toDestroy_;
+    // "ref" props to call in the commit: removed ones with 0 first, then the new nodes.
+    std::vector<RefHandler> refsOff_;
+    std::vector<std::pair<RefHandler, NodeHandle>> refsOn_;
     std::unordered_map<NodeHandle, Fiber*> hosts_;
     bool busy_ = false;
     bool runEffects_ = true;

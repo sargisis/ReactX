@@ -388,6 +388,19 @@ inline const std::vector<Page>& pages() {
                               "Вставьте его в <div id=\"app\"> при сборке — и страница видна до загрузки .wasm; потом mountDom "
                               "заменяет его живым приложением, так что первый рендер должен рисовать то же. Так сделана главная этого сайта.",
                  "std::string html = renderToString(h(Home));\n// \"<main class=\\\"home\\\"><h1>Hello</h1>...</main>\""},
+                {"Ref и JavaScript", "useNodeRef() даёт настоящий элемент: передайте его в prop ref и пользуйтесь в useEffect "
+                                     "(он заполнен до эффектов и снова 0, когда элемент убран). rx::domElement (reactx/js.hpp) "
+                                     "превращает его в emscripten::val — объект самой страницы: вызывайте его методы, читайте "
+                                     "размеры или отдайте JavaScript-библиотеке. rx::jsValue делает JS-объект из JSON. "
+                                     "Приложение линкуется с reactx::js (подключает embind; остальные приложения его не несут). "
+                                     "Всё вместе — в демо с Chart.js.",
+                 "auto canvas = useNodeRef();\n"
+                 "auto& chart = useRef(emscripten::val::undefined());\n"
+                 "useEffect([canvas, &chart] {\n"
+                 "    chart = emscripten::val::global(\"Chart\").new_(domElement(canvas), jsValue(config));\n"
+                 "    return [&chart] { chart.call<void>(\"destroy\"); };\n"
+                 "}, deps());\n"
+                 "return h(\"canvas\", {{\"ref\", canvas}});"},
                 {"Props в DOM", "className → class, style — строка CSS, value — управляемое поле ввода, checked/disabled — "
                                 "свойства, остальное — атрибуты (true — есть, false — убрать). onChange флажка получает \"true\" или "
                                 "\"false\"; rx::boolHandler превращает это в bool.",

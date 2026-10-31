@@ -8,8 +8,6 @@
 
 namespace rx {
 
-using NodeHandle = std::uint64_t;
-
 // The backend interface. The core computes what changed and calls these
 // methods; a backend (terminal, SDL, DOM, ...) only has to apply them.
 class Renderer {

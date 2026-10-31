@@ -20,6 +20,9 @@ namespace rx {
 struct Element;
 class Props;
 
+// A node of the backend (a DOM element, a terminal box); 0 means none.
+using NodeHandle = std::uint64_t;
+
 namespace detail {
 
 // Handler with a stable identity, made by useCallback. Two handlers that wrap
@@ -90,6 +93,36 @@ using Callback = std::function<void()>;                         // onClick, onFo
 using KeyHandler = std::function<void(const KeyEvent&)>;        // onKey
 using InputHandler = std::function<void(const std::string&)>;   // onInput, onChange
 using ScrollHandler = std::function<void(const ScrollEvent&)>;  // onScroll
+using RefHandler = std::function<void(NodeHandle)>;             // ref
+
+// The node a host element became, for code that needs the real thing (focus,
+// measure, a JavaScript library): pass it as the "ref" prop and read it in
+// useEffect or a handler, after the element is on the page.
+//   auto canvas = useNodeRef();
+//   useEffect([canvas] { rx::domElement(canvas).call<void>("focus"); }, deps());
+//   return h("canvas", {{"ref", canvas}});
+// get() is 0 before the first commit and after the element is removed. Copies
+// share the node, like React's ref object. Any RefHandler works as "ref" too
+// (a callback ref): it gets the node after the commit and 0 on removal.
+class NodeRef {
+public:
+    NodeRef() = default;  // empty: ignores the node; useNodeRef() makes a real one
+    static NodeRef create() {
+        NodeRef r;
+        r.node_ = std::make_shared<NodeHandle>(0);
+        return r;
+    }
+
+    NodeHandle get() const { return node_ ? *node_ : 0; }
+    explicit operator bool() const { return get() != 0; }
+    void operator()(NodeHandle node) const {
+        if (node_) *node_ = node;
+    }
+    bool operator==(const NodeRef&) const = default;  // the same ref, not the same node
+
+private:
+    std::shared_ptr<NodeHandle> node_;
+};
 
 // A checkbox's onChange with a bool instead of the text "true" / "false":
 //   {"onChange", rx::boolHandler([setDone](bool on) { setDone(on); })}
@@ -101,9 +134,9 @@ inline InputHandler boolHandler(std::function<void(bool)> handler) {
 using EventData = std::variant<std::monostate, KeyEvent, std::string, ScrollEvent>;
 
 using PropValue = std::variant<std::monostate, bool, std::int64_t, double, std::string,
-                               Callback, KeyHandler, InputHandler, ScrollHandler>;
+                               Callback, KeyHandler, InputHandler, ScrollHandler, RefHandler>;
 
-// True for any event handler type (Callback, KeyHandler, InputHandler, ScrollHandler).
+// True for any handler type (Callback, KeyHandler, InputHandler, ScrollHandler, RefHandler).
 bool isHandler(const PropValue& value);
 
 // A component is a plain function: props in, element tree out.

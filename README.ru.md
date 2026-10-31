@@ -26,9 +26,24 @@
 - **Как React, только C++.** Компоненты — обычные функции, состояние — хуки, изменения вносит reconciler с ключами и пакетными обновлениями.
 - **Один код — два мира.** Терминал (ANSI, Flexbox на Yoga, фокус, клавиатура) и браузер (WebAssembly + DOM). Готовые компоненты `rx::ui` выглядят уместно и там, и там.
 - **Типы ловят ошибки.** Props — своя структура: `h(Counter, {.start = 5})`. Опечатку в имени поля или неверный тип найдёт компилятор, а не пользователь.
-- **Весь стек на C++.** Роутер, `useFetch`, свой JSON (с рефлексией C++26), HTTP-сервер и CLI `reactx` — без Node, npm и webpack. Счётчик в браузере — это `.wasm` на 91 КБ (40 КБ по сети, gzip).
+- **Весь стек на C++.** Роутер, `useFetch`, свой JSON (с рефлексией C++26), HTTP-сервер и CLI `reactx` — без Node, npm и webpack. Счётчик в браузере — это `.wasm` на 93 КБ (41 КБ по сети, gzip).
 - **Современный и строгий C++.** Контракты C++26, `std::expected` для ошибок, hardening стандартной библиотеки; каждый push проверяется под ASan, UBSan и ThreadSanitizer.
 - **Этот сайт тоже на ReactX:** [sargisis.github.io/ReactX](https://sargisis.github.io/ReactX/).
+
+### ReactX или Preact?
+
+Если вы пишете веб-приложение и команда пишет на JavaScript — берите Preact (или React): он меньше, а экосистема огромная. ReactX — для случаев, когда смысл именно в C++.
+
+| | ReactX | Preact |
+|---|---|---|
+| Приложение-счётчик по сети (gzip) | ~47 КБ (41 КБ `.wasm` + 6 КБ `.js`) | ~5 КБ (библиотека с хуками ~4–5 КБ) |
+| До первой отрисовки | `.wasm` скачивается и компилируется; пререндер (`renderToString`, ниже) это прячет | JS разбирается и выполняется |
+| Язык, типы | C++26: props — структуры, их проверяет компилятор | JavaScript / TypeScript |
+| Работает ещё и в терминале | да, те же компоненты | нет |
+| JavaScript-библиотеки | через `useNodeRef` + `rx::domElement` ([демо с Chart.js](examples/web_chart.cpp)) | напрямую, npm |
+| Рендер на сервере | `renderToString` (гидратации пока нет) | `preact-render-to-string` + гидратация |
+
+ReactX стоит выбрать, когда логика уже на C++ (симуляция, парсер, движок, код, общий с десктопной или встраиваемой программой), когда один интерфейс должен работать и в терминале, и в браузере, или когда команда пишет на C++ и не хочет JavaScript-инструментов. Замерено на `web_counter` из этого репозитория (Release, `-Oz`); цифра Preact — размер, который публикуют его авторы.
 
 ## Быстрый старт
 
@@ -144,7 +159,7 @@ int main() { mountDom(h(App)); }
 | | |
 |---|---|
 | **Ядро** | элементы `h()`, фрагменты, ключи; компоненты-функции; props-структуры; reconciler с переиспользованием узлов; пакетные обновления |
-| **Хуки** | `useState`, `useEffect`, `useRef`, `useMemo`, `useCallback`, `useContext`, `useReducer`, `useStore`, `useId`, `useTimeout`, `useInterval`, `useKeyboard`, `useDebounce`, `useLocalStorage`, `useWindowSize`, `memo<C>`, `errorBoundary` |
+| **Хуки** | `useState`, `useEffect`, `useRef`, `useNodeRef`, `useMemo`, `useCallback`, `useContext`, `useReducer`, `useStore`, `useId`, `useTimeout`, `useInterval`, `useKeyboard`, `useDebounce`, `useLocalStorage`, `useWindowSize`, `memo<C>`, `errorBoundary` |
 | **События** | `onClick`, `onInput`, `onChange`, `onKey`, `onSubmit`, `onFocus`, `onBlur`, `onScroll`; всплытие как в React |
 | **Терминал** | ANSI-отрисовка только изменённых строк, Flexbox на Yoga, рамки, цвета, фокус, Unicode/ASCII по локали |
 | **Браузер** | WebAssembly + DOM, управляемые поля, SVG, делегирование событий |
@@ -279,6 +294,18 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 | `svg`, `rect`, `circle`, `path`, `g`, … | SVG в своём пространстве имён; `svg:text`, `svg:a` — для тегов, которые есть и в HTML |
 | `data-rx-self` | элемент получает только клики по себе, не по детям (фон окна) |
 | `data-rx-trap` | Tab не выходит из элемента; при появлении он забирает фокус, при удалении — возвращает |
+
+**Ref и JavaScript.** `useNodeRef()` даёт сам элемент: передайте его как `{"ref", ref}` и пользуйтесь в `useEffect` (он заполнен до эффектов и снова `0`, когда элемент убран; любой `RefHandler` тоже работает — как callback ref). В браузере [`reactx/js.hpp`](include/reactx/js.hpp) превращает его в `emscripten::val`: `rx::domElement(ref).call<void>("focus")` — или отдайте его JavaScript-библиотеке; `rx::jsValue(json)` делает JS-объект из JSON. Линкуйте с `reactx::js` (подключает embind, ~12 КБ JS; приложения без него его не несут). Демо [`examples/web_chart.cpp`](examples/web_chart.cpp) управляет Chart.js из состояния C++:
+
+```cpp
+auto canvas = useNodeRef();
+auto& chart = useRef(emscripten::val::undefined());
+useEffect([canvas, &chart] {
+    chart = emscripten::val::global("Chart").new_(domElement(canvas), jsValue(config));
+    return [&chart] { chart.call<void>("destroy"); };
+}, deps());
+return h("canvas", {{"ref", canvas}});
+```
 
 **Пререндер.** `rx::renderToString(h(Home))` ([`reactx/html.hpp`](include/reactx/html.hpp)) возвращает HTML компонентов без браузера; эффекты не запускаются. Вставьте его в `<div id="app">` страницы при сборке — и страница видна до загрузки `.wasm`; потом `mountDom` заменяет его живым приложением (гидратации пока нет, так что первый рендер должен рисовать то же самое). Так сделана главная страница сайта ReactX: см. `site_prerender` в `CMakeLists.txt` — сборку `examples/site.cpp`, которая запускается под Node.
 

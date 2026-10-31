@@ -37,7 +37,8 @@ std::string numberText(double x) {
 
 bool isHandler(const PropValue& value) {
     return std::holds_alternative<Callback>(value) || std::holds_alternative<KeyHandler>(value) ||
-           std::holds_alternative<InputHandler>(value) || std::holds_alternative<ScrollHandler>(value);
+           std::holds_alternative<InputHandler>(value) || std::holds_alternative<ScrollHandler>(value) ||
+           std::holds_alternative<RefHandler>(value);
 }
 
 namespace {
@@ -49,6 +50,13 @@ bool sameStable(const std::function<Sig>& a, const std::function<Sig>& b) {
     return x && y && x->impl == y->impl;
 }
 
+// Two copies of one NodeRef are the same ref (useNodeRef returns a copy each render).
+bool sameRef(const RefHandler& a, const RefHandler& b) {
+    auto* x = a.target<NodeRef>();
+    auto* y = b.target<NodeRef>();
+    return x && y ? *x == *y : sameStable(a, b);
+}
+
 }  // namespace
 
 bool propEquals(const PropValue& a, const PropValue& b) {
@@ -57,6 +65,7 @@ bool propEquals(const PropValue& a, const PropValue& b) {
         [&](const auto& x) -> bool {
             using T = std::decay_t<decltype(x)>;
             if constexpr (std::equality_comparable<T>) return x == std::get<T>(b);
+            else if constexpr (std::is_same_v<T, RefHandler>) return sameRef(x, std::get<T>(b));
             else return sameStable(x, std::get<T>(b));  // handlers
         },
         a);

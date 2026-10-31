@@ -8,7 +8,7 @@ Native builds need GCC 16+ (the C++26 standard library); browser builds need Ems
 
 Every file needs the includes, `using namespace rx;` and a `main`. A component alone does not build.
 
-`reactx/reactx.hpp` is the core only: `Element`, `h`, hooks, context, `memo`, stores, `Root`. Everything else has its own header: `router.hpp`, `ui.hpp`, `fetch.hpp`, `json.hpp`, `dom.hpp` (`mountDom`), `terminal.hpp` (`TerminalApp`), `html.hpp` (`renderToString`), `text_renderer.hpp` (tests), `http.hpp` (server), `path.hpp` (`urlEncode`), `parse.hpp` (`parseNumber`), all under `reactx/`.
+`reactx/reactx.hpp` is the core only: `Element`, `h`, hooks, context, `memo`, stores, `Root`. Everything else has its own header: `router.hpp`, `ui.hpp`, `fetch.hpp`, `json.hpp`, `dom.hpp` (`mountDom`), `terminal.hpp` (`TerminalApp`), `html.hpp` (`renderToString`), `js.hpp` (`domElement`, browser only), `text_renderer.hpp` (tests), `http.hpp` (server), `path.hpp` (`urlEncode`), `parse.hpp` (`parseNumber`), all under `reactx/`.
 
 ```cpp
 // Browser app (reactx new my-app)
@@ -61,7 +61,7 @@ int main() {
 
 - `auto [v, setV] = useState(initial);` — `setV(x)` or `setV([](const T& old) { return ...; })`; an equal value doesn't re-render. Capture setters by value in lambdas.
 - `useEffect(fn)`, `useEffect(fn, deps(a, b))`, `useEffect(fn, deps())` (once). `fn` may return a cleanup lambda.
-- `T& r = useRef(initial);` — mutable, no re-render. `const auto& x = useMemo([&] { ... }, deps(a));` `useCallback(handler, deps(...))`.
+- `T& r = useRef(initial);` — mutable, no re-render. `auto el = useNodeRef();` + `{"ref", el}` — the element's node (`el.get()`, 0 until committed), set before effects run. `const auto& x = useMemo([&] { ... }, deps(a));` `useCallback(handler, deps(...))`.
 - Context: `const auto Theme = createContext<std::string>("dark");` → `Theme.provide(value, {children})`, `useContext(Theme)`.
 - `useDebounce(value, 300ms)` — the value after it stopped changing (timers run on the UI thread).
 - `auto [v, setV] = useLocalStorage("key", default);` — `std::string`, `bool` or numbers; localStorage in the browser; natively only in memory (lost when the program exits). A third argument `[](const std::string& why) { ... }` is called when saving fails (quota, private mode); without it the value silently stays in memory only. Direct access with errors as values: `rx::storageRead(key)` → `std::expected<std::optional<std::string>, std::string>` (missing key = `std::nullopt`), `rx::storageWrite(key, value)`, `rx::storageRemove(key)` → `std::expected<void, std::string>`.
@@ -152,8 +152,12 @@ server.run();
 - Numbers from text: `rx::parseNumber<int>(s)` / `rx::parsePort(s)` (`reactx/parse.hpp`), not `std::stoi`.
 - Never change state from another thread (natively a setter called off the UI thread stops the program with `precondition failed: ... onOwnThread()`). Timers: `useTimeout`, `useInterval`, `useDebounce`; the UI thread runs them.
 - Prefer the standard library (`std::format`, `std::print`, `std::ranges`, `std::flat_map`, `std::expected`) over hand-written helpers or extra libraries.
-- Code built for the browser: build strings with `+` and `std::to_string`, not `std::format` / `std::print` — any use adds ~100 KB to the `.wasm` (a whole counter app is 91 KB without it). Natively `std::format` is fine. `reactx build` prints the `.wasm` size and names the files that pull these in (`reactx: size: ...`).
+- Code built for the browser: build strings with `+` and `std::to_string`, not `std::format` / `std::print` — any use adds ~100 KB to the `.wasm` (a whole counter app is 93 KB without it). Natively `std::format` is fine. `reactx build` prints the `.wasm` size and names the files that pull these in (`reactx: size: ...`).
 - Code built for the browser must not use reflection, `std::generator`, `<stacktrace>`, threads, sockets or the file system.
+
+## JavaScript and the DOM (browser build)
+
+`#include "reactx/js.hpp"` and link `reactx::js` (CMake: `target_link_libraries(app PRIVATE reactx::js)`, adds embind). `rx::domElement(ref)` is the page's element as `emscripten::val` (undefined until the element is on the page, so use it in `useEffect` or handlers); `rx::jsValue(json::Value)` is a JS object for a library's options. Keep a JS object between renders in `useRef(emscripten::val::undefined())`; free it in the effect's cleanup. Natively the header is a compile error: keep it under `#ifdef __EMSCRIPTEN__`.
 
 ## HTML without a browser (prerender)
 

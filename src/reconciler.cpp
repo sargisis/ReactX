@@ -97,6 +97,8 @@ Reconciler::~Reconciler() {
     try {
         reconcileChildren(*root_, {});
         effects_.clear();
+        refsOff_.clear();  // the app is going away: nobody reads them
+        refsOn_.clear();
         commit();
     } catch (...) {
         // Destructors must not throw.
@@ -424,20 +426,39 @@ void Reconciler::unmount(Fiber& f) {
         hosts_.erase(f.node);
         toDestroy_.push_back(f.node);
     }
+    if (f.hostPart && f.hostPart->hasRef)
+        if (const PropValue* ref = f.hostPart->props.find("ref"))
+            if (const auto* off = std::get_if<RefHandler>(ref); off && *off) refsOff_.push_back(*off);
 }
 
 void Reconciler::applyProps(Fiber& f, const Props& next) {
     const Props& old = f.hostPart->props;
+    // "ref" is a handler too; noticed in the loops, not looked up separately.
+    const PropValue* now = nullptr;
+    const PropValue* was = nullptr;
     for (const auto& [name, value] : next.values()) {
-        if (isHandler(value)) continue;  // handled by the core
+        if (isHandler(value)) {  // handled by the core
+            if (name == "ref") now = &value;
+            continue;
+        }
         const PropValue* prev = old.find(name);
         if (!prev || !propEquals(*prev, value)) renderer_.setProp(f.node, name, value);
     }
     for (const auto& [name, value] : old.values()) {
-        if (isHandler(value)) continue;
-        const PropValue* now = next.find(name);
-        if (!now || isHandler(*now)) renderer_.removeProp(f.node, name);
+        if (isHandler(value)) {
+            if (name == "ref") was = &value;
+            continue;
+        }
+        const PropValue* kept = next.find(name);
+        if (!kept || isHandler(*kept)) renderer_.removeProp(f.node, name);
     }
+
+    // "ref": the old one learns the node is gone, the new one gets it (in the commit).
+    if (!was && !now) return;
+    f.hostPart->hasRef = now != nullptr;
+    if (was && now && propEquals(*was, *now)) return;
+    if (const auto* off = was ? std::get_if<RefHandler>(was) : nullptr; off && *off) refsOff_.push_back(*off);
+    if (const auto* on = now ? std::get_if<RefHandler>(now) : nullptr; on && *on) refsOn_.emplace_back(*on, f.node);
 }
 
 void Reconciler::collectNodes(const Fiber& f, std::vector<NodeHandle>& out) const {
@@ -505,8 +526,16 @@ void Reconciler::commit() {
     renderer_.commit();
     if (!runEffects_) {
         effects_.clear();
+        refsOff_.clear();
+        refsOn_.clear();
         return;
     }
+
+    // Refs before effects, so an effect can use the node. Off first: a keyed
+    // element that was replaced hands its ref to the new node.
+    for (auto& ref : std::exchange(refsOff_, {})) ref(0);
+    for (auto& [ref, node] : std::exchange(refsOn_, {}))
+        if (hosts_.contains(node)) ref(node);  // skip a node removed in the same batch
 
     for (auto& [weak, index] : std::exchange(effects_, {})) {
         auto f = weak.lock();

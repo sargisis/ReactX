@@ -28,6 +28,28 @@ fi
 [ -n "$tag" ] || { echo "reactx: can't find the latest release of $repo"; exit 1; }
 version=${tag#v}
 
+# Not on PATH yet: the line for the user's own shell (zsh doesn't read ~/.bashrc).
+# Printed last, so it isn't lost above the output of `reactx install`.
+path_hint() {
+  case ":$PATH:" in
+    *":$bin:"*) ;;
+    *)
+      case "${SHELL:-}" in
+        */zsh) rc=~/.zshrc ;;
+        */fish) rc= ;;
+        *) rc=~/.bashrc ;;
+      esac
+      echo
+      echo "Add $bin to PATH (once), then reactx works in this and every new terminal:"
+      if [ -n "$rc" ]; then
+        echo "  echo 'export PATH=\"$bin:\$PATH\"' >> $rc && . $rc"
+      else
+        echo "  fish_add_path $bin"
+      fi
+      ;;
+  esac
+}
+
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 echo "Downloading reactx $version..."
@@ -37,11 +59,6 @@ bin=${REACTX_BIN:-$HOME/.local/bin}
 mkdir -p "$bin"
 cp "$tmp"/reactx-*/bin/* "$bin/"
 echo "Installed reactx $version into $bin"
-case ":$PATH:" in
-  *":$bin:"*) ;;
-  *) echo "Add it to PATH:  echo 'export PATH=\"$bin:\$PATH\"' >> ~/.bashrc  (then open a new terminal)" ;;
-esac
-
 # The compiler and tools (reactx install asks nothing, so a pipe is fine).
 # Releases before 0.8.2 have no `reactx install`: say what to do instead.
 if "$bin/reactx" help install > /dev/null 2>&1; then
@@ -50,3 +67,4 @@ else
   echo "reactx $version can't install the compiler itself: install Emscripten 6+ (https://emscripten.org/docs/getting_started/downloads.html),"
   echo "or get a newer release:  curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh"
 fi
+path_hint

@@ -33,7 +33,17 @@ inline const std::vector<Page>& pages() {
                             "что действительно изменилось.\n\n"
                             "Один и тот же код компонентов работает в двух местах: в браузере (через WebAssembly) и в терминале "
                             "(текстовый интерфейс). JavaScript, Node и npm не нужны.", ""},
-                {"1. Установка: Arch Linux",
+                {"1. Установка (одна строка)",
+                 "На Linux (x86-64) всё ставится одной командой. Она скачивает reactx в ~/.local/bin, а затем reactx install "
+                 "скачивает компилятор для браузера (Emscripten) и, если в системе их нет, CMake и Ninja в ~/.reactx — без sudo, "
+                 "как npm. Нужны curl, git, python3 и tar, они есть почти в любом Linux.\n\n"
+                 "reactx install --check показывает, что уже есть. Терминальным приложениям нужен ещё GCC 16+ из пакетного "
+                 "менеджера. Другие системы — разделы ниже или Docker-образ.",
+                 "curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh\n\n"
+                 "# потом — проверить или доустановить:\n"
+                 "reactx install --check\n"
+                 "reactx install"},
+                {"Установка вручную: Arch Linux",
                  "В Arch Linux компилятор и инструменты сборки ставятся через pacman одной командой:\n\n"
                  "- Компилятор GCC 16, CMake, Ninja и Git\n"
                  "- Emscripten для сборки в WebAssembly\n"
@@ -105,10 +115,13 @@ inline const std::vector<Page>& pages() {
         {
             "cli", "CLI reactx", "Новый проект, разработка с автообновлением, сборка, зависимости.",
             {
-                {"Установка", "Готовый reactx для Linux x86-64 лежит в GitHub Releases: распакуйте архив и добавьте bin/ в PATH. "
+                {"Установка", "Одной строкой на Linux x86-64: готовый reactx, затем reactx install скачивает Emscripten (и CMake с Ninja, "
+                              "если нужно) в ~/.reactx; reactx build и dev находят их сами. "
+                              "Вручную: готовый reactx для Linux x86-64 лежит в GitHub Releases — распакуйте архив и добавьте bin/ в PATH. "
                               "Для веб-проектов хватит Emscripten, CMake и Ninja, для терминальных нужен ещё GCC 16. "
                               "Можно и собрать из исходников: cmake --install кладёт reactx и reactx_serve в bin.",
-                 "# github.com/sargisis/ReactX/releases → reactx-X.Y.Z-linux-x86_64.tar.gz\n"
+                 "curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh\n\n"
+                 "# вручную: github.com/sargisis/ReactX/releases → reactx-X.Y.Z-linux-x86_64.tar.gz\n"
                  "tar xzf reactx-*-linux-x86_64.tar.gz && cp reactx-*/bin/* ~/.local/bin/\n\n"
                  "# или из исходников\n"
                  "cmake --preset release && cmake --build --preset release\n"

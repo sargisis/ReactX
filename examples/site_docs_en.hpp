@@ -19,7 +19,17 @@ inline const std::vector<Page>& pagesEn() {
                                     "ReactX updates only what actually changed.\n\n"
                                     "The same component code runs in two places: in the browser (compiled to WebAssembly) "
                                     "and in the terminal (as a text UI). No JavaScript, Node or npm is involved.", ""},
-                {"1. Install: Arch Linux",
+                {"1. Install (one line)",
+                 "On Linux (x86-64) one command installs everything. It downloads the reactx tool into ~/.local/bin, then "
+                 "reactx install downloads the compiler for the browser (Emscripten) and, if your system lacks them, CMake and "
+                 "Ninja into ~/.reactx — no sudo, like npm. It needs curl, git, python3 and tar, which almost every Linux has.\n\n"
+                 "reactx install --check shows what is there. Terminal apps also need GCC 16+ from your package manager. "
+                 "Other systems: the sections below or the Docker image.",
+                 "curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh\n\n"
+                 "# later, to check or to finish:\n"
+                 "reactx install --check\n"
+                 "reactx install"},
+                {"Install by hand: Arch Linux",
                  "On Arch Linux, compiler and build tools can be installed via pacman in a single command:\n\n"
                  "- GCC 16, CMake, Ninja, and Git\n"
                  "- Emscripten for WebAssembly builds\n"
@@ -27,7 +37,8 @@ inline const std::vector<Page>& pagesEn() {
                  "# Install tools via pacman:\n"
                  "sudo pacman -S gcc cmake ninja git emscripten\n\n"
                  "# Download prebuilt reactx CLI:\n"
-                 "# github.com/sargisis/ReactX/releases -> reactx-X.Y.Z-linux-x86_64.tar.gz\n"
+                 "curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh\n\n"
+                 "# by hand: github.com/sargisis/ReactX/releases -> reactx-X.Y.Z-linux-x86_64.tar.gz\n"
                  "tar xzf reactx-*-linux-x86_64.tar.gz && cp reactx-*/bin/* ~/.local/bin/\n"
                  "reactx --version"},
                 {"Install: macOS",
@@ -92,7 +103,9 @@ inline const std::vector<Page>& pagesEn() {
         {
             "cli", "The reactx tool", "Create a project, run it with live reload, build it, add libraries.",
             {
-                {"Install", "Grab the prebuilt reactx for Linux x86-64 from GitHub Releases, unpack it and put bin/ on your PATH. "
+                {"Install", "One line on Linux x86-64: the prebuilt reactx, then reactx install, which downloads Emscripten (and "
+                            "CMake and Ninja if needed) into ~/.reactx; reactx build and dev find them on their own. "
+                            "By hand: grab the prebuilt reactx for Linux x86-64 from GitHub Releases, unpack it and put bin/ on your PATH. "
                             "Browser apps need Emscripten, CMake and Ninja; terminal apps also need GCC 16. "
                             "You can build it from source too.",
                  "# github.com/sargisis/ReactX/releases -> reactx-X.Y.Z-linux-x86_64.tar.gz\n"

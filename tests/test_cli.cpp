@@ -192,6 +192,19 @@ void quick(const fs::path& tmp) {
     CHECK(contains(reactx({"build", "-h"}, tmp).out, "--native"));
     CHECK(reactx({"frobnicate", "--help"}, tmp).code == 2);
     CHECK(contains(reactx({"--version"}, tmp).out, std::string("reactx ") + REACTX_VERSION));
+
+    std::cout << "install: --check lists the tools without downloading anything\n";
+    {
+        ::setenv("REACTX_HOME", (tmp / "rx-home").c_str(), 1);
+        auto checked = reactx({"install", "--check"}, tmp);
+        CHECK(checked.code == 0 || checked.code == 1);  // 1: something is missing on this machine
+        for (const char* tool : {"cmake", "ninja", "emscripten", "gcc"}) CHECK(contains(checked.out, tool));
+        CHECK(!fs::exists(tmp / "rx-home"));  // --check writes nothing
+        CHECK(contains(reactx({"install", "--help"}, tmp).out, "Emscripten"));
+        auto bad = reactx({"install", "--nope"}, tmp);
+        CHECK(bad.code != 0 && contains(bad.out, "unknown option --nope"));
+        ::unsetenv("REACTX_HOME");
+    }
 }
 
 // `reactx update` against a local git repository with release tags (no network).

@@ -3,7 +3,9 @@
 // test runs as steps on timers.
 #include <emscripten.h>
 
+#include <chrono>
 #include <iostream>
+#include <optional>
 #include <string>
 
 #include "reactx/dom.hpp"
@@ -30,6 +32,9 @@ std::string html() { return js("rxTest.html()"); }
 bool has(const std::string& part) { return html().find(part) != std::string::npos; }
 
 std::string posted;
+FetchResponse me, slow;
+FetchHandle gone;
+bool goneCalled = false;
 
 Element Home(const Props&) {
     auto todos = useFetch("/api/todos");
@@ -127,6 +132,33 @@ extern "C" EMSCRIPTEN_KEEPALIVE void test_step(int step) {
         case 8:
             CHECK(posted == "201 {\"id\":3}");
             CHECK(js("rxTest.requests()").find("POST /api/todos {\"title\":\"Tea\"}") != std::string::npos);
+            std::cout << "headers, timeout and cancel\n";
+            js("rxTest.mock('GET', '/api/me', 200, 'me', {headers: {ETag: 'v1'}})");
+            js("rxTest.mock('GET', '/api/slow', 200, 'late', {delay: 300})");
+            js("rxTest.mock('GET', '/api/gone', 200, 'never', {delay: 50})");
+            fetch({.url = "/api/me", .headers = {{"Authorization", "Bearer t"}}}, [](const FetchResponse& r) { me = r; });
+            fetch({.url = "/api/slow", .timeout = std::chrono::milliseconds(20)}, [](const FetchResponse& r) { slow = r; });
+            gone = fetch({.url = "/api/gone"}, [](const FetchResponse&) { goneCalled = true; });
+            gone.cancel();
+            std::cout << "storage errors are values\n";
+            CHECK(storageWrite("k", "1").has_value());
+            CHECK(storageRead("k").value() == std::optional<std::string>{"1"});
+            js("rxTest.storageFull(true)");
+            {
+                auto full = storageWrite("k", "2");
+                CHECK(!full && full.error().starts_with("QuotaExceededError"));
+            }
+            js("rxTest.storageFull(false)");
+            CHECK(storageRead("k").value() == std::optional<std::string>{"1"});
+            CHECK(storageRemove("k").has_value() && !storageRead("k").value());
+            next(9, 150);
+            break;
+        case 9:
+            CHECK(me.body == "me" && me.header("etag") == "v1");
+            CHECK(js("rxTest.requests()").find("GET /api/me [Authorization: Bearer t]") != std::string::npos);
+            CHECK(slow.status == 0 && slow.error == "timeout after 20 ms");
+            CHECK(!goneCalled && gone.cancelled());
+            CHECK(js("rxTest.aborted()").find("GET /api/gone") != std::string::npos);
             finish();
             break;
     }

@@ -35,6 +35,7 @@ using rx::Props;
 using rx::ElementKind;
 using rx::Element;
 using rx::isHandler;
+using rx::boolHandler;
 using rx::propEquals;
 using rx::propToString;
 using rx::h;
@@ -54,6 +55,10 @@ using rx::useMemo;
 using rx::useCallback;
 using rx::useDebounce;
 using rx::useLocalStorage;
+using rx::StorageErrorHandler;
+using rx::storageRead;
+using rx::storageWrite;
+using rx::storageRemove;
 using rx::useWindowSize;
 using rx::WindowSize;
 using rx::deps;
@@ -83,6 +88,8 @@ using rx::TextRenderer;
 
 // fetch.hpp, path.hpp
 using rx::FetchRequest;
+using rx::FetchHeaders;
+using rx::FetchHandle;
 using rx::FetchResponse;
 using rx::FetchState;
 using rx::fetch;

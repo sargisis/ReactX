@@ -242,6 +242,70 @@ TEST(fetch_in_the_terminal_build_reports_what_is_wrong) {
     CHECK(refused.status == 0 && refused.error.find("can't connect") != std::string::npos);
 }
 
+TEST(fetch_sends_headers_times_out_and_cancels) {
+    net::HttpServer server{"127.0.0.1", 0};
+    server.get("/echo", [](const net::Request& r) {
+        auto reply = net::Response::text(r.header("authorization"));
+        reply.headers.emplace_back("X-Answer", "42");
+        return reply;
+    });
+    server.get("/slow", [](const net::Request&) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+        return net::Response::text("late");
+    });
+    server.start();
+    std::jthread thread([&server] { server.run(); });
+    std::string base = "http://127.0.0.1:" + std::to_string(server.port());
+    TextRenderer screen;
+    Root root(screen);
+
+    FetchResponse echo;
+    fetch({.url = base + "/echo", .headers = {{"Authorization", "Bearer abc"}}}, [&](const FetchResponse& r) { echo = r; });
+    CHECK(flushUntil(root, [&] { return echo.status != 0; }));
+    CHECK(echo.body == "Bearer abc");
+    CHECK(echo.header("x-answer") == "42" && echo.header("X-ANSWER") == "42");
+    CHECK(echo.header("content-type").starts_with("text/plain"));
+    CHECK(echo.header("missing").empty());
+
+    FetchResponse slow;
+    auto started = std::chrono::steady_clock::now();
+    fetch({.url = base + "/slow", .timeout = std::chrono::milliseconds(200)}, [&](const FetchResponse& r) { slow = r; });
+    CHECK(flushUntil(root, [&] { return !slow.error.empty(); }));
+    CHECK(slow.status == 0 && slow.error == "timeout after 200 ms");
+    CHECK(std::chrono::steady_clock::now() - started < std::chrono::milliseconds(1000));
+
+    bool called = false;
+    FetchHandle cancelled = fetch({.url = base + "/echo"}, [&](const FetchResponse&) { called = true; });
+    CHECK(!cancelled.cancelled());
+    cancelled.cancel();
+    CHECK(cancelled.cancelled());
+    for (int i = 0; i < 40; ++i) {  // 400 ms: the answer comes and is dropped
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        root.flush();
+    }
+    CHECK(!called);
+    server.stop();
+}
+
+std::string echoBase;
+Element WhoAmI(const Props&) {
+    auto me = useFetch({.url = echoBase + "/echo", .headers = {{"Authorization", "Bearer xyz"}}});
+    return h("p", {}, {me.loading ? "loading" : me.response.body});
+}
+
+TEST(use_fetch_takes_a_whole_request) {
+    net::HttpServer server{"127.0.0.1", 0};
+    server.get("/echo", [](const net::Request& r) { return net::Response::text("me=" + r.header("authorization")); });
+    server.start();
+    std::jthread thread([&server] { server.run(); });
+    echoBase = "http://127.0.0.1:" + std::to_string(server.port());
+    TextRenderer screen;
+    Root root(screen);
+    root.render(h(WhoAmI));
+    CHECK(flushUntil(root, [&] { return screen.toString().find("me=Bearer xyz") != std::string::npos; }));
+    server.stop();
+}
+
 TEST(parallel_posts_get_unique_ids) {
     Api api;
     std::vector<std::jthread> clients;

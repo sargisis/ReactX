@@ -260,7 +260,8 @@ inline const std::vector<Page>& pagesEn() {
                  "});"},
                 {"useDebounce, useLocalStorage, useWindowSize, useId",
                  "useDebounce gives a value only after it stopped changing (search boxes). useLocalStorage remembers state across "
-                 "page reloads (natively it lives in memory only, until the program exits). useWindowSize re-renders on resize. useId gives an id for <label for>.",
+                 "page reloads (natively it lives in memory only, until the program exits); a third argument hears about failed saves "
+                 "(quota, private mode), and rx::storageRead / storageWrite give errors as std::expected. useWindowSize re-renders on resize. useId gives an id for <label for>.",
                  "std::string debounced = useDebounce(query, 300ms);\n"
                  "auto [theme, setTheme] = useLocalStorage(\"theme\", std::string(\"dark\"));\n"
                  "WindowSize size = useWindowSize();\n"
@@ -377,6 +378,12 @@ inline const std::vector<Page>& pagesEn() {
                  "fetch({.method = \"POST\", .url = \"/api/todos\", .body = json::object({{\"title\", \"Milk\"}}).dump()},\n"
                  "      [](const FetchResponse& r) { if (r.ok()) ... });\n\n"
                  "useFetch(\"/api/search?q=\" + rx::urlEncode(query));"},
+                {"Headers, timeout, cancel", "A request can carry headers and a deadline (then status 0 and error \"timeout after N ms\"); "
+                                             "the answer's headers are in r.header(name). fetch returns a handle: cancel() means the "
+                                             "callback never runs. useFetch takes a whole request too and cancels requests it replaces.",
+                 "auto me = useFetch({.url = \"/api/me\", .headers = {{\"Authorization\", \"Bearer \" + token}}, .timeout = 5s});\n"
+                 "FetchHandle req = fetch({.url = \"/api/items\"}, [](const FetchResponse& r) { r.header(\"etag\"); });\n"
+                 "req.cancel();"},
                 {"In the terminal", "Terminal apps use the network too: give a full http:// URL (no HTTPS there).",
                  "auto todos = useFetch(\"http://127.0.0.1:8091/api/todos\");"},
                 {"An API without a server", "setLocalFetch answers requests inside the app — for static sites, offline mode and tests.",

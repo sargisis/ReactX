@@ -153,7 +153,7 @@ int main() { mountDom(h(App)); }
 - `useReducer(reducer, initial)` → `[state, dispatch]`: состояние, которое меняют действия; берётся самый свежий reducer.
 - `useTimeout(fn, std::optional(5s))`, `useInterval(fn, 1s)` — таймеры в потоке интерфейса; `std::nullopt` выключает, размонтирование отменяет.
 - `useKeyboard(handler)` — сочетания клавиш для всего приложения, где бы ни был фокус: вызывается раньше `onKey` элемента, `return true` забирает клавишу; пока фокус в поле ввода, клавиши набора текста сюда не приходят.
-- `useDebounce(value, 300ms)`, `useLocalStorage("key", default)` (браузер — `localStorage`; нативно — только память, теряется при выходе), `useWindowSize()`.
+- `useDebounce(value, 300ms)`, `useLocalStorage("key", default)` (браузер — `localStorage`; нативно — только память, теряется при выходе; третий аргумент — обработчик неудачного сохранения), `useWindowSize()`.
 - **Общее состояние** (как Zustand): `const auto Cart = createStore<std::vector<Item>>({});`, `Cart.set(v)` / `Cart.update([](auto items) { ...; return items; })` где угодно в потоке интерфейса; `useStore(Cart)` перерисовывает при каждом изменении, `useStore(Cart, [](const auto& c) { return c.size(); })` — только когда меняется выбранная часть.
 - `useId()` — id, уникальный в приложении и одинаковый при каждой отрисовке: для `<label for>` и `aria-*`.
 - **Границы ошибок**: `errorBoundary([](const RenderError& e) { return h("p", {}, {e.message}); }, {children})` — если дети бросили исключение при отрисовке (в том числе позже, при обновлении состояния), вместо них показывается запасной вариант, а остальное приложение работает; `e.retry()` пробует снова. Исключения в обработчиках событий и эффектах не ловятся (как в React).
@@ -306,11 +306,20 @@ if (todos.loading) ...; if (!todos.ok()) ... todos.errorText();
 if (auto list = todos.tryJson()) for (const auto& t : list->asArray()) ...
 fetch({.method = "POST", .url = "/api/todos", .body = json::object({{"title", "Молоко"}}).dump()},
       [](const FetchResponse& r) { ... });
+
+// Заголовки, срок ожидания, заголовки ответа, отмена:
+auto me = useFetch({.url = "/api/me", .headers = {{"Authorization", "Bearer " + token}}, .timeout = 5s});
+FetchHandle req = fetch({.url = "/api/items", .timeout = 3s}, [](const FetchResponse& r) { r.header("etag"); });
+req.cancel();                                    // колбэк не вызовется; браузер прервёт запрос
 ```
+
+По таймауту приходит ответ со статусом 0 и `error == "timeout after N ms"`. `useFetch` отменяет запрос, который заменяет (новый url, `reload()`), и запрос размонтированного компонента.
 
 В терминальной сборке `fetch` и `useFetch` тоже ходят в сеть (с v0.7): нужен полный URL с `http://`; запрос идёт в своём потоке, ответ приходит в потоке интерфейса на ближайшем `flush()` (`TerminalApp` делает его сам). HTTPS там нет.
 
 `setLocalFetch` — «сервер внутри приложения»: запросы сначала идут в обработчик на C++, сеть не нужна (так работают статические сайты без бэкенда и тесты API).
+
+**Хранилище**: `rx::storageRead(key)` (`std::expected<std::optional<std::string>, std::string>`: нет ключа — `std::nullopt`, ошибка — ошибка), `storageWrite`, `storageRemove` — localStorage в браузере, где запись может не пройти (`QuotaExceededError`, приватный режим). `useLocalStorage("draft", std::string(), onError)` вызывает `onError(причина)`, если сохранить не удалось.
 
 Работа со сторонними бэкендами (например, Python / Flask, Node.js, Go) поддерживается из коробки через `reactx dev --proxy http://127.0.0.1:5000` (проксирует `/api/*` на ваш сервер). Подробнее о связке и текущих ограничениях — в [разделе документации «Бэкенд и Flask»](https://sargisis.github.io/ReactX/#backend?lang=ru).
 
@@ -508,7 +517,7 @@ AGENTS.md         правила и проверки для тех, кто ме�
 - Терминал: ширина символа считается за 1 колонку (эмодзи и иероглифы могут сдвигать строку); курсор в `input` только в конце текста; нет прокрутки — что не влезло, обрезается; только POSIX (Linux/macOS).
 - `rx::ui`: переключение вкладок стрелками и выбор «по фокусу» пока не сделаны; нет прокрутки длинных списков.
 - Браузер: `import reactx;` в веб-сборке выключен; нет событий мыши кроме клика (наведение, перетаскивание); `onScroll` — только у элемента с прокруткой; страница строится в браузере (нет серверного рендеринга).
-- `useFetch` / `fetch` в терминальной сборке: только `http://` и полный URL (`http://127.0.0.1:8090/api/todos`), без HTTPS. В сетевом клиенте пока нет кастомных заголовков запроса (`Authorization: Bearer`), чтения заголовков ответа, таймаутов, отмены запросов и WebSockets/SSE.
+- `useFetch` / `fetch` в терминальной сборке: только `http://` и полный URL (`http://127.0.0.1:8090/api/todos`), без HTTPS. WebSockets и Server-Sent Events пока нет; отменённый запрос в терминальной сборке дорабатывает в своём потоке (его ответ отбрасывается).
 - Рефлексия (`json::to` / `from`) — только в нативной сборке.
 - Раскладка терминала пересчитывается целиком на каждую перерисовку.
 - `memo` не сравнивает детей; хуки нельзя вызывать в цикле с разным числом итераций (как в React) — для элементов списка нужен отдельный компонент.

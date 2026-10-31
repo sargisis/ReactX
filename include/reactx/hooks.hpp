@@ -6,10 +6,12 @@
 #include <format>
 #include <concepts>
 #include <cstddef>
+#include <expected>
 #include <functional>
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <stdexcept>
 #include <tuple>
 #include <type_traits>
@@ -317,12 +319,27 @@ void notifyResize(WindowSize size);
 // re-renders when it changes.
 WindowSize useWindowSize();
 
+// The browser's localStorage, with errors as values: storage turned off
+// (private mode, a sandboxed iframe), the quota is full. A missing key is not
+// an error: storageRead gives std::nullopt. Natively the values live in
+// memory for the life of the process and never fail.
+//   if (auto saved = rx::storageWrite("draft", text); !saved) showWarning("Not saved: " + saved.error());
+std::expected<std::optional<std::string>, std::string> storageRead(std::string_view key);
+std::expected<void, std::string> storageWrite(std::string_view key, std::string_view value);
+std::expected<void, std::string> storageRemove(std::string_view key);
+
+// Called by useLocalStorage when reading or saving fails, with the reason.
+using StorageErrorHandler = std::function<void(const std::string&)>;
+
 // State that survives a reload: kept in localStorage in the browser and in
 // memory for the life of the process natively.
 //   auto [theme, setTheme] = useLocalStorage("theme", std::string("dark"));
-// Supports std::string, bool and numbers.
+// Supports std::string, bool and numbers. Saving can fail in the browser
+// (quota, private mode); pass onError to hear about it, otherwise the value
+// silently stays in memory only:
+//   auto [draft, setDraft] = useLocalStorage("draft", std::string(), [setUnsaved](const std::string&) { setUnsaved(true); });
 template <class T>
-std::pair<T, Setter<T>> useLocalStorage(std::string key, T initialValue) {
+std::pair<T, Setter<T>> useLocalStorage(std::string key, T initialValue, StorageErrorHandler onError = {}) {
     static_assert(std::same_as<T, std::string> || std::same_as<T, bool> || std::integral<T> || std::floating_point<T>,
                   "useLocalStorage: the value must be std::string, bool or a number");
     T initial = std::move(initialValue);
@@ -330,7 +347,10 @@ std::pair<T, Setter<T>> useLocalStorage(std::string key, T initialValue) {
     bool& loaded = useRef(false);
     if (!loaded) {
         loaded = true;
-        if (std::string saved = detail::storageGet(key); !saved.empty()) {
+        auto read = storageRead(key);
+        if (!read && onError) onError(read.error());
+        if (read && *read) {
+            std::string saved = std::move(**read);
             if constexpr (std::same_as<T, std::string>) initial = std::move(saved);
             else if constexpr (std::same_as<T, bool>) initial = saved == "true";
             else if (auto n = parseNumber<T>(saved)) initial = *n;  // a broken value keeps the default
@@ -338,17 +358,20 @@ std::pair<T, Setter<T>> useLocalStorage(std::string key, T initialValue) {
     }
     auto [state, setState] = useState(std::move(initial));
     useEffect(
-        [key, state] {
-            if constexpr (std::same_as<T, std::string>) detail::storageSet(key, state);
-            else if constexpr (std::same_as<T, bool>) detail::storageSet(key, state ? "true" : "false");
-            else detail::storageSet(key, std::format("{}", state));
+        [key, state, onError] {
+            std::expected<void, std::string> saved;
+            if constexpr (std::same_as<T, std::string>) saved = storageWrite(key, state);
+            else if constexpr (std::same_as<T, bool>) saved = storageWrite(key, state ? "true" : "false");
+            else saved = storageWrite(key, std::format("{}", state));
+            if (!saved && onError) onError(saved.error());
         },
         deps(key, state));
     return {state, setState};
 }
 
-inline std::pair<std::string, Setter<std::string>> useLocalStorage(std::string key, const char* initial) {
-    return useLocalStorage<std::string>(std::move(key), std::string(initial));
+inline std::pair<std::string, Setter<std::string>> useLocalStorage(std::string key, const char* initial,
+                                                                 StorageErrorHandler onError = {}) {
+    return useLocalStorage<std::string>(std::move(key), std::string(initial), std::move(onError));
 }
 
 // ---- useReducer ----

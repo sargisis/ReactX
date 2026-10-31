@@ -108,17 +108,30 @@ EM_JS(void, rx_js_listen_keys, (), {
         if (consumed) { e.preventDefault(); e.stopPropagation(); }
     }, true);
 });
+// "v" + the value, "n" if there is none, "e" + the reason if storage failed.
 EM_JS(char*, rx_js_storage_get, (const char* key), {
     try {
         const v = localStorage.getItem(UTF8ToString(key));
-        return stringToNewUTF8(v === null ? "" : v);
+        return stringToNewUTF8(v === null ? "n" : "v" + v);
     } catch (e) {
-        return stringToNewUTF8("");  // storage disabled (private mode, sandbox)
+        return stringToNewUTF8("e" + String((e && e.name) || e) + ": " + String((e && e.message) || ""));
     }
 });
-EM_JS(void, rx_js_storage_set, (const char* key, const char* value), {
-    try { localStorage.setItem(UTF8ToString(key), UTF8ToString(value)); } catch (e) {}
+// "" on success, otherwise the reason (QuotaExceededError, SecurityError, ...).
+EM_JS(char*, rx_js_storage_set, (const char* key, const char* value, int remove), {
+    try {
+        if (remove) localStorage.removeItem(UTF8ToString(key));
+        else localStorage.setItem(UTF8ToString(key), UTF8ToString(value));
+        return stringToNewUTF8("");
+    } catch (e) {
+        return stringToNewUTF8(String((e && e.name) || e) + ": " + String((e && e.message) || ""));
+    }
 });
+std::string takeJsString(char* raw) {
+    std::string value(raw);
+    std::free(raw);
+    return value;
+}
 #else
 std::map<std::string, std::string, std::less<>>& memoryStorage() {
     static std::map<std::string, std::string, std::less<>> all;
@@ -229,31 +242,49 @@ bool dispatchGlobalKey(const KeyEvent& key, bool editing) {
 
 // ---- storage ----
 
-std::string storageGet(std::string_view key) {
-#if defined(__EMSCRIPTEN__)
-    char* raw = rx_js_storage_get(std::string(key).c_str());
-    std::string value(raw);
-    std::free(raw);
-    return value;
-#else
-    std::scoped_lock lock(stateMutex());
-    auto it = memoryStorage().find(key);
-    return it == memoryStorage().end() ? std::string{} : it->second;
-#endif
-}
+std::string storageGet(std::string_view key) { return rx::storageRead(key).value_or(std::nullopt).value_or(""); }
 
-void storageSet(std::string_view key, std::string_view value) {
-#if defined(__EMSCRIPTEN__)
-    rx_js_storage_set(std::string(key).c_str(), std::string(value).c_str());
-#else
-    std::scoped_lock lock(stateMutex());
-    memoryStorage().insert_or_assign(std::string(key), std::string(value));
-#endif
-}
+void storageSet(std::string_view key, std::string_view value) { (void)rx::storageWrite(key, value); }
 
 }  // namespace rx::detail
 
 namespace rx {
+
+std::expected<std::optional<std::string>, std::string> storageRead(std::string_view key) {
+#if defined(__EMSCRIPTEN__)
+    std::string answer = detail::takeJsString(detail::rx_js_storage_get(std::string(key).c_str()));
+    if (answer.starts_with('v')) return answer.substr(1);
+    if (answer.starts_with('e')) return std::unexpected(answer.substr(1));
+    return std::optional<std::string>{};
+#else
+    std::scoped_lock lock(detail::stateMutex());
+    auto it = detail::memoryStorage().find(key);
+    if (it == detail::memoryStorage().end()) return std::optional<std::string>{};
+    return it->second;
+#endif
+}
+
+std::expected<void, std::string> storageWrite(std::string_view key, std::string_view value) {
+#if defined(__EMSCRIPTEN__)
+    std::string error = detail::takeJsString(detail::rx_js_storage_set(std::string(key).c_str(), std::string(value).c_str(), 0));
+    if (!error.empty()) return std::unexpected(std::move(error));
+#else
+    std::scoped_lock lock(detail::stateMutex());
+    detail::memoryStorage().insert_or_assign(std::string(key), std::string(value));
+#endif
+    return {};
+}
+
+std::expected<void, std::string> storageRemove(std::string_view key) {
+#if defined(__EMSCRIPTEN__)
+    std::string error = detail::takeJsString(detail::rx_js_storage_set(std::string(key).c_str(), "", 1));
+    if (!error.empty()) return std::unexpected(std::move(error));
+#else
+    std::scoped_lock lock(detail::stateMutex());
+    if (auto it = detail::memoryStorage().find(key); it != detail::memoryStorage().end()) detail::memoryStorage().erase(it);
+#endif
+    return {};
+}
 
 WindowSize useWindowSize() {
     auto [size, setSize] = useState(detail::currentWindowSize());

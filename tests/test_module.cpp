@@ -105,6 +105,17 @@ int main() {
     tagsRoot.render(h(Tag, {.text = "lambda " + urlEncode("a b")}));
     check(tags.toString().find("lambda a%20b") != std::string::npos, "lambda component, urlEncode");
 
+    bool on = false;
+    InputHandler toggle = boolHandler([&on](bool v) { on = v; });
+    toggle("true");
+    check(on, "boolHandler");
+    check(storageWrite("m", "1").has_value() && storageRead("m").value() == std::optional<std::string>{"1"}, "storage");
+    FetchHandle none;
+    none.cancel();
+    FetchRequest withHeaders{.url = "/x", .headers = FetchHeaders{{"A", "b"}}};
+    check(withHeaders.headers.size() == 1 && !none.cancelled(), "fetch headers, FetchHandle");
+    check(json::parse(R"({"n": 2.5})").require<int>("n").has_value() == false, "json require");
+
     std::cout << (failures ? "module test FAILED\n" : "module test OK\n");
     return failures ? 1 : 0;
 }

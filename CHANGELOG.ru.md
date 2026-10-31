@@ -12,19 +12,13 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 - **Мышь в терминале**: `TerminalApp` включает SGR-отчёты мыши — клик нажимает кнопки и даёт фокус, наведение, перетаскивание; `app.setMouse(false)` выключает. `decodeInput` / `Terminal::readInput` дают клавиши и `MouseInput`; `TerminalRenderer::handleMouse` и `nodeAt(x, y)`.
 - **`ref.focus()`**: `NodeRef` даёт фокус своему элементу из кода, в обоих бэкендах (`Renderer::focus`).
 - **Демо: канбан-доска** (`examples/kanban.cpp`): карточки перетаскиваются между колонками мышью или пальцем либо стрелками ← →; один исходник для браузера (`web_kanban`, на странице demos сайта) и терминала (`kanban`).
-
-### Изменено
-
-- В `PropValue` ещё одна альтернатива, `PointerHandler`, в `EventData` — `PointerEvent`. `TerminalRenderer::focus` теперь переопределяет `Renderer::focus`.
-
-### Добавлено
-
 - **`useNodeRef()` и prop `ref`**: `{"ref", ref}` на HTML-элементе даёт C++ его узел — после коммита, до запуска эффектов, и снова 0, когда элемент убран; копии `NodeRef` видят один и тот же узел. Любой `RefHandler` (`std::function<void(NodeHandle)>`) работает как callback ref. Работает со всеми бэкендами.
 - **`reactx/js.hpp`** (браузер): `rx::domElement(ref)` — элемент страницы как `emscripten::val`, чтобы вызывать его методы или отдать JavaScript-библиотеке; `rx::jsValue(json)` — JS-объект из JSON. Линкуйте `reactx::js` (embind); приложения без него embind не несут.
 - **Демо: Chart.js из C++** (`examples/web_chart.cpp`, на странице demos сайта): данные — в состоянии C++, график создаётся, обновляется и удаляется из эффектов.
 
 ### Изменено
 
+- В `PropValue` ещё одна альтернатива, `PointerHandler`, в `EventData` — `PointerEvent`. `TerminalRenderer::focus` теперь переопределяет `Renderer::focus`.
 - В `PropValue` ещё одна альтернатива, `RefHandler`: код, который делает `std::visit` по всем вариантам `PropValue`, должен её учесть. `NodeHandle` теперь объявлен в `reactx/element.hpp` (и по-прежнему доступен через `renderer.hpp`).
 
 ### Исправлено
@@ -32,6 +26,8 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 - `install.sh` подсказывает, как добавить `reactx` в PATH, для оболочки пользователя (zsh — `~/.zshrc`, fish — `fish_add_path`; раньше всегда `~/.bashrc`, который zsh не читает), и выводит подсказку последней, после вывода `reactx install`.
 - Команда установки на сайте копируется одной строкой: строки-комментарии в ней ломались в zsh (`command not found: #`).
 - На странице «Демо» и 404 сайта не было боковых отступов на телефоне (текст упирался в край экрана).
+- `reactx install` проверяет `xz` до загрузки Emscripten (его архивы — `.tar.xz`; без `xz`, как в «тонких» контейнерах, `tar` падал на полпути), а при сбое emsdk объясняет, отчего обычно бывает ошибка `tar` и как повторить. Нашёл ИИ-агент (Grok), собиравший проект.
+- `llms.txt`: `Store::get()` (чтение store вне компонентов), что даёт `NodeRef::get()`, и что браузерным проектам GCC 16 не нужен.
 
 ## [0.8.3] — 2026-10-31
 

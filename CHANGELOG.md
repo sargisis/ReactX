@@ -12,19 +12,13 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 - **The mouse in the terminal**: `TerminalApp` turns on SGR mouse reports — clicks press buttons and focus, hover, drag; `app.setMouse(false)` turns it off. `decodeInput` / `Terminal::readInput` give keys and `MouseInput`s; `TerminalRenderer::handleMouse` and `nodeAt(x, y)`.
 - **`ref.focus()`**: a `NodeRef` focuses its element from code, in both backends (`Renderer::focus`).
 - **Demo: a kanban board** (`examples/kanban.cpp`): drag cards between columns with the mouse or a finger, or move them with ← →; one source for the browser (`web_kanban`, on the site's demos page) and the terminal (`kanban`).
-
-### Changed
-
-- `PropValue` has one more alternative, `PointerHandler`, and `EventData` one more, `PointerEvent`. `TerminalRenderer::focus` now overrides `Renderer::focus`.
-
-### Added
-
 - **`useNodeRef()` and the `ref` prop**: `{"ref", ref}` on a host element gives C++ its node — set after the commit, before effects run, and back to 0 when the element goes; copies of a `NodeRef` share it. Any `RefHandler` (`std::function<void(NodeHandle)>`) works as a callback ref. Works with every backend.
 - **`reactx/js.hpp`** (browser): `rx::domElement(ref)` — the page's element as an `emscripten::val`, to call its methods or hand it to a JavaScript library; `rx::jsValue(json)` — a JS object from JSON. Link `reactx::js` (embind); apps without it don't carry embind.
 - **Demo: Chart.js from C++** (`examples/web_chart.cpp`, on the site's demos page): the data lives in C++ state, the chart is created, updated and destroyed from effects.
 
 ### Changed
 
+- `PropValue` has one more alternative, `PointerHandler`, and `EventData` one more, `PointerEvent`. `TerminalRenderer::focus` now overrides `Renderer::focus`.
 - `PropValue` has one more alternative, `RefHandler`: code that `std::visit`s all of `PropValue` needs a branch for it. `NodeHandle` now lives in `reactx/element.hpp` (still available through `renderer.hpp`).
 
 ### Fixed
@@ -32,6 +26,8 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 - `install.sh` tells how to add `reactx` to PATH for the user's shell (zsh: `~/.zshrc`, fish: `fish_add_path`; before, always `~/.bashrc`, which zsh doesn't read) and prints it last, after the output of `reactx install`.
 - The install command on the site copies as one line: comment lines in it broke in zsh (`command not found: #`).
 - The site's Demos and 404 pages had no side margins on a phone (the text touched the screen edge).
+- `reactx install` checks for `xz` before downloading Emscripten (its archives are `.tar.xz`; without `xz`, as in slim containers, `tar` failed halfway), and when emsdk fails it says what usually causes a `tar` error and how to retry. Found by an AI agent (Grok) building a project.
+- `llms.txt`: `Store::get()` (reading a store outside components), what `NodeRef::get()` gives, and that browser projects don't need GCC 16.
 
 ## [0.8.3] — 2026-10-31
 

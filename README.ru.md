@@ -53,7 +53,7 @@ ReactX стоит выбрать, когда логика уже на C++ (си�
 curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh
 ```
 
-Команда скачивает готовый `reactx` в `~/.local/bin`, затем `reactx install` скачивает компилятор для браузера (Emscripten) и, если в системе их нет, CMake и Ninja в `~/.reactx` — без sudo, как npm. `reactx build` и `reactx dev` находят их сами (без `source emsdk_env.sh`). Нужны `curl`, `git`, `python3` и `tar`; `reactx install --check` показывает, что уже есть. Терминальным приложениям нужен ещё GCC 16+ из пакетного менеджера.
+Команда скачивает готовый `reactx` в `~/.local/bin`, затем `reactx install` скачивает компилятор для браузера (Emscripten) и, если в системе их нет, CMake и Ninja в `~/.reactx` — без sudo, как npm. `reactx build` и `reactx dev` находят их сами (без `source emsdk_env.sh`). Нужны `curl`, `git`, `python3`, `tar` и `xz` (`xz-utils` в Debian/Ubuntu); `reactx install --check` показывает, что уже есть. Терминальным приложениям нужен ещё GCC 16+ из пакетного менеджера.
 
 **Вручную** или на других платформах:
 

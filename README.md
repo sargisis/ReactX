@@ -65,7 +65,7 @@ Choose ReactX when the logic already is C++ (a simulation, a parser, an engine, 
 curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh
 ```
 
-It downloads the prebuilt `reactx` into `~/.local/bin`, then `reactx install` downloads the compiler for the browser (Emscripten) and, if your system lacks them, CMake and Ninja into `~/.reactx` — no sudo, like npm. `reactx build` and `reactx dev` find them on their own (no `source emsdk_env.sh`). It needs `curl`, `git`, `python3` and `tar`; `reactx install --check` shows what is there. Terminal apps also need GCC 16+ from your package manager.
+It downloads the prebuilt `reactx` into `~/.local/bin`, then `reactx install` downloads the compiler for the browser (Emscripten) and, if your system lacks them, CMake and Ninja into `~/.reactx` — no sudo, like npm. `reactx build` and `reactx dev` find them on their own (no `source emsdk_env.sh`). It needs `curl`, `git`, `python3`, `tar` and `xz` (`xz-utils` on Debian/Ubuntu); `reactx install --check` shows what is there. Terminal apps also need GCC 16+ from your package manager.
 
 **By hand**, or on other platforms:
 

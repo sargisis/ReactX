@@ -773,13 +773,18 @@ int cmdInstall(const std::vector<std::string>& args) {
     else std::println("Installing the ReactX tools into {}:", home.string());
 
     // What emsdk and the downloads need from the system: tiny, everywhere.
+    // xz: emsdk's archives are .tar.xz, and tar runs xz to unpack them (slim
+    // containers don't have it, and then tar fails halfway through).
     std::vector<std::string> basics;
-    for (const char* tool : {"curl", "git", "python3", "tar"})
+    for (const char* tool : {"curl", "git", "python3", "tar", "xz"})
         if (!findOnPath(tool)) basics.emplace_back(tool);
     if (!basics.empty()) {
-        std::string list;
-        for (const auto& b : basics) list += (list.empty() ? "" : " ") + b;
-        missing("system", list + " (e.g. sudo apt install " + list + ", or sudo pacman -S " + list + ")");
+        std::string list, apt;
+        for (const auto& b : basics) {
+            list += (list.empty() ? "" : " ") + b;
+            apt += (apt.empty() ? "" : " ") + (b == "xz" ? std::string("xz-utils") : b);
+        }
+        missing("system", list + " (e.g. sudo apt install " + apt + ", or sudo pacman -S " + list + ")");
         if (!check) fail("install: install " + list + " first, then run reactx install again");
     }
 
@@ -855,7 +860,10 @@ int cmdInstall(const std::vector<std::string>& args) {
             fail("install: couldn't download emsdk");
         if (run({(emsdk / "emsdk").string(), "install", emVersion}, emsdk) != 0 ||
             run({(emsdk / "emsdk").string(), "activate", emVersion}, emsdk) != 0)
-            fail("install: emsdk couldn't install Emscripten " + emVersion);
+            fail("install: emsdk couldn't install Emscripten " + emVersion +
+                 ".\n  A tar error usually means a full disk (it needs ~1.5 GB free in " + home.string() +
+                 ") or a broken download: remove " + emsdk.string() + " and run reactx install again." +
+                 "\n  No luck? The image ghcr.io/sargisis/reactx has everything installed.");
         std::println("  (reactx build / dev find this Emscripten on their own: no need to source emsdk_env.sh)");
         ok("emscripten", std::format("{} ({})", emVersion, emsdk.string()));
     }

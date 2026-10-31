@@ -36,7 +36,7 @@ inline const std::vector<Page>& pages() {
                 {"1. Установка (одна строка)",
                  "На Linux (x86-64) всё ставится одной командой. Она скачивает reactx в ~/.local/bin, а затем reactx install "
                  "скачивает компилятор для браузера (Emscripten) и, если в системе их нет, CMake и Ninja в ~/.reactx — без sudo, "
-                 "как npm. Нужны curl, git, python3 и tar, они есть почти в любом Linux.\n\n"
+                 "как npm. Нужны curl, git, python3, tar и xz (xz-utils в Debian/Ubuntu), они есть почти в любом Linux.\n\n"
                  "reactx install --check показывает, что уже есть. Терминальным приложениям нужен ещё GCC 16+ из пакетного "
                  "менеджера. Другие системы — разделы ниже или Docker-образ.",
                  "curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh"},

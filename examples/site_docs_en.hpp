@@ -338,6 +338,19 @@ inline const std::vector<Page>& pagesEn() {
                               "Put it into <div id=\"app\"> at build time and the page shows before the .wasm arrives; mountDom then "
                               "replaces it with the live app, so the first render must draw the same. This site's home page is built so.",
                  "std::string html = renderToString(h(Home));\n// \"<main class=\\\"home\\\"><h1>Hello</h1>...</main>\""},
+                {"Refs and JavaScript", "useNodeRef() gives the real element: pass it as the ref prop and use it in useEffect "
+                                        "(it is set before effects run, and back to 0 when the element goes). rx::domElement "
+                                        "(reactx/js.hpp) turns it into an emscripten::val, the page's own object: call its methods, "
+                                        "read sizes, or hand it to a JavaScript library. rx::jsValue makes a JS object from JSON. "
+                                        "Link the app with reactx::js (it adds embind; other apps don't carry it). The Chart.js demo "
+                                        "shows the whole thing.",
+                 "auto canvas = useNodeRef();\n"
+                 "auto& chart = useRef(emscripten::val::undefined());\n"
+                 "useEffect([canvas, &chart] {\n"
+                 "    chart = emscripten::val::global(\"Chart\").new_(domElement(canvas), jsValue(config));\n"
+                 "    return [&chart] { chart.call<void>(\"destroy\"); };\n"
+                 "}, deps());\n"
+                 "return h(\"canvas\", {{\"ref\", canvas}});"},
                 {"HTML props", "Any HTML tag works. className becomes class, style is a CSS string, value and checked keep "
                                "inputs in sync with your state, everything else becomes an attribute. A checkbox's onChange gets \"true\" or "
                                "\"false\"; rx::boolHandler turns that into a bool.",

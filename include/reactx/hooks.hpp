@@ -207,6 +207,15 @@ T& useRef(T initial = T{}) {
     return detail::checkedHook<detail::RefHook<T>>(slot.hook).value;
 }
 
+// A ref for the "ref" prop of a host element: the same NodeRef on every
+// render. See NodeRef (reactx/element.hpp); in the browser rx::domElement
+// (reactx/js.hpp) turns it into the page's element.
+inline NodeRef useNodeRef() {
+    auto& ref = useRef<NodeRef>();
+    if (ref == NodeRef()) ref = NodeRef::create();
+    return ref;
+}
+
 // An id unique in the app and the same on every render ("rx-7"), for
 // h("label", {{"for", id}}) and aria-* attributes.
 inline std::string useId() {

@@ -805,6 +805,9 @@ Element Demos(const Props&) {
             demo("web_counter.html", tr(en, "Counter", "Счётчик"), tr(en, "useState and events", "useState и события")),
             demo("web_ui_demo.html", tr(en, "rx::ui components", "Компоненты rx::ui"),
                  tr(en, "tabs, a list, an input, a theme, a dialog", "вкладки, список, поле ввода, тема, модальное окно")),
+            demo("web_chart.html", tr(en, "Chart.js from C++", "Chart.js из C++"),
+                 tr(en, "a JavaScript library on C++ state: useNodeRef and rx::domElement",
+                    "JavaScript-библиотека на состоянии из C++: useNodeRef и rx::domElement")),
         }),
     });
 }

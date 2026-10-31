@@ -93,6 +93,13 @@ if(REACTX_HAS_REFLECTION)
   target_compile_options(reactx_reflection INTERFACE -freflection)
   message(STATUS "ReactX: C++26 reflection available (link reactx::reflection)")
 endif()
+# JavaScript from C++ in the browser (reactx/js.hpp: rx::domElement, emscripten::val).
+# Opt-in per target — link reactx::js — so apps without it don't carry embind.
+add_library(reactx_js INTERFACE)
+add_library(reactx::js ALIAS reactx_js)
+if(EMSCRIPTEN)
+  target_link_options(reactx_js INTERFACE -lembind)
+endif()
 option(REACTX_STACKTRACE "Print the call stack when a precondition fails (C++23 <stacktrace>)" ON)
 if(REACTX_STACKTRACE)
   set(_rx_stacktrace_test "#include <stacktrace>\n#include <print>\nint main() { std::println(\"{}\", std::stacktrace::current()); }")
@@ -168,6 +175,16 @@ if(EMSCRIPTEN)
   reactx_web_example(web_counter)
   reactx_web_example(web_todo)
   reactx_web_example(web_ui_demo)
+  # Chart.js from a CDN, loaded before the app: the shell plus one <script>.
+  file(READ ${PROJECT_SOURCE_DIR}/web/shell.html _rx_shell)
+  string(REPLACE "{{{ SCRIPT }}}"
+         "<script src=\"https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js\"></script>\n  {{{ SCRIPT }}}"
+         _rx_shell "${_rx_shell}")
+  file(WRITE ${PROJECT_BINARY_DIR}/chart_shell.html "${_rx_shell}")
+  add_executable(web_chart examples/web_chart.cpp)
+  target_link_libraries(web_chart PRIVATE reactx reactx::js)
+  set_target_properties(web_chart PROPERTIES SUFFIX ".html")
+  target_link_options(web_chart PRIVATE "SHELL:--shell-file ${PROJECT_BINARY_DIR}/chart_shell.html")
 
   # web_app uses web/app_shell.html, the website web/site_shell.html; @REACTX_WEB_BASE@ becomes
   # <base href>: "/" for web_app, REACTX_WEB_BASE for the website.
@@ -214,13 +231,14 @@ if(EMSCRIPTEN)
     COMMAND ${CMAKE_COMMAND} -E copy
             ${PROJECT_BINARY_DIR}/web_counter.html ${PROJECT_BINARY_DIR}/web_counter.js ${PROJECT_BINARY_DIR}/web_counter.wasm
             ${PROJECT_BINARY_DIR}/web_ui_demo.html ${PROJECT_BINARY_DIR}/web_ui_demo.js ${PROJECT_BINARY_DIR}/web_ui_demo.wasm
+            ${PROJECT_BINARY_DIR}/web_chart.html ${PROJECT_BINARY_DIR}/web_chart.js ${PROJECT_BINARY_DIR}/web_chart.wasm
             ${PROJECT_BINARY_DIR}/site/
     # The API summary for AI assistants: https://sargisis.github.io/ReactX/llms.txt
     COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_SOURCE_DIR}/llms.txt ${PROJECT_BINARY_DIR}/site/
     # The installer: curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh
     COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_SOURCE_DIR}/install.sh ${PROJECT_BINARY_DIR}/site/
     COMMAND ${CMAKE_COMMAND} -E touch ${PROJECT_BINARY_DIR}/site/.nojekyll
-    DEPENDS website site_prerender web_counter web_ui_demo ${PROJECT_SOURCE_DIR}/llms.txt ${PROJECT_SOURCE_DIR}/install.sh
+    DEPENDS website site_prerender web_counter web_ui_demo web_chart ${PROJECT_SOURCE_DIR}/llms.txt ${PROJECT_SOURCE_DIR}/install.sh
     COMMENT "Assembling the website in ${PROJECT_BINARY_DIR}/site")
   # Start page with links to the demos (http://localhost:8090/).
   configure_file(${PROJECT_SOURCE_DIR}/web/index.html ${PROJECT_BINARY_DIR}/index.html COPYONLY)
@@ -236,7 +254,7 @@ if(EMSCRIPTEN)
   add_test(NAME reactx_parse_tests COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} $<TARGET_FILE:reactx_parse_tests>)
 
   add_executable(reactx_dom_tests tests/test_dom.cpp)
-  target_link_libraries(reactx_dom_tests PRIVATE reactx)
+  target_link_libraries(reactx_dom_tests PRIVATE reactx reactx::js)
   target_link_options(reactx_dom_tests PRIVATE
     "SHELL:--pre-js ${PROJECT_SOURCE_DIR}/tests/web/fake_dom.js" "SHELL:-sENVIRONMENT=node")
   set_property(TARGET reactx_dom_tests APPEND PROPERTY LINK_DEPENDS ${PROJECT_SOURCE_DIR}/tests/web/fake_dom.js)

@@ -38,9 +38,24 @@ Don't invent anything that isn't there.
 - **Like React, but C++.** Components are plain functions, state lives in hooks, and a reconciler with keys and batched updates applies the changes.
 - **One codebase, two worlds.** A terminal (ANSI, Flexbox on Yoga, focus, keyboard) and a browser (WebAssembly + DOM). The ready-made `rx::ui` components look at home in both.
 - **Types catch mistakes.** Props are your own struct: `h(Counter, {.start = 5})`. A typo in a field name or a wrong type is found by the compiler, not by your users.
-- **The whole stack in C++.** A router, `useFetch`, its own JSON (with C++26 reflection), an HTTP server and the `reactx` CLI — no Node, npm or webpack. A counter in the browser is a 91 KB `.wasm` (40 KB over the network, gzip).
+- **The whole stack in C++.** A router, `useFetch`, its own JSON (with C++26 reflection), an HTTP server and the `reactx` CLI — no Node, npm or webpack. A counter in the browser is a 93 KB `.wasm` (41 KB over the network, gzip).
 - **Modern, strict C++.** C++26 contracts, `std::expected` for errors, a hardened standard library; every push runs under ASan, UBSan and ThreadSanitizer.
 - **This site is built with ReactX too:** [sargisis.github.io/ReactX](https://sargisis.github.io/ReactX/).
+
+### ReactX or Preact?
+
+If you write a web app and your team writes JavaScript, take Preact (or React): it is smaller and its ecosystem is huge. ReactX is for the cases where C++ is the point.
+
+| | ReactX | Preact |
+|---|---|---|
+| A counter app, over the network (gzip) | ~47 KB (41 KB `.wasm` + 6 KB `.js`) | ~5 KB (the library and hooks are ~4–5 KB) |
+| Before the first paint | the `.wasm` is downloaded and compiled; prerendering (`renderToString`, below) hides it | the JS is parsed and run |
+| Language, types | C++26: props are structs the compiler checks | JavaScript / TypeScript |
+| Also runs in a terminal | yes, the same components | no |
+| JavaScript libraries | through `useNodeRef` + `rx::domElement` ([Chart.js demo](examples/web_chart.cpp)) | directly, npm |
+| Server rendering | `renderToString` (no hydration yet) | `preact-render-to-string` + hydration |
+
+Choose ReactX when the logic already is C++ (a simulation, a parser, an engine, code shared with a desktop or embedded program), when one UI should run both in a terminal and in a browser, or when the team writes C++ and doesn't want a JavaScript toolchain. Measured on this repository's `web_counter` (Release, `-Oz`); the Preact number is the size its authors publish.
 
 ## Quick start
 
@@ -156,7 +171,7 @@ For a terminal: `#include "reactx/terminal.hpp"` and `TerminalApp().run(h(App))`
 | | |
 |---|---|
 | **Core** | `h()` elements, fragments, keys; function components; props structs; a reconciler that reuses nodes; batched updates |
-| **Hooks** | `useState`, `useEffect`, `useRef`, `useMemo`, `useCallback`, `useContext`, `useReducer`, `useStore`, `useId`, `useTimeout`, `useInterval`, `useKeyboard`, `useDebounce`, `useLocalStorage`, `useWindowSize`, `memo<C>`, `errorBoundary` |
+| **Hooks** | `useState`, `useEffect`, `useRef`, `useNodeRef`, `useMemo`, `useCallback`, `useContext`, `useReducer`, `useStore`, `useId`, `useTimeout`, `useInterval`, `useKeyboard`, `useDebounce`, `useLocalStorage`, `useWindowSize`, `memo<C>`, `errorBoundary` |
 | **Events** | `onClick`, `onInput`, `onChange`, `onKey`, `onSubmit`, `onFocus`, `onBlur`, `onScroll`; bubbling like in React |
 | **Terminal** | ANSI drawing of changed lines only, Flexbox on Yoga, borders, colors, focus, Unicode/ASCII by locale |
 | **Browser** | WebAssembly + DOM, controlled inputs, SVG, event delegation |
@@ -291,6 +306,18 @@ The [`DomRenderer`](include/reactx/dom.hpp) backend renders into the real DOM: t
 | `svg`, `rect`, `circle`, `path`, `g`, … | SVG in its own namespace; `svg:text`, `svg:a` for the tags HTML also has |
 | `data-rx-self` | the element only gets clicks on itself, not on its children (dialog backdrops) |
 | `data-rx-trap` | Tab stays inside the element; it takes focus when it appears and gives it back when removed |
+
+**Refs and JavaScript.** `useNodeRef()` gives the element itself: pass it as `{"ref", ref}` and use it in `useEffect` (it is set before effects run, and back to `0` when the element goes; any `RefHandler` works as a callback ref). In the browser [`reactx/js.hpp`](include/reactx/js.hpp) turns it into an `emscripten::val`: `rx::domElement(ref).call<void>("focus")`, or hand it to a JavaScript library; `rx::jsValue(json)` makes a JS object from JSON. Link with `reactx::js` (it adds embind, ~12 KB of JS; apps without it don't carry it). The demo [`examples/web_chart.cpp`](examples/web_chart.cpp) drives Chart.js from C++ state:
+
+```cpp
+auto canvas = useNodeRef();
+auto& chart = useRef(emscripten::val::undefined());
+useEffect([canvas, &chart] {
+    chart = emscripten::val::global("Chart").new_(domElement(canvas), jsValue(config));
+    return [&chart] { chart.call<void>("destroy"); };
+}, deps());
+return h("canvas", {{"ref", canvas}});
+```
 
 **Prerendering.** `rx::renderToString(h(Home))` ([`reactx/html.hpp`](include/reactx/html.hpp)) returns the HTML of components without a browser; effects don't run. Put it into the page's `<div id="app">` at build time and the page shows before the `.wasm` arrives; `mountDom` then replaces it with the live app (no hydration yet, so the first render must draw the same). The ReactX site does this for its home page: see `site_prerender` in `CMakeLists.txt`, a build of `examples/site.cpp` run under Node.
 

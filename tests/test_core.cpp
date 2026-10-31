@@ -563,6 +563,56 @@ TEST(dsl_tag_builder_and_literals) {
     CHECK(r.toString().find("Some text") != std::string::npos);
 }
 
+// ---- ref ----
+
+NodeHandle refSeenInEffect = 0;
+NodeRef lastRef;
+
+struct RefBoxProps {
+    bool show = true;
+    std::string name = "a";  // the box's key ("key" here would key the component itself)
+};
+
+Element RefBox(const RefBoxProps& p) {
+    auto ref = useNodeRef();
+    lastRef = ref;
+    useEffect([ref] { refSeenInEffect = ref.get(); }, deps(p.show, p.name));
+    if (!p.show) return h("text", {}, {"none"});
+    return h("box", {{"key", p.name}, {"id", "target-" + p.name}, {"ref", ref}});
+}
+
+TEST(node_ref_gets_the_node_before_effects_and_zero_on_removal) {
+    TextRenderer r;
+    Root root(r);
+    root.render(h(RefBox, {}));
+    NodeRef first = lastRef;
+    CHECK(lastRef.get() == byId(r, "target-a"));
+    CHECK(refSeenInEffect == lastRef.get());  // effects run after refs
+
+    root.render(h(RefBox, {.name = "b"}));  // another key: a new node gets the same ref
+    CHECK(lastRef == first);
+    CHECK(lastRef.get() == byId(r, "target-b"));
+    CHECK(refSeenInEffect == byId(r, "target-b"));
+
+    root.render(h(RefBox, {.show = false}));
+    CHECK(!lastRef && lastRef.get() == 0);
+    CHECK(refSeenInEffect == 0);
+    CHECK(r.toString().find("ref") == std::string::npos);  // never sent to the backend
+}
+
+TEST(callback_ref_is_called_with_the_node_and_zero) {
+    std::vector<NodeHandle> calls;
+    TextRenderer r;
+    {
+        Root root(r);
+        root.render(h("box", {{"id", "x"}, {"ref", RefHandler([&](NodeHandle n) { calls.push_back(n); })}}));
+        CHECK(calls.size() == 1 && calls[0] == byId(r, "x"));
+        root.render(h("box", {{"id", "x"}}));  // ref removed
+        CHECK(calls.size() == 2 && calls[1] == 0);
+    }
+    CHECK(calls.size() == 2);  // destroying the Root doesn't call it again
+}
+
 // ---- renderToString ----
 
 TEST(render_to_string_props_and_escaping) {

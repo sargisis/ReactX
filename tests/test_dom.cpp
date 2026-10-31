@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "reactx/dom.hpp"
+#include "reactx/js.hpp"
 #include "reactx/reactx.hpp"
 
 using namespace rx;
@@ -86,6 +87,19 @@ Element App(const Props&) {
     });
 }
 
+// useNodeRef + domElement: the C++ side reaches the real element.
+std::string refTag;
+
+Element RefProbe(const Props&) {
+    auto box = useNodeRef();
+    useEffect([box] {
+        emscripten::val el = domElement(box);
+        refTag = el.isUndefined() ? "undefined" : el["tagName"].as<std::string>() + "#" + el.call<std::string>("getAttribute", std::string("id"));
+        el.call<void>("setAttribute", std::string("data-seen"), std::string("yes"));
+    }, deps());
+    return h("section", {{"id", "probe"}, {"ref", box}});
+}
+
 }  // namespace
 
 int main() {
@@ -157,6 +171,11 @@ int main() {
     CHECK(js("document.getElementById('evil').getAttribute('href')") == "about:blank#blocked");
     CHECK(js("document.getElementById('pic').getAttribute('src')") == "about:blank#blocked");
     CHECK(js("document.getElementById('fine').getAttribute('href')") == "/javascript:notes");
+
+    std::cout << "a ref gives the real element to C++ (reactx/js.hpp)\n";
+    mountDom(h(RefProbe));  // replaces the app above: the last check
+    CHECK(refTag == "SECTION#probe");
+    CHECK(has("data-seen=\"yes\""));
 
     std::cout << (failures ? "FAILED: " + std::to_string(failures) : std::string("OK, all tests passed")) << '\n';
     return failures ? 1 : 0;

@@ -25,10 +25,7 @@ inline const std::vector<Page>& pagesEn() {
                  "Ninja into ~/.reactx — no sudo, like npm. It needs curl, git, python3 and tar, which almost every Linux has.\n\n"
                  "reactx install --check shows what is there. Terminal apps also need GCC 16+ from your package manager. "
                  "Other systems: the sections below or the Docker image.",
-                 "curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh\n\n"
-                 "# later, to check or to finish:\n"
-                 "reactx install --check\n"
-                 "reactx install"},
+                 "curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh"},
                 {"Install by hand: Arch Linux",
                  "On Arch Linux, compiler and build tools can be installed via pacman in a single command:\n\n"
                  "- GCC 16, CMake, Ninja, and Git\n"

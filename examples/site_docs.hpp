@@ -39,10 +39,7 @@ inline const std::vector<Page>& pages() {
                  "как npm. Нужны curl, git, python3 и tar, они есть почти в любом Linux.\n\n"
                  "reactx install --check показывает, что уже есть. Терминальным приложениям нужен ещё GCC 16+ из пакетного "
                  "менеджера. Другие системы — разделы ниже или Docker-образ.",
-                 "curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh\n\n"
-                 "# потом — проверить или доустановить:\n"
-                 "reactx install --check\n"
-                 "reactx install"},
+                 "curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh"},
                 {"Установка вручную: Arch Linux",
                  "В Arch Linux компилятор и инструменты сборки ставятся через pacman одной командой:\n\n"
                  "- Компилятор GCC 16, CMake, Ninja и Git\n"

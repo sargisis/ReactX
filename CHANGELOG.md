@@ -6,6 +6,11 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Fixed
+
+- `install.sh` tells how to add `reactx` to PATH for the user's shell (zsh: `~/.zshrc`, fish: `fish_add_path`; before, always `~/.bashrc`, which zsh doesn't read) and prints it last, after the output of `reactx install`.
+- The install command on the site copies as one line: comment lines in it broke in zsh (`command not found: #`).
+
 ## [0.8.3] — 2026-10-31
 
 Pages that show before the WebAssembly arrives: `rx::renderToString` renders components to HTML without a browser, and the site's home page is prerendered with it (LCP on a throttled phone ~1.2 s → ~0.3 s). Apps update without changes; `mountDom` now replaces what the container showed (see Changed).

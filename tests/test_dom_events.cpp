@@ -25,6 +25,7 @@ int failures = 0;
 
 std::string js(const std::string& code) { return emscripten_run_script_string(code.c_str()); }
 std::string log() { return js("document.querySelector('#log').textContent"); }
+NodeRef listRef;  // the #list element, for scrollMetrics / scrollTo
 void clearLog() { js("rxTest.click('clear')"); }
 
 Element App(const Props&) {
@@ -43,12 +44,14 @@ Element App(const Props&) {
         }
         return false;
     });
+    auto list = useNodeRef();
+    listRef = list;
     return h("div", {}, {
         h("input", {{"id", "field"}, {"value", ""},
                     {"onFocus", [add] { add("focus"); }},
                     {"onBlur", [add] { add("blur"); }},
                     {"onKey", [add](const KeyEvent& k) { add("field:" + k.key); }}}),
-        h("div", {{"id", "list"},
+        h("div", {{"id", "list"}, {"ref", list},
                   {"onScroll", [add](const ScrollEvent& e) {
                        add("scroll:" + std::to_string(e.top) + (e.nearBottom() ? ":end" : ""));
                    }}},
@@ -95,6 +98,13 @@ int main() {
     js("rxTest.scroll('row', 10, 100, 50)");  // the <p> has no onScroll and scroll doesn't bubble
     CHECK(log() == "scroll:300 scroll:1450:end ");
     clearLog();
+
+    std::cout << "ref.scrollMetrics / scrollTo / scrollBy\n";
+    auto m = listRef.scrollMetrics();
+    CHECK(m && m->top == 1450 && m->scrollHeight == 2000 && m->clientHeight == 500);
+    CHECK(listRef.scrollTo(100) && js("String(document.getElementById('list').scrollTop)") == "100");
+    CHECK(listRef.scrollBy(40) && js("String(document.getElementById('list').scrollTop)") == "140");
+    CHECK(!NodeRef{}.scrollMetrics() && !NodeRef{}.scrollTo(0));  // an empty ref
 
     std::cout << "SVG elements get the SVG namespace\n";
     CHECK(js("rxTest.ns('chart')") == svg);

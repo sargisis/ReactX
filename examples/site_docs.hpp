@@ -360,7 +360,9 @@ inline const std::vector<Page>& pages() {
                  "h(\"input\", {{\"value\", email}, {\"onBlur\", [validate] { validate(); }}})"},
                 {"Прокрутка", "onScroll получает ScrollEvent: top, scrollHeight, clientHeight и др. (в браузере пиксели, в "
                               "терминале строки у box с overflow: \"scroll\"); nearBottom() — пора подгружать ещё. Не всплывает: "
-                              "срабатывает только у прокручиваемого элемента. ref.scrollIntoView() показывает элемент.",
+                              "срабатывает только у прокручиваемого элемента. ref.scrollIntoView() показывает элемент ({\"scrollIntoView\", selected} "
+                              "без ref); ref.scrollMetrics(), scrollTo(top) и scrollBy(delta) читают и двигают прокрутку — например, "
+                              "чтобы читатель не потерял место, когда сверху приходят старые сообщения.",
                  "h(\"div\", {{\"style\", \"height: 400px; overflow: auto\"},\n"
                  "            {\"onScroll\", [loadMore](const ScrollEvent& e) { if (e.nearBottom()) loadMore(); }}}, rows)"},
             },
@@ -394,10 +396,11 @@ inline const std::vector<Page>& pages() {
                 {"mountDom", "Монтирует приложение в <div id=\"app\"> страницы (заменяя то, что там было: текст загрузки, пререндер) "
                              "и живёт после main().",
                  "int main() { mountDom(h(App)); }"},
-                {"Пререндер", "rx::renderToString (reactx/html.hpp) даёт HTML компонентов без браузера; эффекты не запускаются. "
-                              "Вставьте его в <div id=\"app\"> при сборке — и страница видна до загрузки .wasm; потом mountDom "
-                              "заменяет его живым приложением, так что первый рендер должен рисовать то же. Так сделана главная этого сайта.",
-                 "std::string html = renderToString(h(Home));\n// \"<main class=\\\"home\\\"><h1>Hello</h1>...</main>\""},
+                {"Пререндер", "Перечислите маршруты в reactx.json — и страница видна до загрузки .wasm: reactx build запускает ту же "
+                              "программу под Node, где mountDom пишет HTML каждого маршрута (renderToString) в dist/index.html, "
+                              "dist/docs/faq.html, … и завершается. Код менять не нужно; эффекты там не запускаются. В браузере mountDom "
+                              "заменяет его живым приложением (без гидратации). Остальные маршруты получают 404.html / 200.html — пустую страницу.",
+                 "\"web\": { \"base\": \"/\", \"prerender\": [\"/\", \"/docs/faq\"] }"},
                 {"Мышь, касания и перетаскивание", "onPointerDown, onPointerMove и onPointerUp получают PointerEvent: x и y в окне, "
                                           "localX и localY от угла элемента, button, buttons и type (mouse, touch, pen). "
                                           "onMouseEnter и onMouseLeave следят за указателем и не всплывают. Те же обработчики работают в "

@@ -145,6 +145,9 @@ public:
     // ---- scrolling (overflow="scroll" boxes) ----
     // Scroll the boxes around `node` so it is visible (NodeRef::scrollIntoView).
     bool scrollIntoView(NodeHandle node) override;
+    // An overflow="scroll" box's position and sizes in rows (NodeRef::scrollMetrics), and moving it.
+    std::optional<ScrollEvent> scrollMetrics(NodeHandle box) override;
+    bool scrollTo(NodeHandle box, int top) override;
     // How far a scroll box is scrolled, in rows (0 = top).
     int scrollTop(NodeHandle box) const;
     // Scroll a box by `rows` (negative = up), within its content. True if it moved.

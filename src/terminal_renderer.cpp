@@ -1015,6 +1015,20 @@ bool TerminalRenderer::scrollBy(NodeHandle box, int rows) {
     return true;
 }
 
+std::optional<ScrollEvent> TerminalRenderer::scrollMetrics(NodeHandle box) {
+    auto it = scrollBoxes_.find(box);
+    if (it == scrollBoxes_.end()) return std::nullopt;
+    const ScrollBox& b = it->second;
+    return ScrollEvent{.top = scrollTop(box), .left = 0, .scrollHeight = b.content, .scrollWidth = b.width,
+                       .clientHeight = b.viewport, .clientWidth = b.width};
+}
+
+bool TerminalRenderer::scrollTo(NodeHandle box, int top) {
+    if (!scrollBoxes_.contains(box)) return false;
+    scrollBy(box, top - scrollTop(box));
+    return true;
+}
+
 bool TerminalRenderer::scrollIntoView(NodeHandle node) {
     if (!findNode(node)) return false;
     scrollRequest_ = node;

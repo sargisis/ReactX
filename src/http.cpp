@@ -613,6 +613,7 @@ Response HttpServer::handle(const Request& req) const {
         if (auto page = readFile(root_ / notFound_)) {
             Response r = Response::html(std::move(*page), 404);
             r.contentType = mimeType(notFound_.extension().string());
+            if (onFile_) onFile_(root_ / notFound_, r);
             return r;
         }
     }
@@ -636,10 +637,18 @@ std::optional<Response> HttpServer::serveFile(const Request& req) const {
     if (ec || !inside(root_, target)) return Response::text("forbidden\n", 403);  // "../" tricks
     if (fs::is_directory(target, ec)) target /= "index.html";
 
+    bool looksLikeRoute = fs::path(urlPath).extension().empty();
+    if (!fs::is_regular_file(target, ec) && looksLikeRoute) {
+        // "/docs/faq" -> docs/faq.html, like GitHub Pages (prerendered routes).
+        fs::path page = target;
+        page += ".html";
+        if (inside(root_, page) && fs::is_regular_file(page, ec)) target = page;
+    }
     if (!fs::is_regular_file(target, ec)) {
-        bool looksLikeRoute = fs::path(urlPath).extension().empty();
         if (!spaFallback_ || !looksLikeRoute) return std::nullopt;
-        target = root_ / "index.html";
+        // 200.html: the app without a prerendered page in it (index.html may show the home page).
+        target = root_ / "200.html";
+        if (!fs::is_regular_file(target, ec)) target = root_ / "index.html";
         if (!fs::is_regular_file(target, ec)) return std::nullopt;
     }
 
@@ -649,6 +658,7 @@ std::optional<Response> HttpServer::serveFile(const Request& req) const {
     r.body = std::move(*body);
     r.contentType = mimeType(target.extension().string());
     r.headers.emplace_back("Cache-Control", "no-cache");
+    if (onFile_) onFile_(target, r);
     return r;
 }
 

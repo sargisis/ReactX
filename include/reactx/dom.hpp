@@ -69,6 +69,8 @@ public:
     void destroyNode(NodeHandle node) override;
     bool focus(NodeHandle node) override;
     bool scrollIntoView(NodeHandle node) override;
+    std::optional<ScrollEvent> scrollMetrics(NodeHandle node) override;
+    bool scrollTo(NodeHandle node, int top) override;
 
 private:
     NodeHandle root_;
@@ -78,7 +80,23 @@ private:
 // Mounts `element` into the page element matching `container` and keeps it
 // running after main() returns (a web page has no main loop). Returns the Root,
 // e.g. to call render() again later.
+//
+// Prerendering: list routes in reactx.json ("web": {"prerender": ["/", "/docs/faq"]})
+// and the build runs the same program under Node, where mountDom writes the
+// HTML of each route (renderToString) into dist/index.html, dist/docs/faq.html,
+// ... and exits. The page shows before the .wasm arrives; then mountDom
+// replaces it with the live app (no hydration). Code before mountDom must not
+// need a page (document, window).
 Root& mountDom(Element element, const std::string& container = "#app");
+
+namespace detail {
+// Extra <head> markup for prerendered pages (rx::ui adds its CSS here).
+void addPrerenderHead(const std::string& html);
+std::string& prerenderHead();
+// Writes the pages for `--reactx-prerender` (src/prerender.cpp sets it).
+using Prerenderer = int (*)(const Element& app, const std::string& args);
+Prerenderer& prerenderer();
+}  // namespace detail
 
 // Re-renders every mounted app whose state changed outside of a DOM event
 // (a fetch answer, the Back button, a timer). The router and useFetch call it.

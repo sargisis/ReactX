@@ -452,6 +452,38 @@ TEST(page_down_scrolls_while_typing_in_an_input) {
     CHECK(s.renderer.scrollTop(byId(s, "box")) > 0);
 }
 
+// Keep the reader's place when rows are added above (a chat loading older messages).
+Element Prepend(const Props&) {
+    auto [rows, setRows] = useState(20);
+    auto box = useNodeRef();
+    auto& before = useRef(std::optional<ScrollEvent>{});
+    useEffect([box, &before] {
+        if (auto now = box.scrollMetrics(); now && before) box.scrollBy(now->scrollHeight - before->scrollHeight);
+    }, deps(rows));
+    std::vector<Element> lines;
+    for (int i = 100 - rows; i < 100; ++i) lines.push_back(h("text", {{"key", std::to_string(i)}}, {"msg " + std::to_string(i)}));
+    return h("box", {{"flexGrow", 1}}, {
+        h("button", {{"id", "older"}, {"onClick", [setRows, box, &before] {
+             before = box.scrollMetrics();
+             setRows([](int r) { return r + 10; });
+         }}}, {"older"}),
+        h("box", {{"overflow", "scroll"}, {"id", "box"}, {"ref", box}}, std::move(lines)),
+    });
+}
+
+TEST(scroll_metrics_keep_the_place_when_rows_come_above) {
+    Screen s(h(Prepend));  // 40x12: the box shows 11 of 20 rows
+    NodeHandle box = byId(s, "box");
+    auto m = s.renderer.scrollMetrics(box);
+    CHECK(m && m->top == 0 && m->scrollHeight == 20 && m->clientHeight == 11);
+    CHECK(s.renderer.scrollTo(box, 2) && s.renderer.scrollTop(box) == 2);
+    CHECK(contains(s.text(), "msg 82") && !contains(s.text(), "msg 81"));
+    s.root.dispatch(byId(s, "older"), "onClick");  // 10 rows above
+    CHECK(s.renderer.scrollTop(box) == 12);       // the same rows are still on screen
+    CHECK(contains(s.text(), "msg 82") && !contains(s.text(), "msg 81"));
+    CHECK(!s.renderer.scrollMetrics(byId(s, "older")));  // not a scroll box
+}
+
 TEST(scroll_clamps_when_the_content_shrinks) {
     Element (*app)(const Props&) = [](const Props&) -> Element {
         auto [rows, set] = useState(30);

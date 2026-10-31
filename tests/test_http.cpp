@@ -93,6 +93,7 @@ struct Site {
         fs::remove(root.parent_path() / "reactx_http_secret.txt", ec);
     }
     void write(const std::string& name, const std::string& data) const {
+        std::filesystem::create_directories((root / name).parent_path());
         std::ofstream(root / name, std::ios::binary) << data;
     }
 };
@@ -217,6 +218,29 @@ TEST(spa_fallback) {
     Running r([&](HttpServer& s) { s.serveDirectory(site.root, true); });
     CHECK(request(r.port(), "GET", "/todos/42").body == "<h1>home</h1>");  // a route: index.html
     CHECK(request(r.port(), "GET", "/missing.js").status == 404);        // a file: still 404
+    site.write("docs/faq.html", "<p>faq</p>");                          // a prerendered route
+    CHECK(request(r.port(), "GET", "/docs/faq").body == "<p>faq</p>");
+    site.write("200.html", "<p>app</p>");                               // a prerendered site's empty page
+    CHECK(request(r.port(), "GET", "/todos/42").body == "<p>app</p>");
+    CHECK(request(r.port(), "GET", "/").body == "<h1>home</h1>");
+}
+
+TEST(on_file_changes_served_files) {
+    Site site;
+    site.write("404.html", "<p>gone</p>");
+    Running r([&](HttpServer& s) {
+        s.serveDirectory(site.root, true);
+        s.setNotFoundPage("404.html");
+        s.onFile([](const std::filesystem::path& file, Response& res) {
+            if (res.contentType.starts_with("text/html")) res.body += "<!--dev-->";
+            if (file.extension() == ".wasm") res.headers.emplace_back("X-Kind", "wasm");
+        });
+    });
+    auto home = request(r.port(), "GET", "/");
+    CHECK(home.body == "<h1>home</h1><!--dev-->" && home.hasHeader("Content-Length: 23"));  // the length follows the body
+    CHECK(request(r.port(), "GET", "/todos/1").body == "<h1>home</h1><!--dev-->");       // SPA fallback too
+    CHECK(request(r.port(), "GET", "/app.wasm").hasHeader("X-Kind: wasm"));
+    CHECK(request(r.port(), "GET", "/missing.js").body == "<p>gone</p><!--dev-->");      // the not-found page too
 }
 
 TEST(prefix_and_not_found_page_like_github_pages) {

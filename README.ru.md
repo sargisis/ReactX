@@ -315,7 +315,7 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 | `data-rx-self` | элемент получает только клики по себе, не по детям (фон окна) |
 | `data-rx-trap` | Tab не выходит из элемента; при появлении он забирает фокус, при удалении — возвращает |
 
-**Мышь, касания и перетаскивание.** `onPointerDown` / `onPointerMove` / `onPointerUp` получают `PointerEvent` (`x`, `y` и `localX`, `localY` от угла элемента), `onMouseEnter` / `onMouseLeave` следят за указателем; те же обработчики работают в терминале — там `TerminalApp` включает мышь (клетки вместо пикселей; `app.setMouse(false)` оставляет её терминалу). `{"pointerCapture", true}` после нажатия держит движения и отпускание на элементе, даже за его пределами (слайдеры); без него их получает то, что под указателем (куда бросают). `ref.focus()` переводит фокус клавиатуры из кода, `ref.scrollIntoView()` прокручивает элемент на виду (оба бэкенда). Демо-канбан [`examples/kanban.cpp`](examples/kanban.cpp) — один исходник для обоих:
+**Мышь, касания и перетаскивание.** `onPointerDown` / `onPointerMove` / `onPointerUp` получают `PointerEvent` (`x`, `y` и `localX`, `localY` от угла элемента), `onMouseEnter` / `onMouseLeave` следят за указателем; те же обработчики работают в терминале — там `TerminalApp` включает мышь (клетки вместо пикселей; `app.setMouse(false)` оставляет её терминалу). `{"pointerCapture", true}` после нажатия держит движения и отпускание на элементе, даже за его пределами (слайдеры); без него их получает то, что под указателем (куда бросают). `ref.focus()` переводит фокус клавиатуры из кода, `ref.scrollIntoView()` прокручивает элемент на виду (или `{"scrollIntoView", selected}` на самом элементе, без ref), а у контейнера с прокруткой `ref.scrollMetrics()` / `scrollTo(top)` / `scrollBy(delta)` читают и двигают позицию — чтобы читатель не потерял место, когда сверху приходят старые сообщения, сделайте `scrollBy` на прирост `scrollHeight` (оба бэкенда). Демо-канбан [`examples/kanban.cpp`](examples/kanban.cpp) — один исходник для обоих:
 
 ```cpp
 h("div", {{"className", "card"}, {"onPointerDown", [setDragging, id](const PointerEvent&) { setDragging(id); }}}, {title}),
@@ -336,7 +336,13 @@ useEffect([canvas, &chart] {
 return h("canvas", {{"ref", canvas}});
 ```
 
-**Пререндер.** `rx::renderToString(h(Home))` ([`reactx/html.hpp`](include/reactx/html.hpp)) возвращает HTML компонентов без браузера; эффекты не запускаются. Вставьте его в `<div id="app">` страницы при сборке — и страница видна до загрузки `.wasm`; потом `mountDom` заменяет его живым приложением (гидратации пока нет, так что первый рендер должен рисовать то же самое). Так сделана главная страница сайта ReactX: см. `site_prerender` в `CMakeLists.txt` — сборку `examples/site.cpp`, которая запускается под Node.
+**Пререндер.** Перечислите маршруты в `reactx.json` — и страница будет видна до загрузки `.wasm` (а поисковики увидят текст):
+
+```json
+"web": { "base": "/", "prerender": ["/", "/docs/faq"] }
+```
+
+`reactx build` тогда запускает ту же программу ещё и под Node, где `mountDom` вместо монтирования пишет HTML каждого маршрута в `dist/index.html`, `dist/docs/faq.html`, … (вместе с CSS `rx::ui`); код менять не нужно. В браузере `mountDom` заменяет его живым приложением (гидратации пока нет). Эффекты при пререндере не запускаются, а код до `mountDom` не должен трогать `document` и `window`. Остальные маршруты получают `404.html` / `200.html` — страницу без содержимого: GitHub Pages берёт первую, хостинги, которые переписывают любой путь, стоит направить на `/200.html`; `HttpServer::serveDirectory` отдаёт `/docs/faq` из `docs/faq.html` и в остальных случаях — `200.html`. В основе — `rx::renderToString(h(Home))` ([`reactx/html.hpp`](include/reactx/html.hpp)): HTML компонентов без страницы. Вызывайте его в браузерной сборке или под Node: нативная сборка рисует `ui::` и `router::link` в терминальном виде.
 
 ```sh
 cmake --preset web && cmake --build --preset web

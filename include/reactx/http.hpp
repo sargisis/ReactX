@@ -112,9 +112,11 @@ public:
     //   server.proxy("/api", *parseUpstream("http://127.0.0.1:5000"));
     void proxy(std::string prefix, Upstream upstream);
 
-    // Serve files from `root` for GET and HEAD ("/" -> index.html).
-    // spaFallback: unknown paths without a file extension get index.html,
-    // so a client-side router can handle them.
+    // Serve files from `root` for GET and HEAD ("/" -> index.html, "/docs/faq"
+    // -> docs/faq.html if there is one, like GitHub Pages).
+    // spaFallback: unknown paths without a file extension get 200.html if there
+    // is one (a prerendered site's empty page), else index.html, so a
+    // client-side router can handle them.
     void serveDirectory(std::filesystem::path root, bool spaFallback = false);
     // Serve the files under a URL prefix: "/ReactX" -> /ReactX/index.html is
     // root/index.html (like a GitHub Pages project site).
@@ -122,6 +124,14 @@ public:
     // For GET requests that match nothing: this file (relative to the root)
     // with status 404, like GitHub Pages' 404.html.
     void setNotFoundPage(std::filesystem::path file);
+
+    // Called for every file served from the directory (and the not-found page)
+    // before it is sent: change its body or headers. Set it before start().
+    //   server.onFile([](const std::filesystem::path& file, Response& r) {
+    //       if (file.extension() == ".wasm") r.headers.emplace_back("Cache-Control", "max-age=3600");
+    //   });
+    using FileHook = std::function<void(const std::filesystem::path& file, Response& response)>;
+    void onFile(FileHook hook) { onFile_ = std::move(hook); }
 
     // Print one line per request ("GET /app.wasm 200 145765").
     void setLogging(bool on) { logging_ = on; }
@@ -154,6 +164,7 @@ private:
     bool spaFallback_ = false;
     std::string prefix_;
     std::filesystem::path notFound_;
+    FileHook onFile_;
 };
 
 // Content type for a file extension (".wasm" -> "application/wasm").

@@ -581,6 +581,16 @@ Native builds need GCC 16+; web builds need Emscripten: `reactx install` downloa
   `root.dispatch(node, "onClick")` and check `renderer.toString()`.
 )md";
 
+// `reactx dev` puts this into every page it serves (HttpServer::onFile).
+constexpr std::string_view kReloadScript = R"html(<script>
+(function poll(version) {
+  fetch("__reactx/version", { cache: "no-store" })
+    .then(function (r) { if (!r.ok) throw 0; return r.text(); })
+    .then(function (v) { if (!/^[0-9]+$/.test(v)) return; if (version && v !== version) location.reload(); else setTimeout(function () { poll(v); }, 700); })
+    .catch(function () { setTimeout(function () { poll(version); }, 1500); });
+})("");
+</script>)html";
+
 // ---- commands ----
 
 // The Emscripten folder for .vscode/settings.json: ${env:EMSDK} when the
@@ -634,7 +644,8 @@ int cmdNew(const std::vector<std::string>& args) {
                                : "\n- The browser build has no threads, sockets or files, and no C++26 reflection or"
                                  "\n  `std::generator`. Events: onClick, onInput/onChange, onKey, onSubmit, onFocus/onBlur,"
                                  "\n  onScroll, onPointerDown/Move/Up, onMouseEnter/Leave."
-                                 "\n- Styles live in `public/style.css`."
+                                 "\n- Styles live in `public/style.css`. Pages that should show before the .wasm loads:"
+                                 "\n  `\"web\": {\"prerender\": [\"/\", \"/about\"]}` in reactx.json (code before `mountDom` must not touch `document`)."
                                  "\n- Tests run natively: keep components in their own file (not `main.cpp`, which calls"
                                  "\n  `mountDom`), add `if(NOT EMSCRIPTEN) add_executable(app_tests tests/app_tests.cpp src/app.cpp)`"
                                  "\n  + `target_link_libraries(app_tests PRIVATE reactx::reactx) endif()` to CMakeLists.txt and build"
@@ -1081,6 +1092,15 @@ int cmdDev(const std::vector<std::string>& args) {
     }
     for (const auto& [prefix, upstream] : proxies) server.proxy(prefix, upstream);
     server.serveDirectory(root / "build/web/dist", /*spaFallback=*/true);
+    // Reload the page when the app is rebuilt. Only the dev server adds this:
+    // a built site must not poll (on a host that answers every path with
+    // index.html it would never stop).
+    server.onFile([](const std::filesystem::path&, rx::net::Response& r) {
+        if (!r.contentType.starts_with("text/html")) return;
+        auto end = r.body.rfind("</body>");
+        if (end == std::string::npos) end = r.body.size();
+        r.body.insert(end, kReloadScript);
+    });
     if (auto started = server.tryStart(); !started) fail(started.error());
 
     devServer = &server;

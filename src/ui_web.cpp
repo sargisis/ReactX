@@ -7,6 +7,7 @@
 #include <string>
 #include <utility>
 
+#include "reactx/dom.hpp"
 #include "reactx/hooks.hpp"
 #include "reactx/store.hpp"
 #include "reactx/ui.hpp"
@@ -118,18 +119,21 @@ constexpr const char* kCss = R"css(
 @keyframes rx-toast-in { from { opacity: 0; transform: translateY(8px); } }
 )css";
 
-EM_JS(void, rx_ui_install_styles, (const char* css), {
-    if (document.getElementById("rx-ui-styles")) return;
+// Returns 0 without a page (prerendering under Node): the CSS then goes into the prerendered <head>.
+EM_JS(int, rx_ui_install_styles, (const char* css), {
+    if (typeof document === "undefined") return 0;
+    if (document.getElementById("rx-ui-styles")) return 1;
     const style = document.createElement("style");
     style.id = "rx-ui-styles";
     style.textContent = UTF8ToString(css);
     document.head.appendChild(style);
+    return 1;
 });
 
 void ensureStyles() {
     static bool done = false;
     if (!done) {
-        rx_ui_install_styles(kCss);
+        if (!rx_ui_install_styles(kCss)) rx::detail::addPrerenderHead(std::string("<style id=\"rx-ui-styles\">") + kCss + "</style>");
         done = true;
     }
 }

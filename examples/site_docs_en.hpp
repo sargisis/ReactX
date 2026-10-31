@@ -311,7 +311,9 @@ inline const std::vector<Page>& pagesEn() {
                 {"Bubbling", "As in React, the handler of the element runs first, then those of its parents.", ""},
                 {"Focus and scrolling", "onFocus and onBlur fire when an element gets or loses focus. onScroll tells you the "
                                         "position (pixels in the browser, rows on a terminal scroll box); nearBottom() says it's "
-                                        "time to load more. ref.scrollIntoView() shows an element.",
+                                        "time to load more. ref.scrollIntoView() shows an element ({\"scrollIntoView\", selected} without a ref); "
+                                        "ref.scrollMetrics(), scrollTo(top) and scrollBy(delta) read and move a scroll container, "
+                                        "e.g. to keep the reader's place when older messages come in above.",
                  "h(\"div\", {{\"style\", \"height: 400px; overflow: auto\"},\n"
                  "            {\"onScroll\", [loadMore](const ScrollEvent& e) { if (e.nearBottom()) loadMore(); }}}, rows)"},
             },
@@ -344,10 +346,11 @@ inline const std::vector<Page>& pagesEn() {
             {
                 {"mountDom", "Puts your app into <div id=\"app\"> of the page, replacing what it showed (a loading text, prerendered HTML).",
                  "int main() { mountDom(h(App)); }"},
-                {"Prerender", "rx::renderToString (reactx/html.hpp) gives the HTML of components without a browser; effects don't run. "
-                              "Put it into <div id=\"app\"> at build time and the page shows before the .wasm arrives; mountDom then "
-                              "replaces it with the live app, so the first render must draw the same. This site's home page is built so.",
-                 "std::string html = renderToString(h(Home));\n// \"<main class=\\\"home\\\"><h1>Hello</h1>...</main>\""},
+                {"Prerender", "List routes in reactx.json and the page shows before the .wasm arrives: reactx build runs the same "
+                              "program under Node, where mountDom writes each route's HTML (renderToString) into dist/index.html, "
+                              "dist/docs/faq.html, ... and stops. No code changes; effects don't run there. In the browser mountDom "
+                              "replaces it with the live app (no hydration). Other routes get 404.html / 200.html, the empty page.",
+                 "\"web\": { \"base\": \"/\", \"prerender\": [\"/\", \"/docs/faq\"] }"},
                 {"Mouse, touch and drag", "onPointerDown, onPointerMove and onPointerUp get a PointerEvent: x and y in the window, "
                                           "localX and localY from the element's corner, button, buttons and type (mouse, touch, pen). "
                                           "onMouseEnter and onMouseLeave follow the pointer and don't bubble. The same handlers work in a "

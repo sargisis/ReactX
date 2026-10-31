@@ -319,6 +319,9 @@ void endToEnd(const fs::path& tmp) {
     auto wb = reactx({"build"}, web);
     CHECK(wb.code == 0);
     for (const char* f : {"index.html", "index.js", "index.wasm", "404.html", "style.css"}) CHECK(fs::exists(web / "build/web/dist" / f));
+    // A built site doesn't poll the dev server (only `reactx dev` adds the reload script).
+    CHECK(!contains(read(web / "build/web/dist/index.html"), "__reactx"));
+    CHECK(!contains(read(web / "build/web/dist/404.html"), "__reactx"));
 
     std::cout << "e2e: build reports the .wasm size and what makes it big\n";
     CHECK(contains(wb.out, "index.wasm: ") && !contains(wb.out, "reactx: size:"));  // a fresh project is lean
@@ -328,6 +331,21 @@ void endToEnd(const fs::path& tmp) {
     }
     auto heavy = reactx({"build"}, web);
     CHECK(heavy.code == 0 && contains(heavy.out, "reactx: size: std::format") && contains(heavy.out, "src/main.cpp"));
+
+    std::cout << "e2e: prerender writes the listed routes\n";
+    {
+        auto m = rx::json::parse(read(web / "reactx.json"));
+        m["web"]["prerender"] = rx::json::array({"/", "/about"});
+        std::ofstream(web / "reactx.json") << m.dump(2);
+    }
+    auto pre = reactx({"build"}, web);
+    CHECK(pre.code == 0 && contains(pre.out, "prerendered /about -> about.html"));
+    fs::path dist = web / "build/web/dist";
+    CHECK(contains(read(dist / "index.html"), "Hello, web-app!"));  // the home page, before the .wasm
+    CHECK(contains(read(dist / "about.html"), "<h1>About</h1>") && contains(read(dist / "about.html"), "href=\"/about\""));
+    CHECK(contains(read(dist / "index.html"), "id=\"rx-ui-styles\""));  // rx::ui's CSS is in the page too
+    for (const char* empty : {"404.html", "200.html"})                  // other routes: the page without content
+        CHECK(contains(read(dist / empty), "<div id=app></div>") && !contains(read(dist / empty), "Hello"));
 
     std::cout << "e2e: dev serves, proxies /api, rebuilds after an edit, survives a broken edit\n";
     rx::net::HttpServer backend("127.0.0.1", 0);  // the app's own API server (Flask, ...)
@@ -347,7 +365,8 @@ void endToEnd(const fs::path& tmp) {
         ::_exit(127);
     }
     CHECK(waitFor([&] { return httpGet(port, "/__reactx/version") == "1"; }, 120s));
-    CHECK(contains(httpGet(port, "/"), "__reactx/version"));        // the reload script
+    CHECK(contains(httpGet(port, "/"), "__reactx/version"));        // the reload script, added by dev
+    CHECK(contains(httpGet(port, "/some/route"), "__reactx/version"));  // also on SPA routes
     CHECK(httpGet(port, "/api/ping?x=1") == "pong x=1");               // --proxy
     CHECK(contains(httpGet(port, "/some/route"), "<div id=app>") ||  // SPA fallback (minified HTML)
           contains(httpGet(port, "/some/route"), "<div id=\"app\">"));

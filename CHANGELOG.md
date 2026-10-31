@@ -6,6 +6,18 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Added
+
+- **Prerendering from `reactx.json`**: `"web": {"prerender": ["/", "/docs/faq"]}`. The build runs the same program under Node, where `mountDom` writes each route's HTML (with the `rx::ui` CSS) into `dist/index.html`, `dist/docs/faq.html`, … and stops; the page shows before the `.wasm` arrives. No code changes. `200.html` / `404.html` stay the empty page for other routes. `reactx_add_app(... PRERENDER <routes>)` for CMake, `reactx::prerender`.
+- `ref.scrollMetrics()`, `ref.scrollTo(top)`, `ref.scrollBy(delta)` (`NodeRef`, `Renderer::scrollMetrics` / `scrollTo`): read and move a scroll container in the browser and in the terminal — e.g. keep the reader's place when older messages are added above.
+- The `scrollIntoView` prop (`{"scrollIntoView", selected}`): an element scrolls into view when it becomes `true`, in both backends, without a ref.
+- `HttpServer::onFile(hook)`: change the body or headers of served files. `serveDirectory` serves `/docs/faq` from `docs/faq.html` when there is one, and its SPA fallback prefers `200.html`.
+
+### Fixed
+
+- Built sites polled `__reactx/version` (the `reactx dev` reload script was in every page); on a host that answers every path with `index.html` (SPA rewrites, `serveDirectory(dir, true)`) that never stopped, about 1.4 requests a second per open tab. Only `reactx dev` adds the script now.
+- llms.txt: `Request::param` returns `std::optional<std::string>`; `renderToString` in a native build draws the terminal form of `ui::` and `router::link`.
+
 ## [0.11.0] — 2026-11-01
 
 Long lists in the terminal: a `box` with `overflow: "scroll"` (or `ui::list({.scroll = true})`) scrolls with the mouse wheel and PageUp/PageDown and keeps the focused or selected item on screen, and modals and toasts stay on the screen however tall the page is. `ref.scrollIntoView()` in both backends. Fixes found by writing real apps from llms.txt: `ui::select` with an empty value ("All") in the browser, and a terminal modal that Escape couldn't close. A MINOR release because `Renderer` got a virtual and the terminal modal and toaster are now `position: "fixed"`; apps update without changes.

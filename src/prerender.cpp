@@ -1,0 +1,97 @@
+// Prerendering for apps that list routes in reactx.json ("web": {"prerender": [...]}).
+// Only the Node build of an app links this file (reactx::prerender, see
+// cmake/ReactXApp.cmake); it hooks into mountDom, which then writes the HTML
+// of each route instead of mounting.
+#include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <vector>
+
+#include "reactx/dom.hpp"
+#include "reactx/html.hpp"
+#include "reactx/router.hpp"
+
+namespace rx {
+
+namespace {
+
+std::optional<std::string> readText(const std::filesystem::path& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) return std::nullopt;
+    return std::string(std::istreambuf_iterator<char>(in), {});
+}
+
+// "/" -> index.html, "/docs/faq" -> docs/faq.html (GitHub Pages, Netlify and
+// HttpServer::serveDirectory serve /docs/faq from docs/faq.html).
+std::filesystem::path pageFile(std::string route) {
+    while (route.size() > 1 && route.back() == '/') route.pop_back();
+    if (route == "/" || route.empty()) return "index.html";
+    return std::filesystem::path(route.substr(1) + ".html");
+}
+
+int prerender(const Element& app, const std::string& args) {
+    std::vector<std::string> parts;
+    for (std::size_t from = 0;;) {
+        auto nl = args.find('\n', from);
+        parts.push_back(args.substr(from, nl - from));
+        if (nl == std::string::npos) break;
+        from = nl + 1;
+    }
+    if (parts.size() < 3) {
+        std::fputs("reactx prerender: usage: --reactx-prerender <page.html> <out dir> <route>...\n", stderr);
+        return 2;
+    }
+    auto page = readText(parts[0]);
+    if (!page) {
+        std::fputs(("reactx prerender: can't read " + parts[0] + "\n").c_str(), stderr);
+        return 1;
+    }
+    // The built page is minified: <div id=app></div>, <base href=/repo/ >.
+    std::size_t at = page->find("<div id=app></div>");
+    std::size_t len = std::string_view("<div id=app></div>").size();
+    if (at == std::string::npos) {
+        at = page->find("<div id=\"app\"></div>");
+        len = std::string_view("<div id=\"app\"></div>").size();
+    }
+    if (at == std::string::npos) {
+        std::fputs("reactx prerender: no empty <div id=\"app\"></div> in the page\n", stderr);
+        return 1;
+    }
+    if (auto b = page->find("<base href="); b != std::string::npos) {
+        b += std::string_view("<base href=").size();
+        if ((*page)[b] == '"') ++b;
+        router::setBase(page->substr(b, page->find_first_of("\" >", b) - b));
+    }
+    for (std::size_t i = 2; i < parts.size(); ++i) {
+        const std::string& route = parts[i];
+        if (route.empty() || route.front() != '/') continue;
+        router::reset(route);
+        std::string html = renderToString(app);
+        std::string out = *page;
+        out.replace(at, len, "<div id=app>" + html + "</div>");
+        if (auto head = out.find("</head>"); head != std::string::npos && !detail::prerenderHead().empty() &&
+                                              out.find("id=\"rx-ui-styles\"") == std::string::npos)
+            out.insert(head, detail::prerenderHead());
+        auto file = std::filesystem::path(parts[1]) / pageFile(route);
+        std::error_code ec;
+        std::filesystem::create_directories(file.parent_path(), ec);
+        std::ofstream f(file, std::ios::binary);
+        if (!(f << out) || !f.flush()) {
+            std::fputs(("reactx prerender: can't write " + file.string() + "\n").c_str(), stderr);
+            return 1;
+        }
+        std::fputs(("reactx: prerendered " + route + " -> " + pageFile(route).string() + "\n").c_str(), stdout);
+    }
+    return 0;
+}
+
+// Registers itself before main() runs.
+const bool registered = (detail::prerenderer() = &prerender, true);
+
+}  // namespace
+
+}  // namespace rx

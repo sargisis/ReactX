@@ -40,6 +40,20 @@ bool NodeRef::focus() const {
     return state_ && state_->node && state_->renderer && state_->renderer->focus(state_->node);
 }
 
+std::optional<ScrollEvent> NodeRef::scrollMetrics() const {
+    if (!state_ || !state_->node || !state_->renderer) return std::nullopt;
+    return state_->renderer->scrollMetrics(state_->node);
+}
+
+bool NodeRef::scrollTo(int top) const {
+    return state_ && state_->node && state_->renderer && state_->renderer->scrollTo(state_->node, top);
+}
+
+bool NodeRef::scrollBy(int delta) const {
+    auto m = scrollMetrics();
+    return m && scrollTo(m->top + delta);
+}
+
 bool NodeRef::scrollIntoView() const {
     return state_ && state_->node && state_->renderer && state_->renderer->scrollIntoView(state_->node);
 }

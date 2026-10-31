@@ -6,6 +6,7 @@
 #include <exception>
 #include <flat_map>
 #include <functional>
+#include <optional>
 #include <initializer_list>
 #include <memory>
 #include <string>
@@ -156,6 +157,15 @@ public:
     // scrollIntoView({block: "nearest"}); in a terminal the overflow="scroll"
     // boxes around it). False if it isn't on the page.
     bool scrollIntoView() const;
+
+    // A scroll container's position and sizes now (the same fields onScroll
+    // gets: top, scrollHeight, clientHeight, ...; pixels in the browser, rows
+    // in a terminal), and moving it. To keep the reader's place when rows are
+    // added above (older messages), read scrollMetrics() before and
+    // scrollBy(newHeight - oldHeight) in an effect after.
+    std::optional<ScrollEvent> scrollMetrics() const;
+    bool scrollTo(int top) const;
+    bool scrollBy(int delta) const;
 
 private:
     friend class detail::Reconciler;

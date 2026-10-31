@@ -127,7 +127,6 @@ if(EMSCRIPTEN)
     src/reconciler.cpp
     src/root.cpp
     src/text_renderer.cpp
-  src/html.cpp
     src/html.cpp
     src/json.cpp
     src/router.cpp
@@ -144,6 +143,12 @@ if(EMSCRIPTEN)
   target_link_libraries(reactx PUBLIC reactx_std)
   target_link_options(reactx PUBLIC -fwasm-exceptions)
   add_library(reactx::reactx ALIAS reactx)
+  # Prerendering ("web": {"prerender": [...]} in reactx.json): only the Node
+  # build of an app links it, so apps don't carry renderToString for it.
+  add_library(reactx_prerender OBJECT src/prerender.cpp)
+  target_link_libraries(reactx_prerender PUBLIC reactx)
+  target_compile_options(reactx_prerender PRIVATE -Wall -Wextra -Wpedantic)
+  add_library(reactx::prerender ALIAS reactx_prerender)
   include(${PROJECT_SOURCE_DIR}/cmake/ReactXApp.cmake)
   # Functions and helpers the page's JavaScript calls (see src/dom.cpp).
   target_link_options(reactx INTERFACE

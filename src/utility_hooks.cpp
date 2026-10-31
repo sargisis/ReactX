@@ -1,4 +1,4 @@
-// Timers, window size and storage behind useDebounce, useWindowSize and
+ // Timers, window size and storage behind useDebounce, useWindowSize and
 // useLocalStorage. Everything runs on the UI thread: in the browser through
 // setTimeout / the resize event, natively through Root::flush() and
 // TerminalApp — so callbacks may set state like event handlers do.
@@ -81,10 +81,11 @@ std::function<void()> takeTimer(int id) {
 EM_JS(void, rx_js_set_timeout, (int id, int ms), {
     setTimeout(function() { Module.ccall("rx_timer_fired", null, ["number"], [id]); }, ms);
 });
-EM_JS(int, rx_js_window_width, (), { return window.innerWidth | 0; });
-EM_JS(int, rx_js_window_height, (), { return window.innerHeight | 0; });
+// Without a window (prerendering under Node): a desktop-sized one, no listeners.
+EM_JS(int, rx_js_window_width, (), { return typeof window === "undefined" ? 1280 : window.innerWidth | 0; });
+EM_JS(int, rx_js_window_height, (), { return typeof window === "undefined" ? 800 : window.innerHeight | 0; });
 EM_JS(void, rx_js_listen_resize, (), {
-    if (Module.rxResizeListening) return;
+    if (Module.rxResizeListening || typeof window === "undefined") return;
     Module.rxResizeListening = true;
     window.addEventListener("resize", function() {
         Module.ccall("rx_window_resized", null, ["number", "number"], [window.innerWidth | 0, window.innerHeight | 0]);
@@ -93,7 +94,7 @@ EM_JS(void, rx_js_listen_resize, (), {
 // Capture phase on the window: runs before the elements' own handlers, and
 // also when nothing on the page has focus.
 EM_JS(void, rx_js_listen_keys, (), {
-    if (Module.rxKeysListening) return;
+    if (Module.rxKeysListening || typeof window === "undefined") return;
     Module.rxKeysListening = true;
     const names = { ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right", Esc: "Escape" };
     window.addEventListener("keydown", function(e) {

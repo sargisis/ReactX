@@ -182,6 +182,27 @@ EM_JS(int, rx_js_scroll_into_view, (double id), {
     return 1;
 });
 
+// 0 top, 1 left, 2 scrollHeight, 3 scrollWidth, 4 clientHeight, 5 clientWidth; -1 if not on the page.
+EM_JS(int, rx_js_scroll_metric, (double id, int which), {
+    const el = Module.rxNodes.get(id);
+    if (!el || !el.isConnected || el.scrollTop === undefined) return -1;
+    switch (which) {
+        case 0: return Math.round(el.scrollTop);
+        case 1: return Math.round(el.scrollLeft);
+        case 2: return el.scrollHeight;
+        case 3: return el.scrollWidth;
+        case 4: return el.clientHeight;
+        default: return el.clientWidth;
+    }
+});
+
+EM_JS(int, rx_js_scroll_to, (double id, int top), {
+    const el = Module.rxNodes.get(id);
+    if (!el || !el.isConnected || el.scrollTop === undefined) return 0;
+    el.scrollTop = top;
+    return 1;
+});
+
 EM_JS(void, rx_js_destroy, (double id), {
     Module.rxNodes.delete(id);
 });
@@ -480,8 +501,55 @@ void flushDom() {
 bool DomRenderer::focus(NodeHandle node) { return rx_js_focus(js(node)) != 0; }
 bool DomRenderer::scrollIntoView(NodeHandle node) { return rx_js_scroll_into_view(js(node)) != 0; }
 
+std::optional<ScrollEvent> DomRenderer::scrollMetrics(NodeHandle node) {
+    double id = js(node);
+    if (rx_js_scroll_metric(id, 0) < 0) return std::nullopt;
+    return ScrollEvent{.top = rx_js_scroll_metric(id, 0), .left = rx_js_scroll_metric(id, 1),
+                       .scrollHeight = rx_js_scroll_metric(id, 2), .scrollWidth = rx_js_scroll_metric(id, 3),
+                       .clientHeight = rx_js_scroll_metric(id, 4), .clientWidth = rx_js_scroll_metric(id, 5)};
+}
+
+bool DomRenderer::scrollTo(NodeHandle node, int top) { return rx_js_scroll_to(js(node), top) != 0; }
+
+// ---- prerendering (the same program under Node) ----
+
+// The arguments after --reactx-prerender, one per line: the page to fill
+// (a copy of the built index.html), the output folder, then the routes.
+// 0 in a browser or a normal Node run.
+EM_JS(char*, rx_js_prerender_args, (), {
+    if (typeof process === "undefined" || !process.argv) return 0;
+    const at = process.argv.indexOf("--reactx-prerender");
+    return at < 0 ? 0 : stringToNewUTF8(process.argv.slice(at + 1).join("\n"));
+});
+
+namespace detail {
+std::string& prerenderHead() {
+    static std::string head;
+    return head;
+}
+void addPrerenderHead(const std::string& html) { prerenderHead() += html; }
+// Set by src/prerender.cpp, which only the Node build of an app links
+// (reactx::prerender): normal apps don't carry renderToString and the router.
+Prerenderer& prerenderer() {
+    static Prerenderer p = nullptr;
+    return p;
+}
+}  // namespace detail
+
+
+
 Root& mountDom(Element element, const std::string& container) {
     REACTX_PRE(!container.empty());
+    if (char* args = rx_js_prerender_args()) {  // under Node at build time: write the pages and stop
+        std::string a(args);
+        std::free(args);
+        std::fflush(stdout);
+        if (!detail::prerenderer()) {
+            std::fputs("reactx prerender: this build doesn't link reactx::prerender\n", stderr);
+            std::exit(2);
+        }
+        std::exit(detail::prerenderer()(element, a));
+    }
     // Lives for the whole page: the runtime keeps running after main().
     auto* app = new DomApp(container);
     int index = static_cast<int>(apps().size());

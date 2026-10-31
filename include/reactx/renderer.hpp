@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string_view>
 
 #include "reactx/element.hpp"
@@ -42,6 +43,11 @@ public:
     // Scroll the containers around `node` so it is visible (NodeRef::scrollIntoView).
     // False if the backend can't.
     virtual bool scrollIntoView(NodeHandle) { return false; }
+
+    // Where a scroll container is (NodeRef::scrollMetrics), and moving it
+    // (NodeRef::scrollTo). nullopt / false if the backend can't.
+    virtual std::optional<ScrollEvent> scrollMetrics(NodeHandle) { return std::nullopt; }
+    virtual bool scrollTo(NodeHandle, int /*top*/) { return false; }
 };
 
 }  // namespace rx

@@ -327,7 +327,7 @@ The [`DomRenderer`](include/reactx/dom.hpp) backend renders into the real DOM: t
 | `data-rx-self` | the element only gets clicks on itself, not on its children (dialog backdrops) |
 | `data-rx-trap` | Tab stays inside the element; it takes focus when it appears and gives it back when removed |
 
-**Mouse, touch and drag.** `onPointerDown` / `onPointerMove` / `onPointerUp` get a `PointerEvent` (`x`, `y`, and `localX`, `localY` from the element's corner), `onMouseEnter` / `onMouseLeave` follow the pointer; the same handlers work in a terminal, where `TerminalApp` turns the mouse on (cells instead of pixels; `app.setMouse(false)` leaves it to the terminal). `{"pointerCapture", true}` keeps moves and the release on the element after a press, even outside it (sliders); without it they go to what is under the pointer (drop targets). `ref.focus()` moves the keyboard focus from code, `ref.scrollIntoView()` scrolls the element into view (both backends). The kanban demo [`examples/kanban.cpp`](examples/kanban.cpp) is one source for both:
+**Mouse, touch and drag.** `onPointerDown` / `onPointerMove` / `onPointerUp` get a `PointerEvent` (`x`, `y`, and `localX`, `localY` from the element's corner), `onMouseEnter` / `onMouseLeave` follow the pointer; the same handlers work in a terminal, where `TerminalApp` turns the mouse on (cells instead of pixels; `app.setMouse(false)` leaves it to the terminal). `{"pointerCapture", true}` keeps moves and the release on the element after a press, even outside it (sliders); without it they go to what is under the pointer (drop targets). `ref.focus()` moves the keyboard focus from code, `ref.scrollIntoView()` scrolls the element into view (or `{"scrollIntoView", selected}` on the element, no ref), and on a scroll container `ref.scrollMetrics()` / `scrollTo(top)` / `scrollBy(delta)` read and move the position — to keep the reader's place when older messages come in above, `scrollBy` the growth of `scrollHeight` (both backends). The kanban demo [`examples/kanban.cpp`](examples/kanban.cpp) is one source for both:
 
 ```cpp
 h("div", {{"className", "card"}, {"onPointerDown", [setDragging, id](const PointerEvent&) { setDragging(id); }}}, {title}),
@@ -348,7 +348,13 @@ useEffect([canvas, &chart] {
 return h("canvas", {{"ref", canvas}});
 ```
 
-**Prerendering.** `rx::renderToString(h(Home))` ([`reactx/html.hpp`](include/reactx/html.hpp)) returns the HTML of components without a browser; effects don't run. Put it into the page's `<div id="app">` at build time and the page shows before the `.wasm` arrives; `mountDom` then replaces it with the live app (no hydration yet, so the first render must draw the same). The ReactX site does this for its home page: see `site_prerender` in `CMakeLists.txt`, a build of `examples/site.cpp` run under Node.
+**Prerendering.** List routes in `reactx.json` and the page shows before the `.wasm` arrives (and search engines see the text):
+
+```json
+"web": { "base": "/", "prerender": ["/", "/docs/faq"] }
+```
+
+`reactx build` then also runs the same program under Node, where `mountDom` writes each route's HTML into `dist/index.html`, `dist/docs/faq.html`, … (with the `rx::ui` CSS) instead of mounting; no code changes. In the browser `mountDom` replaces it with the live app (no hydration yet). Effects don't run while prerendering, and code before `mountDom` must not need `document` or `window`. Other routes get `404.html` / `200.html`, the page without content: GitHub Pages uses the first, hosts that rewrite every path should point at `/200.html`; `HttpServer::serveDirectory` serves `/docs/faq` from `docs/faq.html` and falls back to `200.html`. Underneath is `rx::renderToString(h(Home))` ([`reactx/html.hpp`](include/reactx/html.hpp)): the HTML of components without a page. Call it in the browser build or under Node: a native build draws `ui::` and `router::link` in their terminal form.
 
 ```sh
 cmake --preset web && cmake --build --preset web

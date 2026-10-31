@@ -378,13 +378,27 @@ inline const std::vector<Page>& pagesEn() {
             },
         },
         {
-            "ui", "Ready components (rx::ui)", "Buttons, inputs, tabs, dialogs and lists with a theme.",
+            "ui", "Ready components (rx::ui)", "Buttons, inputs, selects, dialogs, toasts, tooltips and lists with a theme.",
             {
-                {"Components", "button, input, checkbox, tabs, modal, list and listItem. The same code works in the terminal "
-                               "and in the browser.",
+                {"Components", "button, input, checkbox, select, tabs, modal, confirm, list and listItem, tooltip, card, stack "
+                               "and text. The same code works in the terminal and in the browser.",
                  "ui::button({.label = \"Save\", .onClick = save, .variant = ui::Variant::Primary})\n"
                  "ui::input({.value = name, .onChange = setNameFn, .onSubmit = addFn, .label = \"Name\"})\n"
                  "ui::modal({.title = \"Delete?\", .open = asking, .onClose = closeFn, .children = {...}})"},
+                {"Confirm and toasts", "ui::confirm is a ready \"Delete it?\" dialog. ui::toast shows a short message in a corner "
+                                       "from any handler, effect or fetch callback; it goes away by itself. Put one ui::toaster() "
+                                       "in the app.",
+                 "ui::confirm({.title = \"Delete the task?\", .open = asking, .danger = true,\n"
+                 "             .onConfirm = removeFn, .onCancel = closeFn})\n"
+                 "ui::toast({.text = \"Saved\", .variant = ui::Variant::Success});"},
+                {"Select, tooltip, layout", "ui::select is a native <select> in the browser and a ‹ › switch in the terminal. "
+                                            "ui::tooltip shows its text while the pointer is over the children. ui::stack and "
+                                            "ui::card lay things out without CSS.",
+                 "ui::stack({.direction = ui::Direction::Row, .justify = ui::Justify::Between, .children = {\n"
+                 "    ui::select({.label = \"Sort\", .value = sort, .options = {{\"name\", \"By name\"}, {\"date\", \"By date\"}},\n"
+                 "                .onChange = setSortFn}),\n"
+                 "    ui::tooltip({.text = \"Asks first\", .children = {ui::button({.label = \"Clear\"})}}),\n"
+                 "}})"},
                 {"Theme", "ui::themeProvider passes colors to every ui component below it.",
                  "ui::themeProvider(ui::Theme{.accent = \"magenta\"}, {h(App)})"},
             },

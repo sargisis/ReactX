@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "reactx/hooks.hpp"
+#include "reactx/store.hpp"
 #include "reactx/ui.hpp"
 
 namespace {
@@ -84,6 +85,35 @@ constexpr const char* kCss = R"css(
 .rx-item:focus-visible { outline: 2px solid var(--rx-accent); outline-offset: -2px; }
 .rx-item--selected { color: var(--rx-accent); font-weight: 600; }
 .rx-item__detail { color: var(--rx-muted); font-weight: normal; white-space: nowrap; }
+
+.rx-text { margin: 0; }
+.rx-text--muted { color: var(--rx-muted); }
+
+.rx-card { border: 1px solid var(--rx-border); border-radius: 14px; padding: 16px 18px; background: var(--rx-surface);
+           display: flex; flex-direction: column; gap: 12px; }
+.rx-card__title { margin: 0; font-size: 1rem; }
+
+.rx-select { cursor: pointer; }
+
+.rx-tip { position: relative; display: inline-flex; }
+.rx-tip__bubble {
+  position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); z-index: 1001;
+  background: #111827; color: #f9fafb; font-size: .82rem; line-height: 1.35; padding: 5px 9px; border-radius: 7px;
+  white-space: nowrap; pointer-events: none; box-shadow: 0 4px 14px rgb(0 0 0 / 0.25); animation: rx-fade .12s ease-out;
+}
+
+.rx-toaster { position: fixed; right: 16px; bottom: 16px; z-index: 1002; display: flex; flex-direction: column;
+              align-items: flex-end; gap: 8px; max-width: min(360px, calc(100vw - 32px)); }
+.rx-toast {
+  font: inherit; text-align: left; cursor: pointer; padding: 10px 14px; border-radius: var(--rx-radius);
+  border: 1px solid var(--rx-border); border-left: 4px solid var(--rx-muted); background: var(--rx-surface); color: inherit;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18); animation: rx-toast-in .18s ease-out;
+}
+.rx-toast--primary { border-left-color: var(--rx-accent); }
+.rx-toast--success { border-left-color: var(--rx-success); }
+.rx-toast--danger { border-left-color: var(--rx-danger); }
+.rx-toast:focus-visible { outline: 2px solid var(--rx-accent); outline-offset: 2px; }
+@keyframes rx-toast-in { from { opacity: 0; transform: translateY(8px); } }
 )css";
 
 EM_JS(void, rx_ui_install_styles, (const char* css), {
@@ -271,6 +301,93 @@ Element ListItem(const Props& p) {
                      {"onKey", p.get<KeyHandler>("onKey")}},
           std::move(parts)),
     });
+}
+
+Element Text(const Props& p) {
+    ensureStyles();
+    return h("p", {{"className", p.get<bool>("muted") ? "rx-text rx-text--muted" : "rx-text"}}, {p.get<std::string>("text")});
+}
+
+Element Card(const Props& p) {
+    ensureStyles();
+    std::string title = p.get<std::string>("title");
+    std::vector<Element> parts;
+    if (!title.empty()) parts.push_back(h("h3", {{"className", "rx-card__title"}}, {title}));
+    for (const Element& child : p.children()) parts.push_back(child);
+    return h("section", {{"className", "rx-card"}, {"aria-label", title}}, std::move(parts));
+}
+
+Element Stack(const Props& p) {
+    std::string align = p.get<std::string>("align", "stretch");
+    std::string justify = p.get<std::string>("justify", "start");
+    auto flex = [](const std::string& v) { return v == "start" ? "flex-start" : v == "end" ? "flex-end" : v; };
+    std::string style = "display: flex; flex-direction: " + p.get<std::string>("direction", "column") +
+                        "; gap: " + std::to_string(p.get<int>("gap", 1) * 8) + "px; align-items: " + flex(align) +
+                        "; justify-content: " + (justify == "between" ? std::string("space-between") : flex(justify)) +
+                        (p.get<bool>("wrap") ? "; flex-wrap: wrap" : "");
+    return h("div", {{"className", "rx-stack"}, {"style", style}}, p.children());
+}
+
+Element Select(const Props& p) {
+    ensureStyles();
+    std::string label = p.get<std::string>("label");
+    std::vector<Element> options;
+    for (const Element& o : p.children()) {
+        std::string value = o.props.get<std::string>("value");
+        options.push_back(h("option", {{"key", value}, {"value", value}}, {o.props.get<std::string>("label")}));
+    }
+    std::vector<Element> parts;
+    if (!label.empty()) parts.push_back(h("span", {{"className", "rx-field__label"}}, {label}));
+    parts.push_back(h("select", {{"className", "rx-input rx-select"},
+                                 {"value", p.get<std::string>("value")},
+                                 {"onChange", p.get<InputHandler>("onChange")}},
+                      std::move(options)));
+    return h("label", {{"className", "rx-field"}}, std::move(parts));
+}
+
+Element Tooltip(const Props& p) {
+    ensureStyles();
+    auto [shown, setShown] = useState(false);
+    std::string id = useId();
+    std::vector<Element> parts = p.children();
+    if (shown) parts.push_back(h("span", {{"className", "rx-tip__bubble"}, {"role", "tooltip"}, {"id", id}}, {p.get<std::string>("text")}));
+    return h("span", {{"className", "rx-tip"},
+                      {"aria-describedby", shown ? id : std::string{}},
+                      {"onMouseEnter", [setShown] { setShown(true); }},
+                      {"onMouseLeave", [setShown] { setShown(false); }},
+                      {"onFocus", [setShown] { setShown(true); }},
+                      {"onBlur", [setShown] { setShown(false); }}},
+             std::move(parts));
+}
+
+namespace {
+
+struct ToastViewProps {
+    detail::ToastItem item{};
+    std::string key{};
+    bool operator==(const ToastViewProps&) const = default;
+};
+
+Element ToastView(const ToastViewProps& p) {
+    int id = p.item.id;
+    useTimeout([id] { detail::dismissToast(id); },
+               p.item.duration.count() > 0 ? std::optional(p.item.duration) : std::nullopt);
+    return h("button", {{"type", "button"},
+                        {"className", "rx-toast rx-toast--" + p.item.variant},
+                        {"title", "Close"},
+                        {"onClick", [id] { detail::dismissToast(id); }}},
+             {p.item.text});
+}
+
+}  // namespace
+
+Element Toaster(const Props&) {
+    ensureStyles();
+    const auto& list = useStore(detail::toasts());
+    std::vector<Element> items;
+    for (const auto& t : list) items.push_back(h(ToastView, {.item = t, .key = std::to_string(t.id)}));
+    // Always on the page, so screen readers hear what is added to it.
+    return h("div", {{"className", "rx-toaster"}, {"role", "status"}, {"aria-live", "polite"}}, std::move(items));
 }
 
 }  // namespace rx::ui

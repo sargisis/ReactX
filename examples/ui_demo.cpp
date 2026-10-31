@@ -1,5 +1,5 @@
-// rx::ui demo: tabs, input, list, checkboxes, buttons, a confirm modal and
-// a theme switch.
+// rx::ui demo: tabs, input, list, select, checkboxes, buttons, a tooltip,
+// a confirm dialog, toasts, cards and a theme switch.
 //   Tab / Up / Down  move focus      Enter / Space  press / toggle / select
 //   Delete           remove task     Escape         close the dialog
 //   Ctrl+C           quit
@@ -35,6 +35,7 @@ Element App(const Props& props) {
     auto [compact, setCompact] = useState(false);
     auto [accent, setAccent] = useState(std::string("cyan"));
     auto [confirm, setConfirm] = useState(false);
+    auto [sort, setSort] = useState(std::string("added"));
     int& nextId = useRef(4);
 
     auto toggle = [setTasks](int id) {
@@ -51,8 +52,11 @@ Element App(const Props& props) {
     };
 
     // ---- Tasks tab ----
+    Tasks shown = tasks;
+    if (sort == "name") std::ranges::sort(shown, {}, &Task::title);
+    if (sort == "todo") std::ranges::stable_partition(shown, [](const Task& t) { return !t.done; });
     std::vector<Element> items;
-    for (const Task& t : tasks) {
+    for (const Task& t : shown) {
         if (!showDone && t.done) continue;
         int id = t.id;
         items.push_back(ui::listItem({
@@ -77,14 +81,19 @@ Element App(const Props& props) {
                            return list;
                        });
                        setDraft(std::string{});
+                       ui::toast({.text = "Added: " + v, .variant = ui::Variant::Success});
                    },
                    .placeholder = "new task, press Enter",
                    .label = "Add:"}),
         ui::list({.title = std::to_string(left) + " left", .emptyText = "no tasks", .items = std::move(items)}),
-        h("box", {{"direction", "row"}, {"gap", 2}}, {
-            ui::button({.label = "clear all", .onClick = [setConfirm] { setConfirm(true); },
-                        .variant = ui::Variant::Danger, .disabled = tasks.empty()}),
-        }),
+        ui::stack({.direction = ui::Direction::Row, .gap = 2, .justify = ui::Justify::Between, .children = {
+            ui::select({.label = "Sort:", .value = sort,
+                        .options = {{"added", "as added"}, {"name", "by name"}, {"todo", "todo first"}},
+                        .onChange = [setSort](const std::string& v) { setSort(v); }}),
+            ui::tooltip({.text = "asks first", .children = {
+                ui::button({.label = "clear all", .onClick = [setConfirm] { setConfirm(true); },
+                            .variant = ui::Variant::Danger, .disabled = tasks.empty()})}}),
+        }}),
     };
 
     // ---- Settings tab ----
@@ -108,8 +117,11 @@ Element App(const Props& props) {
 
     // ---- About tab ----
     std::vector<Element> aboutTab = {
-        h("text", {}, {"ReactX: a React-like UI framework in C++26, drawn in your terminal. "
-                       "Layout by Yoga (Flexbox), components from rx::ui."}),
+        ui::card({.title = "ReactX", .children = {
+            ui::text({.text = "A React-like UI framework in C++26, drawn in your terminal."}),
+            ui::text({.text = "Layout by Yoga (Flexbox), components from rx::ui.", .muted = true}),
+        }}),
+        ui::button({.label = "say hi", .onClick = [] { ui::toast({.text = "Hi from rx::ui", .variant = ui::Variant::Primary}); }}),
     };
 
     ui::Theme theme;
@@ -128,22 +140,21 @@ Element App(const Props& props) {
                     ui::button({.label = "quit", .onClick = props.get<Callback>("onQuit")}),
                 }),
             }),
-            ui::modal({
+            ui::confirm({
                 .title = "Clear all tasks?",
+                .message = "This removes every task. Esc to cancel.",
                 .open = confirm,
-                .onClose = [setConfirm] { setConfirm(false); },
-                .width = 36,
-                .children = {
-                    h("text", {}, {"This removes every task. Esc to cancel."}),
-                    h("box", {{"direction", "row"}, {"justifyContent", "space-between"}}, {
-                        ui::button({.label = "keep them", .onClick = [setConfirm] { setConfirm(false); }}),
-                        ui::button({.label = "clear", .onClick = [setTasks, setConfirm] {
-                                        setTasks(Tasks{});
-                                        setConfirm(false);
-                                    }, .variant = ui::Variant::Danger}),
-                    }),
+                .confirmLabel = "clear",
+                .cancelLabel = "keep them",
+                .danger = true,
+                .onConfirm = [setTasks, setConfirm] {
+                    setTasks(Tasks{});
+                    setConfirm(false);
+                    ui::toast({.text = "All tasks cleared", .variant = ui::Variant::Danger});
                 },
+                .onCancel = [setConfirm] { setConfirm(false); },
             }),
+            ui::toaster(),
         }),
     });
 }

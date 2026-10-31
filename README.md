@@ -271,7 +271,8 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
         }},
         {"Settings", {ui::checkbox({.label = "Dark theme", .checked = dark, .onToggle = flipFn})}},
     }}),
-    ui::modal({.title = "Sure?", .open = asking, .onClose = closeFn, .children = {/* ... */}}),
+    ui::confirm({.title = "Delete all?", .open = asking, .danger = true, .onConfirm = clearFn, .onCancel = closeFn}),
+    ui::toaster(),  // ui::toast({.text = "Saved", .variant = ui::Variant::Success}) from any handler
 });
 ```
 
@@ -283,6 +284,13 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 | `tabs` | tabs `{label, content}`, `initial`; Enter on a title opens the tab |
 | `modal` | `title`, `open`, `onClose` (Escape), `width`; covers what is under it, keeps the focus inside and gives it back when closed |
 | `list` / `listItem` | a bordered box with a title, `emptyText`; an item: `label`, `detail` on the right, `selected`, `onSelect`, `onKey` |
+| `select` | `label`, `value`, `options` (`{value, label}`), `onChange(value)`; a native `<select>` in the browser, ‹ › with Left / Right / Enter or a click in a terminal |
+| `confirm` | `title`, `message`, `open`, `confirmLabel`, `cancelLabel`, `danger`, `onConfirm`, `onCancel` (also Escape and a click outside) — a ready "Delete it?" |
+| `toast` / `toaster` | `ui::toast({.text, .variant, .duration})` from any handler or effect shows a message in a corner that goes away by itself (`duration = 0`: until clicked); put one `ui::toaster()` in the app |
+| `tooltip` | `text`, `children`: shows while the pointer is over them (and while they have focus in the browser) |
+| `card` | `title`, `children`: a bordered panel |
+| `stack` | `direction` (`Column`, `Row`), `gap` (cells / 8px steps), `align`, `justify` (`Between`, …), `wrap`, `children`: layout without CSS |
+| `text` | `text`, `muted`: a paragraph |
 
 Theme (`ui::Theme`): `accent`, `text`, `muted`, `success`, `warning`, `danger`, `surface`. In the browser the theme becomes CSS variables (`--rx-accent`, …), terminal color names map to a palette, CSS colors (`"#ff6600"`) work too; style them yourself through the classes `rx-btn`, `rx-btn--primary`, `rx-input`, `rx-tab--active`, `rx-modal__dialog`, `rx-item--selected`. Every component also exists as a `Props` function: `h(ui::Button, {{"label", "OK"}})`.
 

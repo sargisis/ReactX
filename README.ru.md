@@ -259,7 +259,8 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
         }},
         {"Настройки", {ui::checkbox({.label = "Тёмная тема", .checked = dark, .onToggle = flipFn})}},
     }}),
-    ui::modal({.title = "Точно?", .open = asking, .onClose = closeFn, .children = {/* ... */}}),
+    ui::confirm({.title = "Удалить всё?", .open = asking, .danger = true, .onConfirm = clearFn, .onCancel = closeFn}),
+    ui::toaster(),  // ui::toast({.text = "Сохранено", .variant = ui::Variant::Success}) из любого обработчика
 });
 ```
 
@@ -271,6 +272,13 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 | `tabs` | вкладки `{label, content}`, `initial`; Enter на заголовке открывает вкладку |
 | `modal` | `title`, `open`, `onClose` (Escape), `width`; закрывает то, что под ним, держит фокус внутри и возвращает его после закрытия |
 | `list` / `listItem` | рамка с заголовком, `emptyText`; пункт: `label`, `detail` справа, `selected`, `onSelect`, `onKey` |
+| `select` | `label`, `value`, `options` (`{value, label}`), `onChange(value)`; в браузере нативный `<select>`, в терминале ‹ › со стрелками ← → / Enter или кликом |
+| `confirm` | `title`, `message`, `open`, `confirmLabel`, `cancelLabel`, `danger`, `onConfirm`, `onCancel` (ещё Escape и клик мимо) — готовое «Удалить?» |
+| `toast` / `toaster` | `ui::toast({.text, .variant, .duration})` из любого обработчика или эффекта показывает сообщение в углу, которое исчезает само (`duration = 0` — до клика); один `ui::toaster()` в приложении |
+| `tooltip` | `text`, `children`: подсказка, пока указатель над ними (и, в браузере, пока у них фокус) |
+| `card` | `title`, `children`: панель с рамкой |
+| `stack` | `direction` (`Column`, `Row`), `gap` (клетки / шаги по 8px), `align`, `justify` (`Between`, …), `wrap`, `children`: раскладка без CSS |
+| `text` | `text`, `muted`: абзац |
 
 Тема (`ui::Theme`): `accent`, `text`, `muted`, `success`, `warning`, `danger`, `surface`. В браузере тема превращается в CSS-переменные (`--rx-accent`, …), имена цветов терминала переводятся в палитру, можно передавать и CSS-цвета (`"#ff6600"`); свои стили — по классам `rx-btn`, `rx-btn--primary`, `rx-input`, `rx-tab--active`, `rx-modal__dialog`, `rx-item--selected`. Каждый компонент есть и как функция с `Props`: `h(ui::Button, {{"label", "OK"}})`.
 

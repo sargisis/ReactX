@@ -44,6 +44,7 @@
     getBoundingClientRect() { return this.rect || { left: 0, top: 0, width: 0, height: 0 }; }
     setPointerCapture() { globalThis.__rxCaptured = this; }
     addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
+    removeEventListener(type, fn) { this.listeners[type] = (this.listeners[type] || []).filter(f => f !== fn); }
     dispatchEvent(e) {
       e.target ||= this;
       for (let n = this; n && !e.stopped; n = n.parentNode) for (const fn of (n.listeners?.[e.type] || [])) fn(e);
@@ -203,6 +204,7 @@
     clickText: (text) => byText(text).dispatchEvent(event("click")),
     clickClass: (cls, i) => nth(byClass(cls), i, cls).dispatchEvent(event("click")),
     countClass: (cls) => String(byClass(cls).length),
+    changeClass: (cls, value, i) => { const el = nth(byClass(cls), i, cls); el.value = value; el.dispatchEvent(event("change")); },
     typeClass: (cls, text, i) => { const el = nth(byClass(cls), i, cls); el.value = text; el.dispatchEvent(event("input")); },
     keyClass: (cls, key, i) => nth(byClass(cls), i, cls).dispatchEvent(event("keydown", { key })),
     toggleIn: (cls, i) => { const el = nth(byClass(cls), i, cls).querySelectorAll("input")[0]; el.checked = !el.checked; el.dispatchEvent(event("change")); },

@@ -166,6 +166,13 @@ using rx::ui::Tabs;
 using rx::ui::Modal;
 using rx::ui::List;
 using rx::ui::ListItem;
+using rx::ui::Text;
+using rx::ui::Card;
+using rx::ui::Stack;
+using rx::ui::Select;
+using rx::ui::Tooltip;
+using rx::ui::Confirm;
+using rx::ui::Toaster;
 
 using rx::ui::ButtonProps;
 using rx::ui::InputProps;
@@ -175,6 +182,17 @@ using rx::ui::TabsProps;
 using rx::ui::ModalProps;
 using rx::ui::ListItemProps;
 using rx::ui::ListProps;
+using rx::ui::TextProps;
+using rx::ui::CardProps;
+using rx::ui::Direction;
+using rx::ui::Align;
+using rx::ui::Justify;
+using rx::ui::StackProps;
+using rx::ui::Option;
+using rx::ui::SelectProps;
+using rx::ui::TooltipProps;
+using rx::ui::ConfirmProps;
+using rx::ui::ToastProps;
 
 using rx::ui::button;
 using rx::ui::input;
@@ -183,6 +201,14 @@ using rx::ui::tabs;
 using rx::ui::modal;
 using rx::ui::listItem;
 using rx::ui::list;
+using rx::ui::text;
+using rx::ui::card;
+using rx::ui::stack;
+using rx::ui::select;
+using rx::ui::tooltip;
+using rx::ui::confirm;
+using rx::ui::toast;
+using rx::ui::toaster;
 
 }  // namespace rx::ui
 

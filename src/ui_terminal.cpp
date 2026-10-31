@@ -4,6 +4,7 @@
 #include <utility>
 
 #include "reactx/hooks.hpp"
+#include "reactx/store.hpp"
 
 // rx::ui for the terminal backend (box/text/button/input tags, Yoga layout).
 // The typed helpers (ui::button(...)) are in ui_helpers.cpp.
@@ -141,6 +142,108 @@ Element ListItem(const Props& p) {
                      {"onClick", p.get<Callback>("onSelect")},
                      {"onKey", p.get<KeyHandler>("onKey")}},
              std::move(parts));
+}
+
+Element Text(const Props& p) {
+    const Theme& t = useTheme();
+    bool muted = p.get<bool>("muted");
+    return h("text", {{"color", muted ? t.muted : t.text}, {"dim", muted}}, {p.get<std::string>("text")});
+}
+
+Element Card(const Props& p) {
+    const Theme& t = useTheme();
+    return h("box", {{"border", true}, {"title", p.get<std::string>("title")}, {"color", t.muted},
+                     {"paddingX", 1}, {"gap", 1}},
+             p.children());
+}
+
+Element Stack(const Props& p) {
+    std::string align = p.get<std::string>("align", "stretch");
+    std::string justify = p.get<std::string>("justify", "start");
+    return h("box", {{"direction", p.get<std::string>("direction", "column")},
+                     {"gap", p.get<int>("gap", 1)},
+                     {"alignItems", align},
+                     {"justifyContent", justify == "between" ? std::string("space-between") : justify},
+                     {"flexWrap", p.get<bool>("wrap") ? "wrap" : "nowrap"}},
+             p.children());
+}
+
+// "‹ Medium ›": Left / Right step through the options, Enter or a click picks the next.
+Element Select(const Props& p) {
+    const Theme& t = useTheme();
+    std::vector<std::string> values, labels;
+    for (const Element& o : p.children()) {
+        values.push_back(o.props.get<std::string>("value"));
+        labels.push_back(o.props.get<std::string>("label"));
+    }
+    std::string value = p.get<std::string>("value");
+    auto it = std::ranges::find(values, value);
+    int current = it == values.end() ? -1 : static_cast<int>(it - values.begin());
+    int n = static_cast<int>(values.size());
+    auto onChange = p.get<InputHandler>("onChange");
+    auto pick = [onChange, values, n](int i) {
+        if (onChange && n > 0) onChange(values[static_cast<std::size_t>(((i % n) + n) % n)]);
+    };
+    std::string shown = current >= 0 ? labels[static_cast<std::size_t>(current)] : "—";
+    std::string label = p.get<std::string>("label");
+
+    Element field = h("box", {{"direction", "row"}, {"focusable", true},
+                              {"onClick", [pick, current] { pick(current + 1); }},
+                              {"onKey", [pick, current](const KeyEvent& e) {
+                                   if (e.key == "Right" || e.key == "Enter") pick(current + 1);
+                                   else if (e.key == "Left") pick(current - 1);
+                               }}},
+                      {h("text", {{"color", t.accent}, {"wrap", false}}, {"‹ " + shown + " ›"})});
+    if (label.empty()) return field;
+    return h("box", {{"direction", "row"}, {"gap", 1}}, {
+        h("text", {{"color", t.muted}, {"wrap", false}}, {label}),
+        std::move(field),
+    });
+}
+
+// The text shows under the children while the mouse is over them.
+Element Tooltip(const Props& p) {
+    auto [shown, setShown] = useState(false);
+    std::vector<Element> parts = p.children();
+    if (shown)
+        parts.push_back(h("text", {{"position", "absolute"}, {"top", 1}, {"left", 0}, {"wrap", false},
+                                   {"color", "black"}, {"bg", "gray"}},
+                          {" " + p.get<std::string>("text") + " "}));
+    return h("box", {{"onMouseEnter", [setShown] { setShown(true); }},
+                     {"onMouseLeave", [setShown] { setShown(false); }}},
+             std::move(parts));
+}
+
+namespace {
+
+struct ToastViewProps {
+    detail::ToastItem item{};
+    std::string key{};
+    bool operator==(const ToastViewProps&) const = default;
+};
+
+Element ToastView(const ToastViewProps& p) {
+    const Theme& t = useTheme();
+    int id = p.item.id;
+    useTimeout([id] { detail::dismissToast(id); },
+               p.item.duration.count() > 0 ? std::optional(p.item.duration) : std::nullopt);
+    const std::string& v = p.item.variant;
+    std::string color = v == "primary" ? t.accent : v == "danger" ? t.danger : v == "success" ? t.success : t.muted;
+    return h("box", {{"border", true}, {"opaque", true}, {"color", color}, {"bg", t.surface}, {"paddingX", 1},
+                     {"onClick", [id] { detail::dismissToast(id); }}},
+             {h("text", {{"color", t.text}}, {p.item.text})});
+}
+
+}  // namespace
+
+// Bottom right, over everything else in the box it is in.
+Element Toaster(const Props&) {
+    const auto& list = useStore(detail::toasts());
+    if (list.empty()) return fragment({});
+    std::vector<Element> items;
+    for (const auto& t : list) items.push_back(h(ToastView, {.item = t, .key = std::to_string(t.id)}));
+    return h("box", {{"position", "absolute"}, {"bottom", 0}, {"right", 1}, {"maxWidth", "60%"}, {"alignItems", "end"}},
+             std::move(items));
 }
 
 }  // namespace rx::ui

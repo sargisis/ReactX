@@ -1,5 +1,6 @@
 // rx::ui in the browser: the same components and props as the terminal
-// ui_demo, rendered as HTML + CSS.
+// ui_demo (tabs, list, select, tooltip, confirm, toasts, cards), rendered as
+// HTML + CSS.
 #include <algorithm>
 #include <string>
 #include <vector>
@@ -24,6 +25,7 @@ Element App(const Props&) {
     auto [showDone, setShowDone] = useState(true);
     auto [accent, setAccent] = useState(std::string("blue"));
     auto [confirm, setConfirm] = useState(false);
+    auto [sort, setSort] = useState(std::string("added"));
     int& nextId = useRef(4);
 
     auto toggle = [setTasks](int id) {
@@ -40,8 +42,11 @@ Element App(const Props&) {
     };
 
     // ---- Tasks tab ----
+    Tasks shown = tasks;
+    if (sort == "name") std::ranges::sort(shown, {}, &Task::title);
+    if (sort == "todo") std::ranges::stable_partition(shown, [](const Task& t) { return !t.done; });
     std::vector<Element> items;
-    for (const Task& t : tasks) {
+    for (const Task& t : shown) {
         if (!showDone && t.done) continue;
         int id = t.id;
         items.push_back(ui::listItem({
@@ -66,16 +71,21 @@ Element App(const Props&) {
                            return list;
                        });
                        setDraft(std::string{});
+                       ui::toast({.text = "Added: " + v, .variant = ui::Variant::Success});
                    },
                    .placeholder = "New task, press Enter",
                    .label = "Add"}),
         ui::list({.title = std::to_string(left) + " left · click to toggle, Delete to remove",
                   .emptyText = "No tasks",
                   .items = std::move(items)}),
-        h("div", {{"className", "row"}}, {
-            ui::button({.label = "Clear all", .onClick = [setConfirm] { setConfirm(true); },
-                        .variant = ui::Variant::Danger, .disabled = tasks.empty()}),
-        }),
+        ui::stack({.direction = ui::Direction::Row, .justify = ui::Justify::Between, .wrap = true, .children = {
+            ui::select({.label = "Sort", .value = sort,
+                        .options = {{"added", "As added"}, {"name", "By name"}, {"todo", "Todo first"}},
+                        .onChange = [setSort](const std::string& v) { setSort(v); }}),
+            ui::tooltip({.text = "Asks before removing", .children = {
+                ui::button({.label = "Clear all", .onClick = [setConfirm] { setConfirm(true); },
+                            .variant = ui::Variant::Danger, .disabled = tasks.empty()})}}),
+        }}),
     };
 
     // ---- Settings tab ----
@@ -97,8 +107,14 @@ Element App(const Props&) {
 
     // ---- About tab ----
     std::vector<Element> aboutTab = {
-        h("p", {{"style", "margin: 0"}}, {"ReactX is a React-like UI framework in C++26. This page is WebAssembly; "
-                                          "the same rx::ui code also runs in a terminal."}),
+        ui::card({.title = "ReactX", .children = {
+            ui::text({.text = "A React-like UI framework in C++26. This page is WebAssembly."}),
+            ui::text({.text = "The same rx::ui code also runs in a terminal.", .muted = true}),
+        }}),
+        ui::stack({.direction = ui::Direction::Row, .children = {
+            ui::button({.label = "Say hi", .onClick = [] { ui::toast({.text = "Hi from rx::ui", .variant = ui::Variant::Primary}); },
+                        .variant = ui::Variant::Primary}),
+        }}),
     };
 
     ui::Theme theme;
@@ -111,22 +127,21 @@ Element App(const Props&) {
                                {"Settings", std::move(settingsTab)},
                                {"About", std::move(aboutTab)}}}),
         }),
-        ui::modal({
+        ui::confirm({
             .title = "Clear all tasks?",
+            .message = "This removes every task. Press Esc or click outside to cancel.",
             .open = confirm,
-            .onClose = [setConfirm] { setConfirm(false); },
-            .width = 34,
-            .children = {
-                h("p", {{"style", "margin: 0"}}, {"This removes every task. Press Esc or click outside to cancel."}),
-                h("div", {{"className", "row"}, {"style", "justify-content: flex-end"}}, {
-                    ui::button({.label = "Keep them", .onClick = [setConfirm] { setConfirm(false); }}),
-                    ui::button({.label = "Clear", .onClick = [setTasks, setConfirm] {
-                                    setTasks(Tasks{});
-                                    setConfirm(false);
-                                }, .variant = ui::Variant::Danger}),
-                }),
+            .confirmLabel = "Clear",
+            .cancelLabel = "Keep them",
+            .danger = true,
+            .onConfirm = [setTasks, setConfirm] {
+                setTasks(Tasks{});
+                setConfirm(false);
+                ui::toast({.text = "All tasks cleared", .variant = ui::Variant::Danger});
             },
+            .onCancel = [setConfirm] { setConfirm(false); },
         }),
+        ui::toaster(),
     });
 }
 

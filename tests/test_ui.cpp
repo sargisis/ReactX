@@ -1,5 +1,7 @@
 // Tests for rx::ui components on the terminal backend (no real terminal needed).
+#include <chrono>
 #include <functional>
+#include <thread>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -256,6 +258,94 @@ TEST(key_events_bubble_to_ancestors) {
     Screen s(h(&App::render, {{"log", reinterpret_cast<std::int64_t>(&seen)}}));
     s.press("x");
     CHECK((seen == std::vector<std::string>{"button:x", "inner:x", "outer:x"}));
+}
+
+// ---- text, card, stack, select, confirm, tooltip, toasts ----
+
+TEST(card_and_stack_lay_out_their_children) {
+    Screen s(ui::card({.title = "Stats", .children = {
+                           ui::stack({.direction = ui::Direction::Row, .gap = 2, .children = {
+                                          ui::text({.text = "one"}), ui::text({.text = "two", .muted = true})}}),
+                       }}));
+    CHECK(contains(s.text(), "┌─ Stats"));
+    CHECK(contains(s.text(), "one  two"));  // a row, two cells apart
+}
+
+Element SelectApp(const Props&) {
+    auto [size, setSize] = useState(std::string("m"));
+    return h("box", {}, {
+        ui::select({.label = "Size:", .value = size,
+                    .options = {{"s", "Small"}, {"m", "Medium"}, {"l", "Large"}},
+                    .onChange = [setSize](const std::string& v) { setSize(v); }}),
+        h("text", {}, {"size=" + size}),
+    });
+}
+
+TEST(select_steps_through_options_with_arrows) {
+    Screen s(h(SelectApp));
+    CHECK(contains(s.text(), "Size: ‹ Medium ›"));
+    s.press("Right");
+    CHECK(contains(s.text(), "‹ Large ›") && contains(s.text(), "size=l"));
+    s.press("Right");  // wraps around
+    CHECK(contains(s.text(), "size=s"));
+    s.press("Left");
+    CHECK(contains(s.text(), "size=l"));
+}
+
+Element ConfirmApp(const Props&) {
+    auto [open, setOpen] = useState(true);
+    auto [result, setResult] = useState(std::string("none"));
+    return h("box", {{"flexGrow", 1}}, {
+        h("text", {}, {"result=" + result}),
+        ui::confirm({.title = "Delete?", .message = "It can't be undone.", .open = open,
+                     .confirmLabel = "Delete", .danger = true,
+                     .onConfirm = [setOpen, setResult] { setResult("deleted"); setOpen(false); },
+                     .onCancel = [setOpen, setResult] { setResult("kept"); setOpen(false); }}),
+    });
+}
+
+TEST(confirm_asks_and_answers) {
+    {
+        Screen s(h(ConfirmApp), 50, 14);
+        CHECK(contains(s.text(), "Delete?") && contains(s.text(), "It can't be undone."));
+        CHECK(contains(s.text(), "[ Cancel ]") && contains(s.text(), "[ Delete ]"));
+        s.press("Tab");  // Cancel -> Delete
+        s.press("Enter");
+        CHECK(contains(s.text(), "result=deleted") && !contains(s.text(), "It can't"));
+    }
+    {
+        Screen s(h(ConfirmApp), 50, 14);
+        s.press("Escape");
+        CHECK(contains(s.text(), "result=kept"));
+    }
+}
+
+TEST(tooltip_shows_while_the_mouse_is_over) {
+    Screen s(h("box", {}, {ui::tooltip({.text = "Saves the file", .children = {ui::button({.label = "Save"})}})}));
+    CHECK(!contains(s.text(), "Saves the file"));
+    auto over = MouseInput{.action = MouseInput::Action::Move, .x = 2, .y = 0};
+    s.renderer.handleMouse(s.root, over);
+    CHECK(contains(s.text(), "Saves the file"));
+    s.renderer.handleMouse(s.root, MouseInput{.action = MouseInput::Action::Move, .x = 30, .y = 8});
+    CHECK(!contains(s.text(), "Saves the file"));
+}
+
+TEST(toasts_show_go_away_and_close_on_click) {
+    Screen s(h("box", {{"flexGrow", 1}}, {h("text", {}, {"app"}), ui::toaster()}), 40, 10);
+    ui::toast({.text = "Saved", .variant = ui::Variant::Success, .duration = std::chrono::milliseconds(0)});
+    ui::toast({.text = "Quick", .duration = std::chrono::milliseconds(1)});
+    s.root.flush();
+    CHECK(contains(s.text(), "Saved") && contains(s.text(), "Quick"));
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    s.root.flush();  // runs due timers: the 1 ms one is gone
+    CHECK(contains(s.text(), "Saved") && !contains(s.text(), "Quick"));
+    auto lines = s.renderer.frameLines();
+    int y = 0, x = 0;
+    for (std::size_t i = 0; i < lines.size(); ++i)
+        if (auto at = lines[i].find("Saved"); at != std::string::npos) y = static_cast<int>(i), x = static_cast<int>(at);
+    s.renderer.handleMouse(s.root, MouseInput{.action = MouseInput::Action::Down, .x = x, .y = y});
+    s.renderer.handleMouse(s.root, MouseInput{.action = MouseInput::Action::Up, .x = x, .y = y});
+    CHECK(!contains(s.text(), "Saved"));
 }
 
 }  // namespace

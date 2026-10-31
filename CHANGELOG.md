@@ -6,6 +6,14 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Added
+
+- **New `rx::ui` components**, the same in the browser and the terminal: `ui::select` (a native `<select>`; ‹ › with arrows or a click in a terminal), `ui::confirm` (a ready "Delete it?" dialog), `ui::toast` + `ui::toaster()` (messages in a corner that go away by themselves, sent from any handler), `ui::tooltip` (on hover, and on focus in the browser), `ui::card`, `ui::stack` (rows and columns with gaps, no CSS) and `ui::text`. Each also exists as a `Props` component (`ui::Select`, `ui::Confirm`, …). The rx::ui demos use them.
+
+### Fixed
+
+- `mountDom` into a container that already held an app: the old app's event listeners stayed and could undo the new app's `<select>` and inputs. Now the earlier app stops listening.
+
 ## [0.9.0] — 2026-10-31
 
 C++ meets the page: `useNodeRef` and the `ref` prop give the real element, `reactx/js.hpp` drives JavaScript libraries from C++ state (a Chart.js demo), and pointer events bring hover, drag and drop and focus from code — the same in the browser and, with the mouse, in the terminal (a kanban demo built from one source for both). `reactx install` now checks for `xz`. A MINOR release because `PropValue` and `EventData` got new alternatives: code that `std::visit`s all of them needs branches for `RefHandler` / `PointerHandler` / `PointerEvent`; other apps update without changes.

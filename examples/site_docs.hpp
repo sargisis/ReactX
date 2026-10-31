@@ -428,13 +428,27 @@ inline const std::vector<Page>& pages() {
             },
         },
         {
-            "ui", "Компоненты rx::ui", "Готовые кнопки, поля, вкладки, окна и списки с темой.",
+            "ui", "Компоненты rx::ui", "Готовые кнопки, поля, списки выбора, окна, уведомления, подсказки и списки с темой.",
             {
-                {"Компоненты", "button, input, checkbox, tabs, modal, list и listItem. Один и тот же код работает в терминале "
-                               "и в браузере. Свойства — назначенные инициализаторы C++20.",
+                {"Компоненты", "button, input, checkbox, select, tabs, modal, confirm, list и listItem, tooltip, card, stack и text. "
+                               "Один и тот же код работает в терминале и в браузере. Свойства — назначенные инициализаторы C++20.",
                  "ui::button({.label = \"Сохранить\", .onClick = save, .variant = ui::Variant::Primary})\n"
                  "ui::input({.value = name, .onChange = setNameFn, .onSubmit = addFn, .label = \"Имя\"})\n"
                  "ui::modal({.title = \"Удалить?\", .open = asking, .onClose = closeFn, .children = {...}})"},
+                {"Подтверждение и уведомления", "ui::confirm — готовое окно «Удалить?». ui::toast показывает короткое сообщение в углу "
+                                                "из любого обработчика, эффекта или ответа fetch; оно исчезает само. Один ui::toaster() "
+                                                "в приложении.",
+                 "ui::confirm({.title = \"Удалить задачу?\", .open = asking, .danger = true,\n"
+                 "             .onConfirm = removeFn, .onCancel = closeFn})\n"
+                 "ui::toast({.text = \"Сохранено\", .variant = ui::Variant::Success});"},
+                {"Выбор, подсказка, раскладка", "ui::select — нативный <select> в браузере и переключатель ‹ › в терминале. "
+                                                "ui::tooltip показывает текст, пока указатель над детьми. ui::stack и ui::card "
+                                                "раскладывают элементы без CSS.",
+                 "ui::stack({.direction = ui::Direction::Row, .justify = ui::Justify::Between, .children = {\n"
+                 "    ui::select({.label = \"Сортировка\", .value = sort, .options = {{\"name\", \"По имени\"}, {\"date\", \"По дате\"}},\n"
+                 "                .onChange = setSortFn}),\n"
+                 "    ui::tooltip({.text = \"Спросит заранее\", .children = {ui::button({.label = \"Очистить\"})}}),\n"
+                 "}})"},
                 {"Тема", "ui::themeProvider передаёт ui::Theme через контекст; в браузере она превращается в CSS-переменные.",
                  "ui::themeProvider(ui::Theme{.accent = \"magenta\"}, {h(App)})"},
             },

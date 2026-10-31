@@ -167,6 +167,16 @@ EM_JS(void, rx_js_destroy, (double id), {
 // One delegated listener per event type on the container.
 EM_JS(void, rx_js_listen, (int app, double rootId), {
     const root = Module.rxNodes.get(rootId);
+    // One app per container: an app mounted here before stops listening.
+    if (root.__rxUnlisten) root.__rxUnlisten();
+    const listeners = [];
+    const on = function(type, fn, options) {
+        root.addEventListener(type, fn, options);
+        listeners.push([type, fn, options]);
+    };
+    root.__rxUnlisten = function() {
+        for (const l of listeners) root.removeEventListener(l[0], l[1], l[2]);
+    };
     const keyName = function(k) {
         return { ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right", Esc: "Escape" }[k] || k;
     };
@@ -203,7 +213,7 @@ EM_JS(void, rx_js_listen, (int app, double rootId), {
         for (const r of group)
             if (r.__rxChecked !== undefined && r.checked !== r.__rxChecked) r.checked = r.__rxChecked;
     };
-    root.addEventListener("click", function(e) {
+    on("click", function(e) {
         // Router links: stay on the page (unless the user wants a new tab).
         for (let el = e.target; el && el !== root; el = el.parentNode) {
             if (el.getAttribute && el.getAttribute("data-rx-link") !== null) {
@@ -216,11 +226,11 @@ EM_JS(void, rx_js_listen, (int app, double rootId), {
     });
     // A <select> fires input and then change: keep the user's choice until
     // onChange has seen it, and only then snap back to the C++ value.
-    root.addEventListener("input", function(e) {
+    on("input", function(e) {
         send(e, "onInput", e.target.value ?? "");
         if (e.target.tagName !== "SELECT") resync(e.target);
     });
-    root.addEventListener("change", function(e) {
+    on("change", function(e) {
         const t = e.target;
         const box = t.type === "checkbox" || t.type === "radio";
         send(e, "onChange", box ? (t.checked ? "true" : "false") : (t.value ?? ""));
@@ -228,7 +238,7 @@ EM_JS(void, rx_js_listen, (int app, double rootId), {
         if (box) resyncChecked(t);
     });
     // No preventDefault: typing must keep working even if a parent has onKey.
-    root.addEventListener("keydown", function(e) {
+    on("keydown", function(e) {
         if (e.isComposing) return;
         if (e.key === "Tab") {  // keep Tab inside the last open dialog
             const traps = root.querySelectorAll("[data-rx-trap]");
@@ -244,7 +254,7 @@ EM_JS(void, rx_js_listen, (int app, double rootId), {
         }
         send(e, "onKey", keyName(e.key));
     });
-    root.addEventListener("submit", function(e) { e.preventDefault(); send(e, "onSubmit", ""); });
+    on("submit", function(e) { e.preventDefault(); send(e, "onSubmit", ""); });
     // Pointer: bubbles like the others, with the position relative to each
     // element in turn ("x,y,localX,localY,button,buttons,type", whole pixels).
     const sendPointer = function(e, name) {
@@ -267,7 +277,7 @@ EM_JS(void, rx_js_listen, (int app, double rootId), {
     };
     // pointerCapture (data-rx-capture): a press keeps the pointer there until
     // the release, even outside the element, so a slider doesn't break.
-    root.addEventListener("pointerdown", function(e) {
+    on("pointerdown", function(e) {
         for (let el = e.target; el && el !== root; el = el.parentNode) {
             if (el.getAttribute && el.getAttribute("data-rx-capture") !== null) {
                 try { el.setPointerCapture(e.pointerId); } catch (err) {}
@@ -276,9 +286,9 @@ EM_JS(void, rx_js_listen, (int app, double rootId), {
         }
         sendPointer(e, "onPointerDown");
     });
-    root.addEventListener("pointermove", function(e) { sendPointer(e, "onPointerMove"); });
-    root.addEventListener("pointerup", function(e) { sendPointer(e, "onPointerUp"); });
-    root.addEventListener("pointercancel", function(e) { sendPointer(e, "onPointerUp"); });  // a touch became a scroll
+    on("pointermove", function(e) { sendPointer(e, "onPointerMove"); });
+    on("pointerup", function(e) { sendPointer(e, "onPointerUp"); });
+    on("pointercancel", function(e) { sendPointer(e, "onPointerUp"); });  // a touch became a scroll
     // onMouseEnter / onMouseLeave don't bubble (like React): each element the
     // pointer entered or left gets its own, outer first on enter, inner first on leave.
     const hoverOne = function(el, name) {
@@ -295,18 +305,18 @@ EM_JS(void, rx_js_listen, (int app, double rootId), {
         }
         return list;
     };
-    root.addEventListener("mouseout", function(e) {
+    on("mouseout", function(e) {
         for (const el of outside(e.target, e.relatedTarget)) hoverOne(el, "onMouseLeave");
     });
-    root.addEventListener("mouseover", function(e) {
+    on("mouseover", function(e) {
         for (const el of outside(e.target, e.relatedTarget).reverse()) hoverOne(el, "onMouseEnter");
     });
     // Focus: focusin / focusout bubble (like React's onFocus / onBlur).
-    root.addEventListener("focusin", function(e) { send(e, "onFocus", ""); });
-    root.addEventListener("focusout", function(e) { send(e, "onBlur", ""); });
+    on("focusin", function(e) { send(e, "onFocus", ""); });
+    on("focusout", function(e) { send(e, "onBlur", ""); });
     // Scroll doesn't bubble: only the scrolled element's onScroll runs (like React).
     // Captured on the root, so scrolling inside any element of the app is seen.
-    root.addEventListener("scroll", function(e) {
+    on("scroll", function(e) {
         const t = e.target;
         if (!t || t.__rxId === undefined || !Module.rxNodes.has(t.__rxId)) return;
         const pos = [t.scrollTop, t.scrollLeft, t.scrollHeight, t.scrollWidth, t.clientHeight, t.clientWidth]

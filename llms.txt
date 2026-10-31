@@ -6,7 +6,7 @@ Native (terminal) builds need GCC 16+ (the C++26 standard library); browser buil
 
 ## Which version has what
 
-`reactx new` pins the project to the CLI's release (`"rev"` in `reactx.json`). Everything in this file is in v0.9.0: `useNodeRef` / the `ref` prop / `ref.focus()`, `reactx/js.hpp` (`domElement`, `jsValue`, `reactx::js`), pointer and hover events (`onPointerDown/Move/Up`, `onMouseEnter/Leave`, `pointerCapture`) and the mouse in the terminal came in v0.9.0, `renderToString` in v0.8.3. If a name from this file doesn't exist ("'useNodeRef' was not declared in this scope", "'PointerEvent' was not declared in this scope"), the project is on an older release: `reactx update` moves it to the newest one (`reactx --version` shows the CLI's).
+`reactx new` pins the project to the CLI's release (`"rev"` in `reactx.json`). Everything in this file is in v0.9.0 except what is marked "since v0.10.0" (new rx::ui components, on `main` until v0.10.0 is released — use `"rev": "main"` for them): `useNodeRef` / the `ref` prop / `ref.focus()`, `reactx/js.hpp` (`domElement`, `jsValue`, `reactx::js`), pointer and hover events (`onPointerDown/Move/Up`, `onMouseEnter/Leave`, `pointerCapture`) and the mouse in the terminal came in v0.9.0, `renderToString` in v0.8.3. If a name from this file doesn't exist ("'useNodeRef' was not declared in this scope", "'PointerEvent' was not declared in this scope"), the project is on an older release: `reactx update` moves it to the newest one (`reactx --version` shows the CLI's).
 
 ## A complete program
 
@@ -127,6 +127,8 @@ A server (`rx::net::HttpServer`) is native-only: keep it in its own CMake target
 ## Ready components (`reactx/ui.hpp`, same code in terminal and browser)
 
 `ui::button({.label, .onClick, .variant = ui::Variant::Primary|Danger|Success, .disabled})`, `ui::input({.value, .onChange, .onSubmit, .placeholder, .label})`, `ui::checkbox({.label, .checked, .onToggle})`, `ui::tabs({.tabs = {{.label, .content}}})`, `ui::modal({.title, .open, .onClose, .children})`, `ui::list({.title, .items})` with `ui::listItem({.label, .detail, .selected, .onSelect})`. Theme: `ui::themeProvider(ui::Theme{.accent = "blue"}, {children})`.
+
+Since v0.10.0: `ui::select({.label, .value, .options = {{"m", "Medium"}, ...}, .onChange})` (`onChange` gets the value), `ui::confirm({.title, .message, .open, .confirmLabel, .cancelLabel, .danger, .onConfirm, .onCancel})` (a ready yes/no modal; Escape and a click outside call `onCancel`), `ui::toast({.text, .variant, .duration = 4s})` from any handler/effect/fetch callback (UI thread) + one `ui::toaster()` in the app (in a terminal put it last in a box that fills the screen, like a modal; `duration = 0ms` stays until clicked), `ui::tooltip({.text, .children})`, `ui::card({.title, .children})`, `ui::stack({.direction = ui::Direction::Row, .gap = 1, .align = ui::Align::Center, .justify = ui::Justify::Between, .wrap, .children})` (gap in cells / 8px steps), `ui::text({.text, .muted})`. Prefer `ui::stack` / `ui::card` / `ui::text` over raw tags when the code must run in both backends: they pick `div`/`p` or `box`/`text` themselves.
 
 ## Router (`reactx/router.hpp`, namespace `rx::router`)
 

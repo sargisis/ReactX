@@ -1,6 +1,7 @@
 // rx::ui in the browser: WebAssembly under Node with tests/web/fake_dom.js.
 #include <emscripten.h>
 
+#include <chrono>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -68,6 +69,31 @@ Element App(const Props&) {
                        ui::button({.label = "No", .onClick = [setOpen] { setOpen(false); }}),
                    }}),
     });
+}
+
+// The newer atoms: card, stack, text, select, tooltip, confirm, toasts.
+Element Atoms(const Props&) {
+    auto [size, setSize] = useState(std::string("m"));
+    auto [asking, setAsking] = useState(true);
+    auto [result, setResult] = useState(std::string("none"));
+    return ui::stack({.children = {
+        ui::card({.title = "Stats", .children = {
+                      ui::stack({.direction = ui::Direction::Row, .gap = 2, .justify = ui::Justify::Between,
+                                 .children = {ui::text({.text = "one"}), ui::text({.text = "two", .muted = true})}}),
+                  }}),
+        ui::select({.label = "Size", .value = size, .options = {{"s", "Small"}, {"m", "Medium"}, {"l"}},
+                    .onChange = [setSize](const std::string& v) { setSize(v); }}),
+        ui::tooltip({.text = "Saves the file", .children = {h("button", {{"id", "save"}}, {"Save"})}}),
+        h("button", {{"id", "notify"}, {"onClick", [] {
+             ui::toast({.text = "Saved!", .variant = ui::Variant::Success, .duration = std::chrono::milliseconds(0)});
+         }}}, {"notify"}),
+        h("p", {}, {"size=" + size + " result=" + result}),
+        ui::confirm({.title = "Delete?", .message = "It can't be undone.", .open = asking, .confirmLabel = "Delete",
+                     .danger = true,
+                     .onConfirm = [setAsking, setResult] { setResult("deleted"); setAsking(false); },
+                     .onCancel = [setAsking, setResult] { setResult("kept"); setAsking(false); }}),
+        ui::toaster(),
+    }});
 }
 
 }  // namespace
@@ -142,6 +168,39 @@ int main() {
     js("rxTest.clickText('Open')");
     js("rxTest.keyFocused('Escape')");  // from the focused button, bubbles to the modal
     CHECK(js("rxTest.countClass('rx-modal')") == "0");
+
+    std::cout << "card, stack, text\n";
+    mountDom(h(Atoms));  // replaces the app above
+    CHECK(has("<section aria-label=\"Stats\" class=\"rx-card\"><h3 class=\"rx-card__title\">Stats</h3>"));
+    CHECK(has("flex-direction: row; gap: 16px; align-items: stretch; justify-content: space-between"));
+    CHECK(has("<p class=\"rx-text\">one</p><p class=\"rx-text rx-text--muted\">two</p>"));
+
+    std::cout << "select\n";
+
+    CHECK(has("<option>Small</option><option>Medium</option><option>l</option>"));  // value is a property here
+    CHECK(js("document.querySelector('#app').querySelectorAll('option')[2].value") == "l");  // the label falls back to it
+    CHECK(js("document.querySelector('#app').querySelectorAll('select')[0].value") == "m");
+    js("rxTest.changeClass('rx-select', 'l')");
+    CHECK(has("size=l"));
+
+    std::cout << "tooltip\n";
+    CHECK(!has("Saves the file"));
+    js("rxTest.hover('', 'save')");
+    CHECK(has("role=\"tooltip\"") && has("Saves the file"));
+    js("rxTest.hover('save', '')");
+    CHECK(!has("Saves the file"));
+
+    std::cout << "confirm\n";
+    CHECK(has("It can't be undone.") && has("rx-btn rx-btn--danger"));
+    js("rxTest.clickText('Delete')");
+    CHECK(has("result=deleted") && !has("It can't be undone."));
+
+    std::cout << "toasts\n";
+    CHECK(has("<div aria-live=\"polite\" class=\"rx-toaster\" role=\"status\"></div>"));
+    js("rxTest.click('notify')");
+    CHECK(has("rx-toast rx-toast--success") && has("Saved!"));
+    js("rxTest.clickClass('rx-toast')");
+    CHECK(!has("Saved!"));
 
     std::cout << (failures ? "FAILED: " + std::to_string(failures) : std::string("OK, all tests passed")) << '\n';
     return failures ? 1 : 0;

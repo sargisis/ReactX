@@ -6,6 +6,10 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ## [Не выпущено]
 
+## [0.8.2] — 2026-10-31
+
+Меньше и быстрее в браузере, проще начать: WebAssembly в 2–3,5 раза меньше (счётчик — 40 КБ по сети), `reactx install` скачивает компилятор без sudo, установка одной строкой, `fetch` с заголовками, таймаутом и отменой, ошибки хранилища как значения, строгое чтение JSON, проверка потока у сеттеров и CHANGELOG на английском. Приложения обновляются без правок, кроме редкого `return fetch(...)` из функции, возвращающей `void` (см. «Изменено»).
+
 ### Добавлено
 
 - **Сайт на английском**: вся документация, главная и интерфейс — на английском и русском, переключатель EN/RU в шапке (выбор запоминается). По умолчанию английский, русский — если браузер русскоязычный. Заголовок и описание страницы для поисковиков и превью в соцсетях — на английском.
@@ -223,7 +227,8 @@ ReactX без установки компиляторов: готовый `react
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.8.1...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.8.2...HEAD
+[0.8.2]: https://github.com/sargisis/ReactX/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/sargisis/ReactX/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/sargisis/ReactX/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/sargisis/ReactX/compare/v0.6.0...v0.7.0

@@ -6,6 +6,10 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+## [0.8.2] — 2026-10-31
+
+Smaller and faster in the browser, and easier to start: WebAssembly 2–3.5× smaller (a counter is 40 KB over the network), `reactx install` downloads the compiler without sudo, a one-line installer, `fetch` with headers, timeouts and cancelling, storage errors as values, strict JSON reading, a setter thread check, and the changelog in English. Apps update without changes, except the rare `return fetch(...)` from a `void` function (see Changed).
+
 ### Added
 
 - **The site in English**: all documentation, the home page and the interface are in English and Russian, with an EN/RU switch in the header (the choice is remembered). English by default, Russian if the browser is Russian. The page title and description for search engines and social previews are in English.
@@ -223,7 +227,8 @@ The first release.
 - **A documentation site** built with ReactX: https://sargisis.github.io/ReactX/, published by GitHub Actions through the `gh-pages` branch.
 - The version in one place (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; new projects from `reactx new` use ReactX by release tag.
 
-[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.8.2...HEAD
+[0.8.2]: https://github.com/sargisis/ReactX/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/sargisis/ReactX/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/sargisis/ReactX/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/sargisis/ReactX/compare/v0.6.0...v0.7.0

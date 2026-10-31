@@ -6,6 +6,10 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-11-01
+
+Long lists in the terminal: a `box` with `overflow: "scroll"` (or `ui::list({.scroll = true})`) scrolls with the mouse wheel and PageUp/PageDown and keeps the focused or selected item on screen, and modals and toasts stay on the screen however tall the page is. `ref.scrollIntoView()` in both backends. Fixes found by writing real apps from llms.txt: `ui::select` with an empty value ("All") in the browser, and a terminal modal that Escape couldn't close. A MINOR release because `Renderer` got a virtual and the terminal modal and toaster are now `position: "fixed"`; apps update without changes.
+
 ### Added
 
 - **Scrolling in the terminal**: `overflow: "scroll"` makes a `box` a vertical scroll container. In a column it takes the rows that are left (no height to compute); the mouse wheel over it and PageUp/PageDown scroll it, moving the focus keeps the focused node visible, a border shows the position (`┃`), and `onScroll` now works in the terminal too (a `ScrollEvent` in rows). `TerminalRenderer::scrollBy` / `scrollTop` for code and tests.
@@ -299,7 +303,8 @@ The first release.
 - **A documentation site** built with ReactX: https://sargisis.github.io/ReactX/, published by GitHub Actions through the `gh-pages` branch.
 - The version in one place (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; new projects from `reactx new` use ReactX by release tag.
 
-[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/sargisis/ReactX/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/sargisis/ReactX/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/sargisis/ReactX/compare/v0.8.3...v0.9.0
 [0.8.3]: https://github.com/sargisis/ReactX/compare/v0.8.2...v0.8.3

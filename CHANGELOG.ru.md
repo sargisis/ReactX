@@ -6,6 +6,10 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ## [Не выпущено]
 
+## [0.11.0] — 2026-11-01
+
+Длинные списки в терминале: `box` с `overflow: "scroll"` (или `ui::list({.scroll = true})`) прокручивается колёсиком мыши и PageUp/PageDown и держит на экране пункт в фокусе или выбранный, а окна и уведомления остаются на экране, какой бы длинной ни была страница. `ref.scrollIntoView()` в обоих бэкендах. Исправления, найденные при написании настоящих приложений по llms.txt: `ui::select` с пустым значением («All») в браузере и терминальное окно, которое не закрывалось по Escape. MINOR-релиз, потому что у `Renderer` появилась виртуальная функция, а терминальные окно и уведомления теперь `position: "fixed"`; приложения обновляются без правок.
+
 ### Добавлено
 
 - **Прокрутка в терминале**: `overflow: "scroll"` делает `box` вертикальным контейнером с прокруткой. В колонке он занимает оставшиеся строки (высоту считать не нужно); колёсико мыши над ним и PageUp/PageDown прокручивают его, при перемещении фокуса элемент в фокусе остаётся на виду, рамка показывает положение (`┃`), а `onScroll` теперь работает и в терминале (`ScrollEvent` в строках). `TerminalRenderer::scrollBy` / `scrollTop` для кода и тестов.
@@ -299,7 +303,8 @@ ReactX без установки компиляторов: готовый `react
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.10.0...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/sargisis/ReactX/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/sargisis/ReactX/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/sargisis/ReactX/compare/v0.8.3...v0.9.0
 [0.8.3]: https://github.com/sargisis/ReactX/compare/v0.8.2...v0.8.3

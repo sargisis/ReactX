@@ -292,6 +292,8 @@ The [`DomRenderer`](include/reactx/dom.hpp) backend renders into the real DOM: t
 | `data-rx-self` | the element only gets clicks on itself, not on its children (dialog backdrops) |
 | `data-rx-trap` | Tab stays inside the element; it takes focus when it appears and gives it back when removed |
 
+**Prerendering.** `rx::renderToString(h(Home))` ([`reactx/html.hpp`](include/reactx/html.hpp)) returns the HTML of components without a browser; effects don't run. Put it into the page's `<div id="app">` at build time and the page shows before the `.wasm` arrives; `mountDom` then replaces it with the live app (no hydration yet, so the first render must draw the same). The ReactX site does this for its home page: see `site_prerender` in `CMakeLists.txt`, a build of `examples/site.cpp` run under Node.
+
 ```sh
 cmake --preset web && cmake --build --preset web
 ctest --preset web                                     # DOM backend tests under Node

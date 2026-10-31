@@ -280,6 +280,8 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 | `data-rx-self` | элемент получает только клики по себе, не по детям (фон окна) |
 | `data-rx-trap` | Tab не выходит из элемента; при появлении он забирает фокус, при удалении — возвращает |
 
+**Пререндер.** `rx::renderToString(h(Home))` ([`reactx/html.hpp`](include/reactx/html.hpp)) возвращает HTML компонентов без браузера; эффекты не запускаются. Вставьте его в `<div id="app">` страницы при сборке — и страница видна до загрузки `.wasm`; потом `mountDom` заменяет его живым приложением (гидратации пока нет, так что первый рендер должен рисовать то же самое). Так сделана главная страница сайта ReactX: см. `site_prerender` в `CMakeLists.txt` — сборку `examples/site.cpp`, которая запускается под Node.
+
 ```sh
 cmake --preset web && cmake --build --preset web
 ctest --preset web                                     # тесты DOM-бэкенда под Node

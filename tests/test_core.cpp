@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "reactx/dsl.hpp"
+#include "reactx/html.hpp"
 #include "reactx/reactx.hpp"
 #include "reactx/text_renderer.hpp"
 #include "reactx/contract.hpp"
@@ -560,6 +561,50 @@ TEST(dsl_tag_builder_and_literals) {
     root.render(el);
     CHECK(r.toString().find("Title") != std::string::npos);
     CHECK(r.toString().find("Some text") != std::string::npos);
+}
+
+// ---- renderToString ----
+
+TEST(render_to_string_props_and_escaping) {
+    std::string html = renderToString(h("div", {{"className", "card"}, {"data-n", 3}, {"hidden", true}, {"draggable", false}}, {
+        h("label", {{"htmlFor", "q"}}, {"a < b & \"c\""}),
+        h("input", {{"id", "q"}, {"value", "x\"y"}, {"onInput", InputHandler([](const std::string&) {})}}),
+        h("a", {{"href", " javascript:alert(1)"}}, {"bad"}),
+    }));
+    CHECK(html == "<div class=\"card\" data-n=\"3\" hidden>"
+                  "<label for=\"q\">a &lt; b &amp; \"c\"</label>"
+                  "<input id=\"q\" value=\"x&quot;y\">"
+                  "<a href=\"about:blank#blocked\">bad</a></div>");
+}
+
+TEST(render_to_string_form_values_svg_and_raw_text) {
+    std::string html = renderToString(fragment({
+        h("textarea", {{"value", "<hi>"}}),
+        h("select", {{"value", "b"}}, {h("option", {{"value", "a"}}, {"A"}), h("option", {{"value", "b"}}, {"B"})}),
+        h("input", {{"type", "checkbox"}, {"checked", true}}),
+        h("svg", {{"viewBox", "0 0 1 1"}}, {h("svg:text", {}, {"t"})}),
+        h("style", {}, {"a > b { color: red }"}),
+        h("script", {}, {"x = '</script>'"}),
+    }));
+    CHECK(html.contains("<textarea>&lt;hi&gt;</textarea>"));
+    CHECK(html.contains("<option value=\"a\">A</option><option value=\"b\" selected>B</option>"));
+    CHECK(html.contains("<input checked type=\"checkbox\">"));
+    CHECK(html.contains("<svg viewBox=\"0 0 1 1\"><text>t</text></svg>"));
+    CHECK(html.contains("<style>a > b { color: red }</style>"));
+    CHECK(html.contains("<script>x = '<\\/script>'</script>"));
+}
+
+bool prerenderEffectRan = false;
+
+Element PrerenderCounter(const Props&) {
+    auto [n, setN] = useState(7);
+    useEffect([setN] { prerenderEffectRan = true; setN(8); }, deps());
+    return h("p", {}, {"n=" + std::to_string(n)});
+}
+
+TEST(render_to_string_components_without_effects) {
+    CHECK(renderToString(h(PrerenderCounter)) == "<p>n=7</p>");
+    CHECK(!prerenderEffectRan);
 }
 
 }  // namespace

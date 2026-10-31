@@ -120,6 +120,8 @@ if(EMSCRIPTEN)
     src/reconciler.cpp
     src/root.cpp
     src/text_renderer.cpp
+  src/html.cpp
+    src/html.cpp
     src/json.cpp
     src/router.cpp
     src/fetch.cpp
@@ -194,11 +196,20 @@ if(EMSCRIPTEN)
   # static host: the site is the start page and also 404.html, so direct links
   # like /ReactX/docs/hooks open it (GitHub Pages has no other fallback).
   reactx_web_page(website examples/site.cpp site_app ${PROJECT_BINARY_DIR}/site_shell.html)
+  # The same site under Node: puts the home page's HTML (renderToString) into
+  # site/index.html, so it shows before index.wasm arrives. 404.html, which
+  # opens every other path, keeps the loading text.
+  add_executable(site_prerender examples/site.cpp)
+  target_link_libraries(site_prerender PRIVATE reactx)
+  target_compile_definitions(site_prerender PRIVATE REACTX_SITE_PRERENDER)
+  target_link_options(site_prerender PRIVATE "SHELL:-sENVIRONMENT=node" "SHELL:-sNODERAWFS=1")
   add_custom_target(site ALL
     COMMAND ${CMAKE_COMMAND} -E rm -rf ${PROJECT_BINARY_DIR}/site
     COMMAND ${CMAKE_COMMAND} -E make_directory ${PROJECT_BINARY_DIR}/site
-    COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_BINARY_DIR}/site_app/index.html ${PROJECT_BINARY_DIR}/site_app/index.js
+    COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_BINARY_DIR}/site_app/index.js
             ${PROJECT_BINARY_DIR}/site_app/index.wasm ${PROJECT_BINARY_DIR}/site/
+    COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} $<TARGET_FILE:site_prerender>
+            ${PROJECT_BINARY_DIR}/site_app/index.html ${PROJECT_BINARY_DIR}/site/index.html
     COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_BINARY_DIR}/site_app/index.html ${PROJECT_BINARY_DIR}/site/404.html
     COMMAND ${CMAKE_COMMAND} -E copy
             ${PROJECT_BINARY_DIR}/web_counter.html ${PROJECT_BINARY_DIR}/web_counter.js ${PROJECT_BINARY_DIR}/web_counter.wasm
@@ -209,7 +220,7 @@ if(EMSCRIPTEN)
     # The installer: curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh
     COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_SOURCE_DIR}/install.sh ${PROJECT_BINARY_DIR}/site/
     COMMAND ${CMAKE_COMMAND} -E touch ${PROJECT_BINARY_DIR}/site/.nojekyll
-    DEPENDS website web_counter web_ui_demo ${PROJECT_SOURCE_DIR}/llms.txt ${PROJECT_SOURCE_DIR}/install.sh
+    DEPENDS website site_prerender web_counter web_ui_demo ${PROJECT_SOURCE_DIR}/llms.txt ${PROJECT_SOURCE_DIR}/install.sh
     COMMENT "Assembling the website in ${PROJECT_BINARY_DIR}/site")
   # Start page with links to the demos (http://localhost:8090/).
   configure_file(${PROJECT_SOURCE_DIR}/web/index.html ${PROJECT_BINARY_DIR}/index.html COPYONLY)
@@ -289,6 +300,7 @@ add_library(reactx
   src/reconciler.cpp
   src/root.cpp
   src/text_renderer.cpp
+  src/html.cpp
   src/json.cpp
   src/router.cpp
   src/fetch.cpp

@@ -7,6 +7,8 @@
 //   anything else  404
 //
 // Built by the "pages" preset into build/pages/site with <base href="/ReactX/">.
+// The home page is prerendered: the same file built with REACTX_SITE_PRERENDER
+// (site_prerender in CMakeLists.txt) writes its HTML into index.html.
 // The look is in web/site_shell.html; this file is only ReactX components
 // (most of them with props structs: h(CodeBlock, {.code = ...})).
 #include <emscripten.h>
@@ -14,13 +16,18 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <format>
+#include <fstream>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include "reactx/dom.hpp"
+#include "reactx/html.hpp"
 #include "reactx/reactx.hpp"
 #include "reactx/router.hpp"
 #include "reactx/version.hpp"
@@ -32,6 +39,8 @@ using namespace rx;
 namespace {
 
 // ---- the few things only JavaScript can do ----
+
+#ifndef REACTX_SITE_PRERENDER
 
 EM_JS(char*, site_js_theme, (), {
     const t = document.documentElement.dataset.theme ||
@@ -51,10 +60,6 @@ EM_JS(void, site_js_copy, (const char* text), {
     if (navigator.clipboard) navigator.clipboard.writeText(UTF8ToString(text)).catch(function() {});
 });
 EM_JS(void, site_js_title, (const char* title), { document.title = UTF8ToString(title); });
-EM_JS(void, site_js_remove_boot, (), {
-    const boot = document.querySelector("#app > .boot");
-    if (boot) boot.remove();
-});
 
 // The language: saved choice, else the browser's (Russian or English).
 EM_JS(char*, site_js_lang, (), {
@@ -69,6 +74,23 @@ EM_JS(void, site_js_set_lang, (const char* lang), {
     document.documentElement.lang = l;
     try { localStorage.setItem("rx-lang", l); } catch (e) {}
 });
+#else
+// The prerender (REACTX_SITE_PRERENDER, run under Node when the site is built)
+// has no page: English or Russian is chosen by main(), the theme is light, and
+// the rest is never called (effects and handlers don't run in renderToString).
+char* siteDup(std::string_view s) {
+    auto* out = static_cast<char*>(std::malloc(s.size() + 1));
+    std::memcpy(out, s.data(), s.size());
+    out[s.size()] = '\0';
+    return out;
+}
+char* site_js_theme() { return siteDup("light"); }
+void site_js_set_theme(const char*) {}
+void site_js_scroll_to(const char*) {}
+void site_js_copy(const char*) {}
+void site_js_title(const char*) {}
+void site_js_set_lang(const char*) {}
+#endif  // REACTX_SITE_PRERENDER
 
 std::string currentTheme() {
     char* t = site_js_theme();
@@ -838,10 +860,69 @@ Element Site(const Props&) {
 
 }  // namespace
 
+#ifndef REACTX_SITE_PRERENDER
 int main() {
     char* lang = site_js_lang();
     SiteLang.set(lang);
     std::free(lang);
-    site_js_remove_boot();
     mountDom(h(Site));
 }
+#else
+// site_prerender <shell.html> <out.html>: the home page, rendered in English
+// and in Russian, in place of the loading text. A small script picks the
+// language before the first paint; the app then replaces it with the same
+// markup, so the page shows long before index.wasm arrives.
+int main(int argc, char** argv) {
+    if (argc != 3) {
+        std::fputs("usage: site_prerender <shell.html> <out.html>\n", stderr);
+        return 2;
+    }
+    std::ifstream in(argv[1], std::ios::binary);
+    std::string page{std::istreambuf_iterator<char>(in), {}};
+    // Emscripten minifies the shell in Release builds: quotes may be gone.
+    std::size_t at = page.find(R"(<div id="app">)");
+    if (at == std::string::npos) at = page.find("<div id=app>");
+    constexpr std::string_view kBootEnd = "loading ReactX</div></div>";
+    std::size_t bootEnd = at == std::string::npos ? at : page.find(kBootEnd, at);
+    std::size_t baseAt = page.find("<base href=");
+    if (!in || bootEnd == std::string::npos || baseAt == std::string::npos) {
+        std::fputs("site_prerender: no <base href> or loading text in the shell\n", stderr);
+        return 1;
+    }
+    baseAt += std::string_view("<base href=").size();
+    if (page[baseAt] == '"') ++baseAt;
+    router::setBase(page.substr(baseAt, page.find_first_of("\" >", baseAt) - baseAt));
+    router::reset("/");
+
+    SiteLang.set("en");
+    std::string en = renderToString(h(Site));
+    SiteLang.set("ru");
+    std::string ru = renderToString(h(Site));
+
+    std::string html = R"(<div id="app">)" + en + R"(</div><template id="rx-prerender-ru">)" + ru +
+                       R"js(</template><script>
+    // The prerendered page in the visitor's language and theme (main() in site.cpp does the same).
+    (function () {
+      var l = null;
+      try { l = localStorage.getItem("rx-lang"); } catch (e) {}
+      if (l !== "ru" && l !== "en") l = (navigator.language || "").toLowerCase().indexOf("ru") === 0 ? "ru" : "en";
+      var app = document.getElementById("app");
+      if (l === "ru") {
+        document.documentElement.lang = "ru";
+        document.title = "ReactX — React на C++26";
+        app.innerHTML = document.getElementById("rx-prerender-ru").innerHTML;
+      }
+      var t = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      var b = app.querySelector(".icon-btn:not(.lang-btn)");
+      if (t === "dark" && b) { b.textContent = "\u2600"; b.title = l === "ru" ? "Светлая тема" : "Light theme"; }
+    })();
+  </script>)js";
+    page.replace(at, bootEnd + kBootEnd.size() - at, html);
+    std::ofstream out(argv[2], std::ios::binary);
+    out << page;
+    if (!out.flush()) {
+        std::fputs("site_prerender: can't write the page\n", stderr);
+        return 1;
+    }
+}
+#endif

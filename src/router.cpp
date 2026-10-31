@@ -64,12 +64,16 @@ std::string outside(const std::string& path) {
 
 #ifdef __EMSCRIPTEN__
 
+// Each one also works without a page (Node, renderToString at build time):
+// the path is then "/" until reset() or setBase() say otherwise.
 EM_JS(char*, rx_router_js_current, (), {
+    if (typeof location === "undefined") return stringToNewUTF8("/");
     return stringToNewUTF8(location.pathname + location.search);
 });
 
 // Path of <base href="..."> without the trailing slash ("/ReactX"), or "".
 EM_JS(char*, rx_router_js_base, (), {
+    if (typeof document === "undefined") return stringToNewUTF8("");
     const el = document.querySelector("base[href]");
     if (!el) return stringToNewUTF8("");
     const page = location.href || ("http://localhost" + location.pathname);
@@ -79,18 +83,22 @@ EM_JS(char*, rx_router_js_base, (), {
 });
 
 EM_JS(void, rx_router_js_listen, (), {
+    if (typeof window === "undefined") return;
     window.addEventListener("popstate", function() {
         Module.ccall("rx_router_popstate", null, ["string"], [location.pathname + location.search]);
     });
 });
 
 EM_JS(void, rx_router_js_go, (const char* path, int replace), {
+    if (typeof history === "undefined") return;
     const p = UTF8ToString(path);
     if (replace) history.replaceState(null, "", p); else history.pushState(null, "", p);
     if (window.scrollTo) window.scrollTo(0, 0);
 });
 
-EM_JS(void, rx_router_js_back, (), { history.back(); });
+EM_JS(void, rx_router_js_back, (), {
+    if (typeof history !== "undefined") history.back();
+});
 
 #endif
 

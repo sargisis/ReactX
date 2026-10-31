@@ -81,6 +81,9 @@ public:
     void schedule(Fiber& fiber);
     void queueEffect(std::weak_ptr<Fiber> fiber, std::size_t index);
 
+    // renderToString: render without running effects (no page to touch yet).
+    void skipEffects() { runEffects_ = false; }
+
     // The UI thread: the one that created the Root.
     bool onOwnThread() const { return std::this_thread::get_id() == thread_; }
 
@@ -107,6 +110,7 @@ private:
     std::vector<NodeHandle> toDestroy_;
     std::unordered_map<NodeHandle, Fiber*> hosts_;
     bool busy_ = false;
+    bool runEffects_ = true;
     std::thread::id thread_ = std::this_thread::get_id();
 };
 

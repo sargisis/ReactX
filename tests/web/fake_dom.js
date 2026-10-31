@@ -79,7 +79,10 @@
     focus() { document.activeElement = this; }
     contains(other) { for (let n = other; n; n = n.parentNode) if (n === this) return true; return false; }
     get isConnected() { for (let n = this; n; n = n.parentNode) if (n === app || n === head) return true; return false; }
-    set textContent(text) { this.childNodes = [new Text(text)]; }
+    set textContent(text) {
+      for (const c of this.childNodes) c.parentNode = null;
+      this.childNodes = text === "" ? [] : [new Text(text)];  // like the DOM: "" leaves no node
+    }
     get textContent() { return this.childNodes.map(c => c instanceof Text ? c.nodeValue : c.textContent).join(""); }
     find(pred) {
       if (pred(this)) return this;

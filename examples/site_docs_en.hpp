@@ -335,7 +335,12 @@ inline const std::vector<Page>& pagesEn() {
         {
             "browser", "Browser apps", "WebAssembly, the DOM and CSS.",
             {
-                {"mountDom", "Puts your app into <div id=\"app\"> of the page.", "int main() { mountDom(h(App)); }"},
+                {"mountDom", "Puts your app into <div id=\"app\"> of the page, replacing what it showed (a loading text, prerendered HTML).",
+                 "int main() { mountDom(h(App)); }"},
+                {"Prerender", "rx::renderToString (reactx/html.hpp) gives the HTML of components without a browser; effects don't run. "
+                              "Put it into <div id=\"app\"> at build time and the page shows before the .wasm arrives; mountDom then "
+                              "replaces it with the live app, so the first render must draw the same. This site's home page is built so.",
+                 "std::string html = renderToString(h(Home));\n// \"<main class=\\\"home\\\"><h1>Hello</h1>...</main>\""},
                 {"HTML props", "Any HTML tag works. className becomes class, style is a CSS string, value and checked keep "
                                "inputs in sync with your state, everything else becomes an attribute. A checkbox's onChange gets \"true\" or "
                                "\"false\"; rx::boolHandler turns that into a bool.",

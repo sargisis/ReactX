@@ -219,6 +219,27 @@ TEST(modal_closes_on_escape_and_restores_focus) {
     CHECK(s.renderer.focused() == openButton);
 }
 
+// A modal with only text in it has nothing to focus: Escape must still close it.
+Element TextModalApp(const Props&) {
+    auto [open, setOpen] = useState(false);
+    return h("box", {{"flexGrow", 1}}, {
+        ui::button({.label = "open", .onClick = [setOpen] { setOpen(true); }}),
+        ui::modal({.title = "Note", .open = open, .onClose = [setOpen] { setOpen(false); },
+                   .children = {h("text", {}, {"just text"})}}),
+    });
+}
+
+TEST(modal_without_buttons_closes_on_escape) {
+    Screen s(h(TextModalApp));
+    NodeHandle openButton = s.renderer.focused();
+    s.press("Enter");
+    CHECK(contains(s.text(), "just text"));
+    CHECK(s.renderer.focused() == 0);  // nothing to focus inside
+    s.press("Escape");
+    CHECK(!contains(s.text(), "just text"));
+    CHECK(s.renderer.focused() == openButton);
+}
+
 TEST(modal_button_acts) {
     Screen s(h(ModalApp));
     s.press("Enter");
@@ -346,6 +367,148 @@ TEST(toasts_show_go_away_and_close_on_click) {
     s.renderer.handleMouse(s.root, MouseInput{.action = MouseInput::Action::Down, .x = x, .y = y});
     s.renderer.handleMouse(s.root, MouseInput{.action = MouseInput::Action::Up, .x = x, .y = y});
     CHECK(!contains(s.text(), "Saved"));
+}
+
+// ---- scrolling (overflow="scroll") ----
+
+ScrollEvent lastScroll;
+
+// A header, a scroll box with `rows` lines, a footer: in a 40x12 terminal.
+Element Scroller(const Props& p) {
+    int rows = p.get<int>("rows", 30);
+    std::vector<Element> lines;
+    for (int i = 0; i < rows; ++i)
+        lines.push_back(h("button", {{"key", std::to_string(i)}}, {"line " + std::to_string(i)}));
+    return h("box", {{"flexGrow", 1}}, {
+        h("text", {}, {"HEADER"}),
+        h("box", {{"overflow", "scroll"}, {"border", true}, {"id", "box"},
+                  {"onScroll", [](const ScrollEvent& e) { lastScroll = e; }}},
+          std::move(lines)),
+        h("text", {}, {"FOOTER"}),
+    });
+}
+
+NodeHandle byId(Screen& s, const std::string& id) { return *s.renderer.findByProp("id", id); }
+
+TEST(scroll_box_takes_the_room_left_and_clips) {
+    Screen s(h(Scroller));  // 40x12: header, box (10 rows, 8 inside the border), footer
+    std::string screen = s.text();
+    CHECK(contains(screen, "HEADER") && contains(screen, "FOOTER"));  // the footer isn't pushed off
+    CHECK(contains(screen, "line 0") && contains(screen, "line 7") && !contains(screen, "line 8"));
+    CHECK(contains(screen, "┃"));  // where we are, on the right border
+}
+
+TEST(scroll_by_moves_the_content_and_sends_onScroll) {
+    Screen s(h(Scroller));
+    NodeHandle box = byId(s, "box");
+    lastScroll = {};
+    CHECK(s.renderer.scrollBy(box, 5));
+    CHECK(s.renderer.scrollTop(box) == 5);
+    CHECK(!contains(s.text(), "line 4 ") && contains(s.text(), "line 5") && contains(s.text(), "line 12"));
+    s.renderer.sendScrollEvents(s.root);
+    CHECK(lastScroll.top == 5 && lastScroll.scrollHeight == 30 && lastScroll.clientHeight == 8);
+    CHECK(!s.renderer.scrollBy(box, -100) || s.renderer.scrollTop(box) == 0);  // clamped at the top
+    s.renderer.scrollBy(box, 1000);
+    CHECK(s.renderer.scrollTop(box) == 22);  // 30 lines, 8 visible
+    CHECK(contains(s.text(), "line 29") && contains(s.text(), "FOOTER"));
+}
+
+TEST(scroll_follows_the_focus) {
+    Screen s(h(Scroller));
+    for (int i = 0; i < 20; ++i) s.press("Down");
+    CHECK(contains(s.text(), "line 20"));  // the focused line is on screen
+    CHECK(s.renderer.scrollTop(byId(s, "box")) == 13);  // the least scroll that shows it
+    for (int i = 0; i < 20; ++i) s.press("Up");
+    CHECK(s.renderer.scrollTop(byId(s, "box")) == 0);
+}
+
+TEST(page_down_and_the_wheel_scroll) {
+    Screen s(h(Scroller));
+    NodeHandle box = byId(s, "box");
+    lastScroll = {};
+    s.press("PageDown");
+    CHECK(s.renderer.scrollTop(box) == 7);  // a page is the visible rows minus one
+    CHECK(lastScroll.top == 7);             // handleKey sends onScroll
+    s.press("PageUp");
+    CHECK(s.renderer.scrollTop(box) == 0);
+    s.renderer.handleMouse(s.root, MouseInput{.action = MouseInput::Action::WheelDown, .x = 5, .y = 4});
+    CHECK(s.renderer.scrollTop(box) == 3);
+    s.renderer.handleMouse(s.root, MouseInput{.action = MouseInput::Action::WheelUp, .x = 5, .y = 4});
+    CHECK(s.renderer.scrollTop(box) == 0);
+    // Over the header nothing scrolls.
+    CHECK(!s.renderer.handleMouse(s.root, MouseInput{.action = MouseInput::Action::WheelDown, .x = 2, .y = 0}));
+}
+
+TEST(page_down_scrolls_while_typing_in_an_input) {
+    Element (*app)(const Props&) = [](const Props&) -> Element {
+        auto [q, setQ] = useState(std::string{});
+        return h("box", {{"flexGrow", 1}}, {
+            ui::input({.value = q, .onChange = [setQ](const std::string& t) { setQ(t); }}),  // has its own onKey
+            h(Scroller),
+        });
+    };
+    Screen s(h(app));
+    s.press("PageDown");
+    CHECK(s.renderer.scrollTop(byId(s, "box")) > 0);
+}
+
+TEST(scroll_clamps_when_the_content_shrinks) {
+    Element (*app)(const Props&) = [](const Props&) -> Element {
+        auto [rows, set] = useState(30);
+        return h("box", {{"flexGrow", 1}}, {
+            h("button", {{"id", "less"}, {"onClick", [set] { set(3); }}}, {"less"}),
+            h(Scroller, {{"rows", rows}}),
+        });
+    };
+    Screen s(h(app));
+    NodeHandle box = byId(s, "box");
+    s.renderer.scrollBy(box, 10);
+    s.root.dispatch(byId(s, "less"), "onClick");
+    CHECK(s.renderer.scrollTop(box) == 0);
+    CHECK(contains(s.text(), "line 2"));
+}
+
+// A page taller than the terminal: a modal and toasts still show on the screen.
+Element TallPage(const Props&) {
+    auto [open, setOpen] = useState(false);
+    std::vector<Element> rows;
+    for (int i = 0; i < 40; ++i) rows.push_back(h("text", {{"key", std::to_string(i)}}, {"row " + std::to_string(i)}));
+    rows.push_back(ui::button({.label = "open", .onClick = [setOpen] { setOpen(true); }, .key = "open"}));
+    rows.push_back(ui::modal({.title = "Hi", .open = open, .onClose = [setOpen] { setOpen(false); },
+                              .children = {h("text", {}, {"modal body"})}, .key = "modal"}));
+    rows.push_back(ui::toaster());
+    return h("box", {{"flexGrow", 1}}, std::move(rows));
+}
+
+TEST(fixed_modal_and_toasts_stay_on_the_screen) {
+    Screen s(h(TallPage));
+    s.press("Enter");  // "open" is the only focusable node
+    CHECK(contains(s.text(), "modal body"));
+    s.press("Escape");
+    CHECK(!contains(s.text(), "modal body"));
+    ui::toast({.text = "Saved", .duration = std::chrono::milliseconds(0)});
+    s.root.flush();
+    CHECK(contains(s.text(), "Saved"));
+    ui::detail::toasts().set({});  // don't leak into other tests
+}
+
+// ui::listItem keeps the selected item visible (selection without focus, like useKeyboard).
+Element LongList(const Props&) {
+    auto [sel, setSel] = useState(0);
+    std::vector<Element> items;
+    for (int i = 0; i < 30; ++i)
+        items.push_back(ui::listItem({.label = "item " + std::to_string(i), .selected = i == sel, .key = std::to_string(i)}));
+    return h("box", {{"flexGrow", 1}}, {
+        h("button", {{"id", "next"}, {"onClick", [setSel] { setSel([](int v) { return v + 1; }); }}}, {"next"}),
+        h("box", {{"overflow", "scroll"}, {"id", "box"}}, {ui::list({.items = std::move(items)})}),
+    });
+}
+
+TEST(selected_list_item_scrolls_into_view) {
+    Screen s(h(LongList));
+    for (int i = 0; i < 15; ++i) s.root.dispatch(byId(s, "next"), "onClick");
+    CHECK(contains(s.text(), "› item 15"));
+    CHECK(s.renderer.scrollTop(byId(s, "box")) > 0);
 }
 
 }  // namespace

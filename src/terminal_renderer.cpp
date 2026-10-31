@@ -277,11 +277,16 @@ struct TerminalRenderer::Layout {
     YGNodeRef root = nullptr;
     std::unordered_map<NodeHandle, YGNodeRef> nodes;
     std::deque<Leaf> leaves;  // stable addresses for YGNodeSetContext
+    // position="fixed" nodes, in tree order: each is laid out in its own
+    // screen-sized wrapper instead of its parent.
+    std::vector<std::pair<NodeHandle, YGNodeRef>> fixed;
 
     // No rounding inside Yoga: it rounds text and boxes differently, which can
     // make neighbours overlap by a cell. draw() rounds every edge the same way.
     Layout() { YGConfigSetPointScaleFactor(config, 0.0f); }
     ~Layout() {
+        for (auto& [h, wrap] : fixed)
+            if (wrap) YGNodeFreeRecursive(wrap);
         if (root) YGNodeFreeRecursive(root);
         YGConfigFree(config);
     }
@@ -317,12 +322,43 @@ struct TerminalRenderer::Layout {
             return y;
         }
 
+        if (prop(n->props, "overflow") == "scroll") {
+            YGNodeStyleSetOverflow(y, YGOverflowScroll);  // children keep their size
+            if (!parentRow) {  // take the room that is left, like CSS `flex: 1; min-height: 0`
+                YGNodeStyleSetFlexShrink(y, 1.0f);
+                if (prop(n->props, "height").empty() && prop(n->props, "flexBasis").empty()) {
+                    YGNodeStyleSetFlexBasis(y, 0.0f);
+                    if (prop(n->props, "flexGrow").empty()) YGNodeStyleSetFlexGrow(y, 1.0f);
+                }
+            }
+        }
         applyStyle(y, n->props, true);
         bool row = isRow(n->props);
         std::size_t index = 0;
-        for (NodeHandle c : n->children)
+        for (NodeHandle c : n->children) {
+            if (isFixed(r, c)) {
+                buildFixed(r, c);
+                continue;
+            }
             if (YGNodeRef child = build(r, c, row)) YGNodeInsertChild(y, child, index++);
+        }
         return y;
+    }
+
+    static bool isFixed(const TerminalRenderer& r, NodeHandle h) {
+        const Node* n = r.findNode(h);
+        return n && !n->isText && prop(n->props, "position") == "fixed";
+    }
+
+    void buildFixed(const TerminalRenderer& r, NodeHandle h) {
+        std::size_t i = fixed.size();
+        fixed.emplace_back(h, nullptr);  // before its subtree: outer fixed nodes are drawn first
+        YGNodeRef node = build(r, h, false);
+        if (!node) return;
+        YGNodeStyleSetPositionType(node, YGPositionTypeAbsolute);
+        YGNodeRef wrap = YGNodeNewWithConfig(config);
+        YGNodeInsertChild(wrap, node, 0);
+        fixed[i].second = wrap;
     }
 };
 
@@ -380,8 +416,17 @@ void TerminalRenderer::commit() {
     repaint();
 }
 
+void TerminalRenderer::setProp(NodeHandle h, std::string_view name, const PropValue& value) {
+    TextRenderer::setProp(h, name, value);
+    if (name == "scrollIntoView" && std::holds_alternative<bool>(value) && std::get<bool>(value)) scrollRequest_ = h;
+}
+
 void TerminalRenderer::destroyNode(NodeHandle h) {
     if (h == focused_) focused_ = 0;  // fixFocus picks a neighbour on commit
+    if (h == scrolledTo_) scrolledTo_ = 0;
+    if (h == scrollRequest_) scrollRequest_ = 0;
+    scrollTop_.erase(h);
+    scrollBoxes_.erase(h);
     TextRenderer::destroyNode(h);
 }
 
@@ -515,10 +560,36 @@ void TerminalRenderer::draw(const Layout& layout, NodeHandle h, float originX, f
     // Like CSS overflow: visible, except that children never draw over a
     // border; overflow="hidden" clips them to the box.
     int b = flag(n->props, "border") ? 1 : 0;
+    std::string overflow = prop(n->props, "overflow");
+    bool scroll = overflow == "scroll";
     Rect inner = clip;
-    if (b || prop(n->props, "overflow") == "hidden")
+    if (b || overflow == "hidden" || scroll)
         inner = Rect{x0 + b, y0 + b, x0 + w - b, y0 + hgt - b}.intersect(clip);
-    for (NodeHandle c : n->children) draw(layout, c, fx, fy, st, inner, frame);
+    float childY = fy;
+    int thumbTop = 0, thumbLen = 0;  // the scroll position on the right border
+    if (scroll) {
+        float bottom = 0;
+        for (NodeHandle c : n->children) {
+            auto ci = layout.nodes.find(c);
+            if (ci == layout.nodes.end() || Layout::isFixed(*this, c)) continue;
+            bottom = std::max(bottom, YGNodeLayoutGetTop(ci->second) + YGNodeLayoutGetHeight(ci->second) +
+                                          YGNodeLayoutGetMargin(ci->second, YGEdgeBottom));
+        }
+        int content = cells(bottom + YGNodeLayoutGetPadding(y, YGEdgeBottom)) + b;  // from the box's top
+        ScrollBox box{.max = std::max(content - hgt, 0), .content = std::max(content - 2 * b, 0),
+                      .viewport = std::max(hgt - 2 * b, 0), .width = std::max(w - 2 * b, 0)};
+        int& top = scrollTop_[h];
+        top = std::clamp(top, 0, box.max);  // the content may have shrunk
+        scrollBoxes_[h] = box;
+        childY = fy - static_cast<float>(top);
+        if (b && box.max > 0 && hgt > 2) {
+            int track = hgt - 2;
+            thumbLen = std::clamp(track * box.viewport / std::max(box.content, 1), 1, track);
+            thumbTop = y0 + 1 + (track - thumbLen) * top / box.max;
+        }
+    }
+    for (NodeHandle c : n->children)
+        if (!Layout::isFixed(*this, c)) draw(layout, c, fx, childY, st, inner, frame);  // fixed: drawn last
 
     if (b && w >= 2 && hgt >= 2) {
         Style bs = st;
@@ -551,6 +622,7 @@ void TerminalRenderer::draw(const Layout& layout, NodeHandle h, float originX, f
         for (int i = 1; i < w - 1; ++i) bottomLine += hz;
         bottomLine += br;
         put(frame, x0, bottom, clip, bottomLine, bs);
+        for (int yy = thumbTop; yy < thumbTop + thumbLen; ++yy) put(frame, right - 1, yy, clip, unicode_ ? "┃" : "#", bs);
     }
 }
 
@@ -587,11 +659,35 @@ void TerminalRenderer::repaint() {
     YGNodeStyleSetWidth(layout.root, static_cast<float>(width_));
     YGNodeStyleSetHeight(layout.root, static_cast<float>(height_));
     YGNodeCalculateLayout(layout.root, static_cast<float>(width_), static_cast<float>(height_), YGDirectionLTR);
+    for (auto& [h, wrap] : layout.fixed) {
+        if (!wrap) continue;
+        YGNodeStyleSetWidth(wrap, static_cast<float>(width_));
+        YGNodeStyleSetHeight(wrap, static_cast<float>(height_));
+        YGNodeCalculateLayout(wrap, static_cast<float>(width_), static_cast<float>(height_), YGDirectionLTR);
+    }
+
+    // Keep a newly focused node (or a scrollIntoView target) visible.
+    NodeHandle target = std::exchange(scrollRequest_, 0);
+    if (focused_ != scrolledTo_) {
+        scrolledTo_ = focused_;
+        if (!target) target = focused_;
+    }
+    if (target) bringIntoView(layout, target);
 
     frame_ = std::make_unique<Frame>(static_cast<std::size_t>(height_), static_cast<std::size_t>(width_));
     hits_.clear();
     origins_.clear();
-    draw(layout, kRoot, 0, 0, Style{}, Rect{0, 0, width_, height_}, *frame_);
+    scrollBoxes_.clear();
+    Rect screenRect{0, 0, width_, height_};
+    draw(layout, kRoot, 0, 0, Style{}, screenRect, *frame_);
+    for (const auto& [h, wrap] : layout.fixed) {  // over everything, in tree order
+        if (!wrap) continue;
+        std::vector<const Node*> above;  // colors are inherited from the tree, not the screen
+        for (const Node* n = findNode(h); n && n->parent && (n = findNode(n->parent));) above.push_back(n);
+        Style inherited;
+        for (const Node* a : above | std::views::reverse) inherited = styleOf(*a, inherited);
+        draw(layout, h, 0, 0, inherited, screenRect, *frame_);
+    }
     if (!output_) return;
 
     std::string out;
@@ -711,10 +807,13 @@ void TerminalRenderer::focusPrev() {
 }
 
 bool TerminalRenderer::bubbleKey(Root& root, const KeyEvent& key) {
-    if (!focused_) return false;
+    // Nothing focused inside an open modal (only text in it): keys still reach the modal,
+    // so its Escape closes it.
+    NodeHandle from = focused_ ? focused_ : trap_;
+    if (!from) return false;
     // Collect the path first: handlers may change the tree.
     std::vector<NodeHandle> path;
-    for (NodeHandle h = focused_; h && h != kRoot;) {
+    for (NodeHandle h = from; h && h != kRoot;) {
         const Node* n = findNode(h);
         if (!n) break;
         path.push_back(h);
@@ -739,6 +838,7 @@ bool TerminalRenderer::handleKey(Root& root, const KeyEvent& key) {
         if (before && findNode(before)) root.dispatch(before, "onBlur");
         if (now && findNode(now)) root.dispatch(now, "onFocus");
     }
+    sendScrollEvents(root);
     return handled;
 }
 
@@ -752,7 +852,12 @@ bool TerminalRenderer::handleKeyNow(Root& root, const KeyEvent& key) {
         focusPrev();
         return true;
     }
-    if (!focused_) return false;
+    // PageUp / PageDown scroll even after an onKey ran (dispatch can't tell
+    // "ran" from "used"), like a browser without preventDefault.
+    if (!focused_) {
+        bool handled = bubbleKey(root, key);
+        return scrollKey(key) || handled;
+    }
 
     NodeHandle target = focused_;
     bool handled = bubbleKey(root, key);
@@ -770,7 +875,7 @@ bool TerminalRenderer::handleKeyNow(Root& root, const KeyEvent& key) {
             return root.dispatch(target, "onInput", value + key.key) || handled;
     }
     if (key.key == "Enter" || key.key == " ") return root.dispatch(target, "onClick") || handled;
-    return handled;
+    return scrollKey(key) || handled;
 }
 
 // ---- mouse ----
@@ -817,8 +922,18 @@ void TerminalRenderer::hover(Root& root, NodeHandle node) {
 
 bool TerminalRenderer::handleMouse(Root& root, const MouseInput& m) {
     using Action = MouseInput::Action;
-    if (m.action == Action::WheelUp || m.action == Action::WheelDown) return false;
     NodeHandle hit = nodeAt(m.x, m.y);
+    if (m.action == Action::WheelUp || m.action == Action::WheelDown) {
+        int rows = m.action == Action::WheelUp ? -3 : 3;
+        for (NodeHandle h : pathOf(hit)) {  // the innermost box that can still move that way
+            if (trap_ && !inside(h, trap_)) break;  // not the page under a modal
+            if (scrollBy(h, rows)) {
+                sendScrollEvents(root);
+                return true;
+            }
+        }
+        return false;
+    }
     PointerEvent e{.x = static_cast<double>(m.x), .y = static_cast<double>(m.y), .button = m.button,
                    .buttons = 0, .type = "mouse", .ctrl = m.ctrl, .alt = m.alt, .shift = m.shift};
     int bit = m.button == 1 ? 4 : m.button == 2 ? 2 : 1;  // the DOM's `buttons` bits
@@ -872,6 +987,111 @@ bool TerminalRenderer::handleMouse(Root& root, const MouseInput& m) {
             return handled;
         }
         default: return false;
+    }
+}
+
+// ---- scrolling ----
+
+bool TerminalRenderer::inside(NodeHandle h, NodeHandle ancestor) const {
+    for (const Node* n = nullptr; h && (n = findNode(h)); h = n->parent)
+        if (h == ancestor) return true;
+    return false;
+}
+
+int TerminalRenderer::scrollTop(NodeHandle box) const {
+    auto it = scrollTop_.find(box);
+    return it == scrollTop_.end() ? 0 : it->second;
+}
+
+bool TerminalRenderer::scrollBy(NodeHandle box, int rows) {
+    auto it = scrollBoxes_.find(box);
+    if (it == scrollBoxes_.end()) return false;
+    int& top = scrollTop_[box];
+    int next = std::clamp(top + rows, 0, it->second.max);
+    if (next == top) return false;
+    top = next;
+    if (std::ranges::find(scrolled_, box) == scrolled_.end()) scrolled_.push_back(box);
+    repaint();
+    return true;
+}
+
+bool TerminalRenderer::scrollIntoView(NodeHandle node) {
+    if (!findNode(node)) return false;
+    scrollRequest_ = node;
+    repaint();
+    return true;
+}
+
+// Scroll each overflow="scroll" ancestor of `node`, innermost first, the
+// least needed to show it. `top` is the node's top within the current
+// ancestor, as laid out (before scrolling).
+void TerminalRenderer::bringIntoView(const Layout& layout, NodeHandle node) {
+    auto self = layout.nodes.find(node);
+    if (self == layout.nodes.end()) return;
+    float height = YGNodeLayoutGetHeight(self->second);
+    float top = 0;
+    for (NodeHandle h = node; h && h != kRoot;) {
+        const Node* n = findNode(h);
+        auto it = layout.nodes.find(h);
+        if (!n || it == layout.nodes.end()) return;
+        top += YGNodeLayoutGetTop(it->second);
+        if (Layout::isFixed(*this, h)) return;  // placed on the screen: nothing above scrolls it
+        const Node* parent = findNode(n->parent);
+        auto py = layout.nodes.find(n->parent);
+        if (!parent || py == layout.nodes.end()) return;
+        if (!parent->isText && prop(parent->props, "overflow") == "scroll") {
+            YGNodeRef p = py->second;
+            float from = YGNodeLayoutGetBorder(p, YGEdgeTop) + YGNodeLayoutGetPadding(p, YGEdgeTop);
+            float to = YGNodeLayoutGetHeight(p) - YGNodeLayoutGetBorder(p, YGEdgeBottom) -
+                       YGNodeLayoutGetPadding(p, YGEdgeBottom);
+            int& scroll = scrollTop_[n->parent];
+            int before = scroll;
+            if (top + height - static_cast<float>(scroll) > to) scroll = cells(top + height - to);
+            if (top - static_cast<float>(scroll) < from) scroll = cells(top - from);  // a tall node: its top wins
+            scroll = std::max(scroll, 0);  // draw() clamps the other end
+            if (scroll != before && std::ranges::find(scrolled_, n->parent) == scrolled_.end())
+                scrolled_.push_back(n->parent);
+            top -= static_cast<float>(scroll);
+        }
+        h = n->parent;
+    }
+}
+
+// PageUp / PageDown: the scroll box around the focus, or else the biggest
+// one on screen (inside an open modal, if there is one).
+bool TerminalRenderer::scrollKey(const KeyEvent& key) {
+    if (key.key != "PageUp" && key.key != "PageDown") return false;
+    NodeHandle box = 0;
+    for (NodeHandle h : pathOf(focused_ ? focused_ : trap_)) {
+        if (auto it = scrollBoxes_.find(h); it != scrollBoxes_.end() && it->second.max > 0) {
+            box = h;
+            break;
+        }
+    }
+    if (!box) {
+        int best = 0;
+        for (const Hit& hit : hits_) {
+            auto it = scrollBoxes_.find(hit.node);
+            if (it == scrollBoxes_.end() || it->second.max == 0 || (trap_ && !inside(hit.node, trap_))) continue;
+            if (it->second.viewport > best) {
+                best = it->second.viewport;
+                box = hit.node;
+            }
+        }
+    }
+    if (!box) return false;
+    int page = std::max(scrollBoxes_[box].viewport - 1, 1);
+    return scrollBy(box, key.key == "PageUp" ? -page : page);
+}
+
+void TerminalRenderer::sendScrollEvents(Root& root) {
+    for (NodeHandle h : std::exchange(scrolled_, {})) {
+        auto it = scrollBoxes_.find(h);
+        if (!findNode(h) || it == scrollBoxes_.end()) continue;
+        const ScrollBox& b = it->second;
+        root.dispatch(h, "onScroll", ScrollEvent{.top = scrollTop(h), .left = 0, .scrollHeight = b.content,
+                                                 .scrollWidth = b.width, .clientHeight = b.viewport,
+                                                 .clientWidth = b.width});
     }
 }
 

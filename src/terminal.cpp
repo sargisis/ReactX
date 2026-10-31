@@ -291,6 +291,7 @@ void TerminalApp::run(Element element) {
             if (!running_) break;
         }
         root_->flush();  // pick up setState calls made outside of events
+        renderer_->sendScrollEvents(*root_);  // scrollIntoView from effects
     }
 }
 

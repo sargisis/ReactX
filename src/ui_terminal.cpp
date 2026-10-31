@@ -100,7 +100,8 @@ Element Modal(const Props& p) {
     auto onClose = p.get<Callback>("onClose");
     int width = p.get<int>("width");
     return h("box", {
-        {"position", "absolute"}, {"top", 0}, {"left", 0}, {"right", 0}, {"bottom", 0},
+        // fixed: the screen, even when the page under it is taller than the terminal
+        {"position", "fixed"}, {"top", 0}, {"left", 0}, {"right", 0}, {"bottom", 0},
         {"justifyContent", "center"}, {"alignItems", "center"},
         {"trapFocus", true},
         {"onKey", [onClose](const KeyEvent& e) {
@@ -123,7 +124,8 @@ Element List(const Props& p) {
     std::vector<Element> items = p.children();
     if (items.empty()) items.push_back(h("text", {{"color", t.muted}, {"dim", true}}, {p.get<std::string>("emptyText")}));
     std::string title = p.get<std::string>("title");
-    return h("box", {{"border", !title.empty()}, {"title", title}, {"color", t.muted}, {"paddingX", title.empty() ? 0 : 1}},
+    return h("box", {{"border", !title.empty()}, {"title", title}, {"color", t.muted}, {"paddingX", title.empty() ? 0 : 1},
+                     {"overflow", p.get<bool>("scroll") ? "scroll" : "visible"}},
              std::move(items));
 }
 
@@ -139,6 +141,7 @@ Element ListItem(const Props& p) {
                      {"justifyContent", "space-between"},
                      {"gap", 1},
                      {"focusable", true},
+                     {"scrollIntoView", selected},  // the selected item stays on screen in a scroll box
                      {"onClick", p.get<Callback>("onSelect")},
                      {"onKey", p.get<KeyHandler>("onKey")}},
              std::move(parts));
@@ -236,13 +239,13 @@ Element ToastView(const ToastViewProps& p) {
 
 }  // namespace
 
-// Bottom right, over everything else in the box it is in.
+// Bottom right of the screen, over everything else.
 Element Toaster(const Props&) {
     const auto& list = useStore(detail::toasts());
     if (list.empty()) return fragment({});
     std::vector<Element> items;
     for (const auto& t : list) items.push_back(h(ToastView, {.item = t, .key = std::to_string(t.id)}));
-    return h("box", {{"position", "absolute"}, {"bottom", 0}, {"right", 1}, {"maxWidth", "60%"}, {"alignItems", "end"}},
+    return h("box", {{"position", "fixed"}, {"bottom", 0}, {"right", 1}, {"maxWidth", "60%"}, {"alignItems", "end"}},
              std::move(items));
 }
 

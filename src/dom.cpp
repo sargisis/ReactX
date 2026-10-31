@@ -44,6 +44,8 @@ EM_JS(void, rx_js_init, (), {
         const sel = el && el.tagName === "OPTGROUP" ? el.parentNode : el;
         if (sel && sel.tagName === "SELECT" && sel.__rxValue !== undefined && sel.value !== sel.__rxValue) sel.value = sel.__rxValue;
     };
+    // Fields whose value is live state the user edits (controlled); other tags get an attribute.
+    Module.rxIsField = function(el) { return el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT"; };
     Module.rxSetProp = function(el, name, kind, str, num) {
         if (name === "className") name = "class";
         if (name === "htmlFor") name = "for";
@@ -54,10 +56,22 @@ EM_JS(void, rx_js_init, (), {
             str = "about:blank#blocked";
         }
         if (name === "style") { el.style.cssText = kind === 3 ? str : ""; return; }
-        if (name === "value") {
+        // Becoming true scrolls the element into view (not while it is created: no jump on load).
+        if (name === "scrollIntoView") {
+            if (kind === 1 && num !== 0 && el.isConnected) el.scrollIntoView({block: "nearest", inline: "nearest"});
+            return;
+        }
+        if (name === "value" && Module.rxIsField(el)) {
             const v = kind === 3 ? str : kind === 2 ? String(num) : "";
             el.__rxValue = v;
             if (el.value !== v) el.value = v;
+            return;
+        }
+        if (name === "value" && el.tagName === "OPTION") {
+            // An attribute, not el.value: a new <option> has no text yet, so its el.value
+            // is already "" and value="" would never be written (its text would win later).
+            el.setAttribute("value", kind === 3 ? str : kind === 2 ? String(num) : "");
+            Module.rxSyncSelect(el.parentNode);
             return;
         }
         if (name === "checked") el.__rxChecked = kind === 1 && num !== 0;  // controlled, like value
@@ -111,7 +125,8 @@ EM_JS(void, rx_js_remove_prop, (double id, const char* name), {
     const el = Module.rxNodes.get(id);
     const n = UTF8ToString(name);
     if (n === "style") el.style.cssText = "";
-    else if (n === "value") { delete el.__rxValue; el.value = ""; }
+    else if (n === "scrollIntoView") {}
+    else if (n === "value" && Module.rxIsField(el)) { delete el.__rxValue; el.value = ""; }
     else if (n === "checked" || n === "disabled" || n === "selected") { el[n] = false; if (n === "checked") delete el.__rxChecked; }
     else el.removeAttribute(n === "className" ? "class" : n === "htmlFor" ? "for" : n === "pointerCapture" ? "data-rx-capture" : n);
 });
@@ -158,6 +173,13 @@ EM_JS(int, rx_js_focus, (double id), {
     if (!el || !el.focus || !el.isConnected) return 0;
     el.focus();
     return document.activeElement === el ? 1 : 0;
+});
+
+EM_JS(int, rx_js_scroll_into_view, (double id), {
+    const el = Module.rxNodes.get(id);
+    if (!el || !el.scrollIntoView || !el.isConnected) return 0;
+    el.scrollIntoView({block: "nearest", inline: "nearest"});
+    return 1;
 });
 
 EM_JS(void, rx_js_destroy, (double id), {
@@ -456,6 +478,7 @@ void flushDom() {
 }
 
 bool DomRenderer::focus(NodeHandle node) { return rx_js_focus(js(node)) != 0; }
+bool DomRenderer::scrollIntoView(NodeHandle node) { return rx_js_scroll_into_view(js(node)) != 0; }
 
 Root& mountDom(Element element, const std::string& container) {
     REACTX_PRE(!container.empty());

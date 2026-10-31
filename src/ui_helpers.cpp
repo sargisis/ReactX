@@ -93,7 +93,8 @@ Element listItem(ListItemProps p) {
 }
 
 Element list(ListProps p) {
-    return withKey(h(List, {{"title", std::move(p.title)}, {"emptyText", std::move(p.emptyText)}}, std::move(p.items)),
+    return withKey(h(List, {{"title", std::move(p.title)}, {"emptyText", std::move(p.emptyText)}, {"scroll", p.scroll}},
+                     std::move(p.items)),
                    p.key);
 }
 

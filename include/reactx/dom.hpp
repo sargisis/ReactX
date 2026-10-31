@@ -68,6 +68,7 @@ public:
     void removeChild(NodeHandle parent, NodeHandle child) override;
     void destroyNode(NodeHandle node) override;
     bool focus(NodeHandle node) override;
+    bool scrollIntoView(NodeHandle node) override;
 
 private:
     NodeHandle root_;

@@ -31,7 +31,15 @@
       this.attributes = new Map();
       this.style = { cssText: "" };
       this.listeners = {};
-      this.value = "";
+      if (this.tagName === "OPTION") {
+        // Like a browser: the value attribute, or the text when there is none.
+        Object.defineProperty(this, "value", {
+          get() { const a = this.getAttribute("value"); return a !== null ? a : this.textContent; },
+          set(v) { this.setAttribute("value", v); },
+        });
+      } else {
+        this.value = "";
+      }
       this.checked = false;
       this.disabled = false;
       this.selected = false;
@@ -81,6 +89,7 @@
       return out;
     }
     focus() { document.activeElement = this; }
+    scrollIntoView() { globalThis.__rxScrolledTo = this; }
     contains(other) { for (let n = other; n; n = n.parentNode) if (n === this) return true; return false; }
     get isConnected() { for (let n = this; n; n = n.parentNode) if (n === app || n === head) return true; return false; }
     set textContent(text) {

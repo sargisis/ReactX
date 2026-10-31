@@ -60,8 +60,16 @@ std::vector<TerminalInput> decodeInput(std::string_view bytes);
 //   padding, paddingX, paddingY, paddingLeft/Right/Top/Bottom
 //   margin,  marginX,  marginY,  marginLeft/Right/Top/Bottom  (or "auto")
 //   gap, rowGap, columnGap
-//   position (absolute | relative), top, left, right, bottom
-//   display (none | flex), overflow (visible | hidden; a border always clips)
+//   position (absolute | relative | fixed), top, left, right, bottom
+//     fixed: placed on the screen, not in its parent, and drawn over
+//     everything else (modals, toasts), even when the content is taller
+//     than the terminal
+//   display (none | flex), overflow (visible | hidden | scroll; a border always clips)
+//     scroll: a vertical scroll container. In a column it takes the room
+//     that is left (flexGrow 1, flexShrink 1, flexBasis 0 unless set) and
+//     its children keep their height; the wheel over it, PageUp / PageDown
+//     and moving the focus scroll it; with a border the right edge shows
+//     where you are. onScroll gets a ScrollEvent in rows.
 //   opaque (bool): clear what is drawn under the box (modals)
 //   trapFocus (bool): while such a node exists, Tab stays inside the last one;
 //                     focus returns to where it was when it goes away
@@ -94,6 +102,8 @@ public:
 
     void commit() override;
     void destroyNode(NodeHandle node) override;
+    // scrollIntoView=true: the node is scrolled into view when it gets it.
+    void setProp(NodeHandle node, std::string_view name, const PropValue& value) override;
 
     // Lay out and draw now (also called by commit). Writes only changed lines.
     void repaint();
@@ -131,6 +141,17 @@ public:
     bool handleMouse(Root& root, const MouseInput& mouse);
     // The topmost node drawn at a cell in the last repaint, 0 if none.
     NodeHandle nodeAt(int x, int y) const;
+
+    // ---- scrolling (overflow="scroll" boxes) ----
+    // Scroll the boxes around `node` so it is visible (NodeRef::scrollIntoView).
+    bool scrollIntoView(NodeHandle node) override;
+    // How far a scroll box is scrolled, in rows (0 = top).
+    int scrollTop(NodeHandle box) const;
+    // Scroll a box by `rows` (negative = up), within its content. True if it moved.
+    bool scrollBy(NodeHandle box, int rows);
+    // Send onScroll to the boxes that scrolled since the last call (handleKey,
+    // handleMouse and TerminalApp do it; tests that call scrollBy call it).
+    void sendScrollEvents(Root& root);
     // The focus is in an input (keys that type text belong to it).
     bool editingText() const;
 
@@ -160,6 +181,9 @@ private:
     NodeHandle focusTrap(NodeHandle h) const;
     bool bubbleKey(Root& root, const KeyEvent& key);
     bool handleKeyNow(Root& root, const KeyEvent& key);
+    bool scrollKey(const KeyEvent& key);
+    bool inside(NodeHandle h, NodeHandle ancestor) const;
+    void bringIntoView(const Layout& layout, NodeHandle node);
 
 
     Output output_;
@@ -173,6 +197,19 @@ private:
     std::size_t focusIndex_ = 0;  // where focus was, to recover after removal
     NodeHandle trap_ = 0;         // current focus trap
     NodeHandle savedFocus_ = 0;   // focus before the trap appeared
+
+    // Scroll boxes: the position of each, and its sizes from the last repaint.
+    struct ScrollBox {
+        int max = 0;       // the furthest it can scroll
+        int content = 0;   // rows of content
+        int viewport = 0;  // rows that show it
+        int width = 0;
+    };
+    std::unordered_map<NodeHandle, int> scrollTop_;
+    std::unordered_map<NodeHandle, ScrollBox> scrollBoxes_;
+    std::vector<NodeHandle> scrolled_;  // onScroll still to send
+    NodeHandle scrolledTo_ = 0;         // the focus last scrolled into view
+    NodeHandle scrollRequest_ = 0;      // scrollIntoView for the next repaint
 
     // Mouse: where each node was drawn in the last repaint, in drawing order
     // (later = on top), and what the pointer is doing.

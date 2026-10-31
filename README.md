@@ -242,7 +242,19 @@ h("box", {{"flexGrow", 1}, {"justifyContent", "center"}, {"alignItems", "center"
 | `input` | a text field: `value`, `placeholder`, a `_` cursor when focused |
 | `button` | `[ label ]` |
 
-**Flex props** (like CSS): `direction` (`row`, `column`, `row-reverse`, `column-reverse`), `justifyContent` (`start`, `center`, `end`, `space-between`, `space-around`, `space-evenly`), `alignItems` / `alignSelf` (`start`, `center`, `end`, `stretch`), `flexGrow`, `flexShrink`, `flexBasis`, `flexWrap`, `width` / `height` / `min*` / `max*` (a number or `"50%"`), `padding*` and `margin*` (`X`, `Y`, `Left`, …; `margin: "auto"`), `gap` / `rowGap` / `columnGap`, `position: "absolute"` + `top` / `left` / `right` / `bottom`, `display: "none"`, `overflow: "hidden"`.
+**Flex props** (like CSS): `direction` (`row`, `column`, `row-reverse`, `column-reverse`), `justifyContent` (`start`, `center`, `end`, `space-between`, `space-around`, `space-evenly`), `alignItems` / `alignSelf` (`start`, `center`, `end`, `stretch`), `flexGrow`, `flexShrink`, `flexBasis`, `flexWrap`, `width` / `height` / `min*` / `max*` (a number or `"50%"`), `padding*` and `margin*` (`X`, `Y`, `Left`, …; `margin: "auto"`), `gap` / `rowGap` / `columnGap`, `position: "absolute"` + `top` / `left` / `right` / `bottom` (`"fixed"`: on the screen and over everything, like `ui::modal` and the toasts), `display: "none"`, `overflow: "hidden"`.
+
+**Scrolling**: `overflow: "scroll"` makes a box a vertical scroll container. In a column it takes the rows that are left, so a list from a server fits under a header with no height to compute; the mouse wheel over it and PageUp/PageDown scroll it, moving the focus keeps the focused element visible, `ref.scrollIntoView()` shows any element, a border shows where you are (`┃`), and `onScroll` gets a `ScrollEvent` in rows (`nearBottom(3)` to load more). `ui::list({.items, .scroll = true})` is a list that scrolls inside its border and keeps the selected item visible.
+
+```cpp
+h("box", {{"flexGrow", 1}}, {
+    h("text", {}, {"Logs"}),
+    h("box", {{"overflow", "scroll"}, {"border", true},
+              {"onScroll", [loadMore](const ScrollEvent& e) { if (e.nearBottom(3)) loadMore(); }}},
+      std::move(lines)),
+    h("text", {{"dim", true}}, {"PgUp/PgDn, wheel"}),
+})
+```
 
 **Look**: `border`, `title`, `color`, `bg`, `bold`, `dim`, `underline`, `focusable`. Colors: `black red green yellow blue magenta cyan white gray`, `bright-<color>`. Borders are `┌─┐` in UTF-8 and `+-+` in other locales (decided with `std::text_encoding`).
 
@@ -283,7 +295,7 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 | `checkbox` | `label`, `checked`, `onToggle` (Enter / Space) |
 | `tabs` | tabs `{label, content}`, `initial`; Enter on a title opens the tab |
 | `modal` | `title`, `open`, `onClose` (Escape), `width`; covers what is under it, keeps the focus inside and gives it back when closed |
-| `list` / `listItem` | a bordered box with a title, `emptyText`; an item: `label`, `detail` on the right, `selected`, `onSelect`, `onKey` |
+| `list` / `listItem` | a bordered box with a title, `emptyText`, `scroll` (scrolls inside instead of growing); an item: `label`, `detail` on the right, `selected` (a newly selected item scrolls into view), `onSelect`, `onKey` |
 | `select` | `label`, `value`, `options` (`{value, label}`), `onChange(value)`; a native `<select>` in the browser, ‹ › with Left / Right / Enter or a click in a terminal |
 | `confirm` | `title`, `message`, `open`, `confirmLabel`, `cancelLabel`, `danger`, `onConfirm`, `onCancel` (also Escape and a click outside) — a ready "Delete it?" |
 | `toast` / `toaster` | `ui::toast({.text, .variant, .duration})` from any handler or effect shows a message in a corner that goes away by itself (`duration = 0`: until clicked); put one `ui::toaster()` in the app |
@@ -310,12 +322,12 @@ The [`DomRenderer`](include/reactx/dom.hpp) backend renders into the real DOM: t
 | `checked`, `disabled`, `selected` | DOM properties |
 | anything else | attributes (`true` — present, `false` — removed) |
 | `onClick`, `onInput(text)`, `onChange`, `onKey(KeyEvent)`, `onSubmit`, `onFocus`, `onBlur` | events; they bubble like in React; `onSubmit` doesn't reload the page |
-| `onScroll(ScrollEvent)` | the element scrolled (doesn't bubble): `top` (also `scrollTop()`), `scrollHeight`, `clientHeight`, `nearBottom()` |
+| `onScroll(ScrollEvent)` | the element scrolled (doesn't bubble): `top` (also `scrollTop()`), `scrollHeight`, `clientHeight`, `nearBottom()`; in a terminal on `overflow: "scroll"` boxes, in rows |
 | `svg`, `rect`, `circle`, `path`, `g`, … | SVG in its own namespace; `svg:text`, `svg:a` for the tags HTML also has |
 | `data-rx-self` | the element only gets clicks on itself, not on its children (dialog backdrops) |
 | `data-rx-trap` | Tab stays inside the element; it takes focus when it appears and gives it back when removed |
 
-**Mouse, touch and drag.** `onPointerDown` / `onPointerMove` / `onPointerUp` get a `PointerEvent` (`x`, `y`, and `localX`, `localY` from the element's corner), `onMouseEnter` / `onMouseLeave` follow the pointer; the same handlers work in a terminal, where `TerminalApp` turns the mouse on (cells instead of pixels; `app.setMouse(false)` leaves it to the terminal). `{"pointerCapture", true}` keeps moves and the release on the element after a press, even outside it (sliders); without it they go to what is under the pointer (drop targets). `ref.focus()` moves the keyboard focus from code. The kanban demo [`examples/kanban.cpp`](examples/kanban.cpp) is one source for both:
+**Mouse, touch and drag.** `onPointerDown` / `onPointerMove` / `onPointerUp` get a `PointerEvent` (`x`, `y`, and `localX`, `localY` from the element's corner), `onMouseEnter` / `onMouseLeave` follow the pointer; the same handlers work in a terminal, where `TerminalApp` turns the mouse on (cells instead of pixels; `app.setMouse(false)` leaves it to the terminal). `{"pointerCapture", true}` keeps moves and the release on the element after a press, even outside it (sliders); without it they go to what is under the pointer (drop targets). `ref.focus()` moves the keyboard focus from code, `ref.scrollIntoView()` scrolls the element into view (both backends). The kanban demo [`examples/kanban.cpp`](examples/kanban.cpp) is one source for both:
 
 ```cpp
 h("div", {{"className", "card"}, {"onPointerDown", [setDragging, id](const PointerEvent&) { setDragging(id); }}}, {title}),
@@ -579,8 +591,8 @@ AGENTS.md         rules and checks for anyone changing ReactX itself
 
 - Numbers like `size_t` in props need an explicit cast to `int64_t`.
 - In tests, after `setState` outside `dispatch`, call `root.flush()` yourself (the browser and `TerminalApp` do it on their own).
-- Terminal: every character counts as 1 column (emoji and CJK can shift a line); the `input` cursor is always at the end; no scrolling — what doesn't fit is cut off; POSIX only (Linux/macOS).
-- `rx::ui`: switching tabs with arrows and "select on focus" aren't done yet; long lists don't scroll.
+- Terminal: every character counts as 1 column (emoji and CJK can shift a line); the `input` cursor is always at the end; scrolling is vertical only (`overflow: "scroll"`), what doesn't fit elsewhere is cut off; POSIX only (Linux/macOS).
+- `rx::ui`: switching tabs with arrows and "select on focus" aren't done yet.
 - Browser: `import reactx;` is off in the web build; no wheel or double-click events yet; `onScroll` only on a scrolling element; `renderToString` has no hydration (the app replaces the prerendered HTML).
 - `useFetch` / `fetch` in the terminal build: `http://` with a full URL only (`http://127.0.0.1:8090/api/todos`), no HTTPS. WebSockets and Server-Sent Events are not supported yet; a cancelled request in the terminal build finishes on its own thread (its answer is dropped).
 - Reflection (`json::to` / `from`) works in native builds only.

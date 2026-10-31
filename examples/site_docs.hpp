@@ -358,8 +358,9 @@ inline const std::vector<Page>& pages() {
                 {"Фокус", "onFocus и onBlur: в браузере — при входе в элемент и уходе из него (всплывают, как в React), "
                           "в терминале — когда фокус переходит по Tab или стрелкам.",
                  "h(\"input\", {{\"value\", email}, {\"onBlur\", [validate] { validate(); }}})"},
-                {"Прокрутка", "onScroll (браузер) получает ScrollEvent: top, scrollHeight, clientHeight и др.; nearBottom() "
-                              "— пора подгружать ещё. Не всплывает: срабатывает только у прокручиваемого элемента.",
+                {"Прокрутка", "onScroll получает ScrollEvent: top, scrollHeight, clientHeight и др. (в браузере пиксели, в "
+                              "терминале строки у box с overflow: \"scroll\"); nearBottom() — пора подгружать ещё. Не всплывает: "
+                              "срабатывает только у прокручиваемого элемента. ref.scrollIntoView() показывает элемент.",
                  "h(\"div\", {{\"style\", \"height: 400px; overflow: auto\"},\n"
                  "            {\"onScroll\", [loadMore](const ScrollEvent& e) { if (e.nearBottom()) loadMore(); }}}, rows)"},
             },
@@ -375,6 +376,15 @@ inline const std::vector<Page>& pages() {
                             "width/height в клетках или процентах, padding, margin, gap, position: absolute.",
                  "h(\"box\", {{\"flexGrow\", 1}, {\"justifyContent\", \"center\"}, {\"alignItems\", \"center\"}}, {\n"
                  "    h(\"box\", {{\"border\", true}, {\"title\", \"Окно\"}, {\"padding\", 1}}, {h(\"text\", {}, {\"Привет\"})}),\n"
+                 "})"},
+                {"Прокрутка", "Что выше терминала, обрезается, поэтому длинные списки кладут в box с overflow: \"scroll\". "
+                              "В колонке он занимает оставшиеся строки; колёсико и PageUp/PageDown прокручивают его, элемент в "
+                              "фокусе остаётся на виду, рамка показывает положение, onScroll сообщает его в строках. "
+                              "ui::list({.items, .scroll = true}) прокручивается внутри своей рамки. Окна и уведомления — "
+                              "position: \"fixed\", они видны на экране, какой бы длинной ни была страница.",
+                 "h(\"box\", {{\"flexGrow\", 1}}, {\n"
+                 "    h(\"text\", {}, {\"Логи\"}),\n"
+                 "    h(\"box\", {{\"overflow\", \"scroll\"}, {\"border\", true}}, std::move(lines)),\n"
                  "})"},
             },
         },

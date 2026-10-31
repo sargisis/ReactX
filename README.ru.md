@@ -230,7 +230,19 @@ h("box", {{"flexGrow", 1}, {"justifyContent", "center"}, {"alignItems", "center"
 | `input` | поле ввода: `value`, `placeholder`, курсор `_` в фокусе |
 | `button` | `[ label ]` |
 
-**Flex-пропсы** (как в CSS): `direction` (`row`, `column`, `row-reverse`, `column-reverse`), `justifyContent` (`start`, `center`, `end`, `space-between`, `space-around`, `space-evenly`), `alignItems` / `alignSelf` (`start`, `center`, `end`, `stretch`), `flexGrow`, `flexShrink`, `flexBasis`, `flexWrap`, `width` / `height` / `min*` / `max*` (число или `"50%"`), `padding*` и `margin*` (`X`, `Y`, `Left`, …; `margin: "auto"`), `gap` / `rowGap` / `columnGap`, `position: "absolute"` + `top` / `left` / `right` / `bottom`, `display: "none"`, `overflow: "hidden"`.
+**Flex-пропсы** (как в CSS): `direction` (`row`, `column`, `row-reverse`, `column-reverse`), `justifyContent` (`start`, `center`, `end`, `space-between`, `space-around`, `space-evenly`), `alignItems` / `alignSelf` (`start`, `center`, `end`, `stretch`), `flexGrow`, `flexShrink`, `flexBasis`, `flexWrap`, `width` / `height` / `min*` / `max*` (число или `"50%"`), `padding*` и `margin*` (`X`, `Y`, `Left`, …; `margin: "auto"`), `gap` / `rowGap` / `columnGap`, `position: "absolute"` + `top` / `left` / `right` / `bottom` (`"fixed"` — на экране и поверх всего, как `ui::modal` и уведомления), `display: "none"`, `overflow: "hidden"`.
+
+**Прокрутка**: `overflow: "scroll"` делает `box` вертикальным контейнером с прокруткой. В колонке он занимает оставшиеся строки, так что список с сервера помещается под заголовком без подсчёта высоты; колёсико мыши над ним и PageUp/PageDown прокручивают его, при перемещении фокуса элемент в фокусе остаётся виден, `ref.scrollIntoView()` показывает любой элемент, рамка показывает положение (`┃`), а `onScroll` получает `ScrollEvent` в строках (`nearBottom(3)` — пора подгрузить). `ui::list({.items, .scroll = true})` — список, который прокручивается внутри своей рамки и держит выбранный пункт на виду.
+
+```cpp
+h("box", {{"flexGrow", 1}}, {
+    h("text", {}, {"Логи"}),
+    h("box", {{"overflow", "scroll"}, {"border", true},
+              {"onScroll", [loadMore](const ScrollEvent& e) { if (e.nearBottom(3)) loadMore(); }}},
+      std::move(lines)),
+    h("text", {{"dim", true}}, {"PgUp/PgDn, колёсико"}),
+})
+```
 
 **Оформление**: `border`, `title`, `color`, `bg`, `bold`, `dim`, `underline`, `focusable`. Цвета: `black red green yellow blue magenta cyan white gray`, `bright-<цвет>`. Рамки — `┌─┐` в UTF-8 и `+-+` в других локалях (по `std::text_encoding`).
 
@@ -271,7 +283,7 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 | `checkbox` | `label`, `checked`, `onToggle` (Enter / Space) |
 | `tabs` | вкладки `{label, content}`, `initial`; Enter на заголовке открывает вкладку |
 | `modal` | `title`, `open`, `onClose` (Escape), `width`; закрывает то, что под ним, держит фокус внутри и возвращает его после закрытия |
-| `list` / `listItem` | рамка с заголовком, `emptyText`; пункт: `label`, `detail` справа, `selected`, `onSelect`, `onKey` |
+| `list` / `listItem` | рамка с заголовком, `emptyText`, `scroll` (прокрутка внутри вместо роста); пункт: `label`, `detail` справа, `selected` (новый выбранный пункт прокручивается на виду), `onSelect`, `onKey` |
 | `select` | `label`, `value`, `options` (`{value, label}`), `onChange(value)`; в браузере нативный `<select>`, в терминале ‹ › со стрелками ← → / Enter или кликом |
 | `confirm` | `title`, `message`, `open`, `confirmLabel`, `cancelLabel`, `danger`, `onConfirm`, `onCancel` (ещё Escape и клик мимо) — готовое «Удалить?» |
 | `toast` / `toaster` | `ui::toast({.text, .variant, .duration})` из любого обработчика или эффекта показывает сообщение в углу, которое исчезает само (`duration = 0` — до клика); один `ui::toaster()` в приложении |
@@ -298,12 +310,12 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 | `checked`, `disabled`, `selected` | свойства DOM |
 | остальное | атрибуты (`true` — есть, `false` — убрать) |
 | `onClick`, `onInput(text)`, `onChange`, `onKey(KeyEvent)`, `onSubmit`, `onFocus`, `onBlur` | события; всплывают как в React; `onSubmit` не перезагружает страницу |
-| `onScroll(ScrollEvent)` | прокрутка элемента (не всплывает): `top` (он же `scrollTop()`), `scrollHeight`, `clientHeight`, `nearBottom()` |
+| `onScroll(ScrollEvent)` | прокрутка элемента (не всплывает): `top` (он же `scrollTop()`), `scrollHeight`, `clientHeight`, `nearBottom()`; в терминале — у `box` с `overflow: "scroll"`, в строках |
 | `svg`, `rect`, `circle`, `path`, `g`, … | SVG в своём пространстве имён; `svg:text`, `svg:a` — для тегов, которые есть и в HTML |
 | `data-rx-self` | элемент получает только клики по себе, не по детям (фон окна) |
 | `data-rx-trap` | Tab не выходит из элемента; при появлении он забирает фокус, при удалении — возвращает |
 
-**Мышь, касания и перетаскивание.** `onPointerDown` / `onPointerMove` / `onPointerUp` получают `PointerEvent` (`x`, `y` и `localX`, `localY` от угла элемента), `onMouseEnter` / `onMouseLeave` следят за указателем; те же обработчики работают в терминале — там `TerminalApp` включает мышь (клетки вместо пикселей; `app.setMouse(false)` оставляет её терминалу). `{"pointerCapture", true}` после нажатия держит движения и отпускание на элементе, даже за его пределами (слайдеры); без него их получает то, что под указателем (куда бросают). `ref.focus()` переводит фокус клавиатуры из кода. Демо-канбан [`examples/kanban.cpp`](examples/kanban.cpp) — один исходник для обоих:
+**Мышь, касания и перетаскивание.** `onPointerDown` / `onPointerMove` / `onPointerUp` получают `PointerEvent` (`x`, `y` и `localX`, `localY` от угла элемента), `onMouseEnter` / `onMouseLeave` следят за указателем; те же обработчики работают в терминале — там `TerminalApp` включает мышь (клетки вместо пикселей; `app.setMouse(false)` оставляет её терминалу). `{"pointerCapture", true}` после нажатия держит движения и отпускание на элементе, даже за его пределами (слайдеры); без него их получает то, что под указателем (куда бросают). `ref.focus()` переводит фокус клавиатуры из кода, `ref.scrollIntoView()` прокручивает элемент на виду (оба бэкенда). Демо-канбан [`examples/kanban.cpp`](examples/kanban.cpp) — один исходник для обоих:
 
 ```cpp
 h("div", {{"className", "card"}, {"onPointerDown", [setDragging, id](const PointerEvent&) { setDragging(id); }}}, {title}),
@@ -570,8 +582,8 @@ AGENTS.md         правила и проверки для тех, кто ме�
 
 - Числа вроде `size_t` в props нужно явно приводить к `int64_t`.
 - В тестах после `setState` вне `dispatch` нужно самому вызвать `root.flush()` (в браузере и `TerminalApp` это происходит само).
-- Терминал: ширина символа считается за 1 колонку (эмодзи и иероглифы могут сдвигать строку); курсор в `input` только в конце текста; нет прокрутки — что не влезло, обрезается; только POSIX (Linux/macOS).
-- `rx::ui`: переключение вкладок стрелками и выбор «по фокусу» пока не сделаны; нет прокрутки длинных списков.
+- Терминал: ширина символа считается за 1 колонку (эмодзи и иероглифы могут сдвигать строку); курсор в `input` только в конце текста; прокрутка только вертикальная (`overflow: "scroll"`), в остальных местах что не влезло — обрезается; только POSIX (Linux/macOS).
+- `rx::ui`: переключение вкладок стрелками и выбор «по фокусу» пока не сделаны.
 - Браузер: `import reactx;` в веб-сборке выключен; пока нет колёсика и двойного клика; `onScroll` — только у элемента с прокруткой; у `renderToString` нет гидратации (приложение заменяет пререндер).
 - `useFetch` / `fetch` в терминальной сборке: только `http://` и полный URL (`http://127.0.0.1:8090/api/todos`), без HTTPS. WebSockets и Server-Sent Events пока нет; отменённый запрос в терминальной сборке дорабатывает в своём потоке (его ответ отбрасывается).
 - Рефлексия (`json::to` / `from`) — только в нативной сборке.

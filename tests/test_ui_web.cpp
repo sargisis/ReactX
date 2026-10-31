@@ -81,7 +81,7 @@ Element Atoms(const Props&) {
                       ui::stack({.direction = ui::Direction::Row, .gap = 2, .justify = ui::Justify::Between,
                                  .children = {ui::text({.text = "one"}), ui::text({.text = "two", .muted = true})}}),
                   }}),
-        ui::select({.label = "Size", .value = size, .options = {{"s", "Small"}, {"m", "Medium"}, {"l"}},
+        ui::select({.label = "Size", .value = size, .options = {{"", "Any"}, {"s", "Small"}, {"m", "Medium"}, {"l"}},
                     .onChange = [setSize](const std::string& v) { setSize(v); }}),
         ui::tooltip({.text = "Saves the file", .children = {h("button", {{"id", "save"}}, {"Save"})}}),
         h("button", {{"id", "notify"}, {"onClick", [] {
@@ -143,9 +143,12 @@ int main() {
     std::cout << "lists\n";
     CHECK(has("<div class=\"rx-list__title\">Fruit</div><ul class=\"rx-list__items\">"));
     CHECK(has("<p class=\"rx-list__empty\">no fruit</p>"));
+    CHECK(js("String(globalThis.__rxScrolledTo)") == "undefined");  // no scrolling while the page is built
     js("rxTest.clickText('pear')");
     CHECK(has("picked=pear"));
     CHECK(js("rxTest.countClass('rx-item--selected')") == "1");
+    CHECK(js("globalThis.__rxScrolledTo.textContent").starts_with("pear"));  // the newly selected item scrolled into view
+    CHECK(!has("scrollIntoView") && !has("scrollintoview"));  // not an attribute
 
     std::cout << "modal: opens, takes focus, traps Tab\n";
     CHECK(js("rxTest.countClass('rx-modal')") == "0");
@@ -177,11 +180,15 @@ int main() {
 
     std::cout << "select\n";
 
-    CHECK(has("<option>Small</option><option>Medium</option><option>l</option>"));  // value is a property here
-    CHECK(js("document.querySelector('#app').querySelectorAll('option')[2].value") == "l");  // the label falls back to it
+    CHECK(has("<option value>Any</option><option value=\"s\">Small</option><option value=\"m\">Medium</option>"
+              "<option value=\"l\">l</option>"));  // the label falls back to the value
+    // value="" must be written: otherwise a browser takes the text ("Any") as the value.
+    CHECK(js("document.querySelector('#app').querySelectorAll('option')[0].value") == "");
     CHECK(js("document.querySelector('#app').querySelectorAll('select')[0].value") == "m");
     js("rxTest.changeClass('rx-select', 'l')");
     CHECK(has("size=l"));
+    js("rxTest.changeClass('rx-select', '')");
+    CHECK(has("size= result"));
 
     std::cout << "tooltip\n";
     CHECK(!has("Saves the file"));

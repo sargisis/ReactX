@@ -619,7 +619,7 @@ TEST(render_to_string_props_and_escaping) {
     std::string html = renderToString(h("div", {{"className", "card"}, {"data-n", 3}, {"hidden", true}, {"draggable", false}}, {
         h("label", {{"htmlFor", "q"}}, {"a < b & \"c\""}),
         h("input", {{"id", "q"}, {"value", "x\"y"}, {"onInput", InputHandler([](const std::string&) {})}}),
-        h("a", {{"href", " javascript:alert(1)"}}, {"bad"}),
+        h("a", {{"href", " javascript:alert(1)"}, {"scrollIntoView", true}}, {"bad"}),  // an action, not an attribute
     }));
     CHECK(html == "<div class=\"card\" data-n=\"3\" hidden>"
                   "<label for=\"q\">a &lt; b &amp; \"c\"</label>"

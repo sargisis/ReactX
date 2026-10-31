@@ -76,6 +76,8 @@ constexpr const char* kCss = R"css(
 .rx-list__title { padding: 8px 12px; font-size: .85rem; color: var(--rx-muted); border-bottom: 1px solid var(--rx-border); }
 .rx-list__items { list-style: none; margin: 0; padding: 0; }
 .rx-list__items > li + li { border-top: 1px solid var(--rx-border); }
+.rx-list--scroll { display: flex; flex-direction: column; min-height: 0; max-height: 100%; }
+.rx-list--scroll > .rx-list__items { overflow-y: auto; min-height: 0; }
 .rx-list__empty { margin: 0; padding: 14px 12px; color: var(--rx-muted); text-align: center; }
 .rx-item {
   width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 12px;
@@ -283,7 +285,7 @@ Element List(const Props& p) {
         parts.push_back(h("p", {{"className", "rx-list__empty"}}, {p.get<std::string>("emptyText")}));
     else
         parts.push_back(h("ul", {{"className", "rx-list__items"}}, p.children()));
-    return h("div", {{"className", "rx-list"}}, std::move(parts));
+    return h("div", {{"className", p.get<bool>("scroll") ? "rx-list rx-list--scroll" : "rx-list"}}, std::move(parts));
 }
 
 Element ListItem(const Props& p) {
@@ -295,6 +297,7 @@ Element ListItem(const Props& p) {
     if (!detail.empty()) parts.push_back(h("span", {{"className", "rx-item__detail"}}, {detail}));
     return h("li", {}, {
         h("button", {{"type", "button"},
+                     {"scrollIntoView", selected},  // a newly selected item scrolls into view
                      {"className", selected ? "rx-item rx-item--selected" : "rx-item"},
                      {"aria-pressed", selected ? "true" : "false"},
                      {"onClick", p.get<Callback>("onSelect")},

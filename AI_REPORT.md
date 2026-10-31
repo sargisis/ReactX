@@ -626,3 +626,100 @@ P3
 Все ссылки зафиксированы на изученном commit; дата чтения — 2026-10-29.
 
 [^storage]: src/utility_hooks.cpp, L111–121 — подавление storage exceptions. [^hooks]: include/reactx/hooks.hpp — Setter, useState, useLocalStorage, эффекты. [^json]: include/reactx/json.hpp, L147–170 и reflection block — getter/fallback/casts и conditional reflection API. [^json-parser]: src/json.cpp, L95–126 — глубина, object parser, insert_or_assign. [^element]: include/reactx/element.hpp — event types, typed props, boundary. [^dom]: src/dom.cpp — DOM, URL guard, controlled fields, focus, delegated events. [^store]: include/reactx/store.hpp — shared state и selector subscriptions. [^fetch]: include/reactx/fetch.hpp, src/fetch.cpp, L163–184 — request contract и alive-flag cleanup. [^cmake]: CMakeLists.txt, cmake/ReactXApp.cmake — browser branch и app helper. [^llms]: llms.txt — явные ограничения events и browser standard library. [^ci]: .github/workflows/pages.yml — конфигурация upstream-проверок, не результаты их выполнения. [^example]: examples/web_app.cpp, L48 и L186, README.ru.md — различие terminology и требования запуска.
+
+
+## Сводный отчёт #7 — Claude (claude-opus-5-5), 2026-11-01
+
+Как писал: только по `llms.txt` и `AGENTS.md` нового проекта, CLI v0.10.0 с install-пути, проекты вне репозитория
+(`~/Desktop/reactx-trials/`). Исходники ReactX открывал только после того, как баг воспроизведён, — чтобы найти причину.
+Проверка: веб — безголовый Brave через CDP (клики, ввод, Escape, скриншоты, 1000 px и 390 px);
+терминал — настоящий pty 80×24 + эмулятор pyte (клавиши, мышь, resize).
+
+Проекты:
+1. **budget** (веб): роутер с `:id` и `?cat=`, `createStore`, `useFetch` + `setLocalFetch`, `storageRead/Write`,
+   `ui::input/select/button/confirm/toast/card/stack/text`, SVG-график, тесты на `TextRenderer`.
+2. **notes** (терминал): 60 заметок с `rx::net::HttpServer` (отдельная цель), `useFetch` по http, `useDebounce`-поиск,
+   `useKeyboard` (↑↓, Ctrl+O/D/Q), `useInterval`-часы, `ui::list/listItem/modal/confirm/toaster`.
+
+Итог: оба проекта собрались почти сразу (веб — после 3 правок, терминал — с первого раза), консоль чистая,
+localStorage, deep links, назад, Escape в веб-диалоге, тосты, resize — работают. Ниже то, что сломалось.
+
+### Баги
+
+**C1. [P0][bug][web] `ui::select`: вариант с `value = ""` не выбирается и отдаёт свою подпись вместо значения.**
+`ui::select({.value = "", .options = {{"", "All"}, {"food", "Food"}}})` → в DOM `<option>` без атрибута `value`,
+`select.selectedIndex == -1` (поле пустое), а выбор «All» вызывает `onChange("All")` вместо `onChange("")`.
+У меня фильтр стал `?cat=All` и список опустел. Типовой случай «Все / не выбрано» сломан.
+Причина: `src/dom.cpp` `rxSetProp`, ветка `name === "value"`: `if (el.value !== v) el.value = v;` — у нового
+`<option>` без текста `el.value` уже `""`, присваивание пропускается, атрибута нет; потом добавляется текст, и `value`
+становится «All». Фикс: для `<option>` (и вообще не-полей ввода) писать `setAttribute("value", v)`.
+Тест: `h("option", {{"value", ""}}, {"All"})` → `getAttribute("value") === ""`. Терминальная версия select в порядке.
+
+**C2. [P0][bug][terminal] `ui::modal` без кнопок внутри нельзя закрыть: Escape не доходит.**
+Модалка с одним текстом (`.children = {h("text", ...)}`) открывается, но Escape, Tab+Enter ничего не делают — пользователь
+заперт (Ctrl+C убивает программу). В браузере та же модалка закрывается по Escape. `ui::confirm` (есть кнопки) — работает.
+Причина: `TerminalRenderer` шлёт `onKey` от элемента в фокусе вверх по предкам (`if (!focused_) return false;`); в модалке
+нет фокусируемых узлов, ловушка фокуса сбрасывает `focused_ = 0`, и `onKey` модалки (`ui_terminal.cpp:106`) не вызывается.
+Фикс: когда фокуса нет, а ловушка есть — слать `onKey` в узел ловушки; либо делать коробку модалки `focusable`.
+
+**C3. [P1][bug][terminal] Содержимое выше экрана выталкивает модалки и тосты за край.**
+Корневой `box` c `flexGrow: 1` растёт вместе со списком (60 строк при 24 на экране). `ui::modal`/`ui::confirm`
+(`position: absolute; top/bottom: 0`) центрируются по этой высоте — окно рисуется ниже экрана, его не видно, но фокус в нём,
+ввод «пропадает». То же с `ui::toaster()`. Ожидание: корень `TerminalApp` = размер терминала, лишнее обрезается
+(или прокручивается — см. D1). Сейчас llms.txt советует «toaster последним в box, который заполняет экран», но такой box
+заполняет не экран, а контент.
+
+### Пробелы (то, чего нет, а пользователь ждёт)
+
+**D1. [P1][gap][terminal] Нет прокрутки.** Выделение `ui::listItem` уходит ниже экрана после ~18 пунктов;
+колесо мыши и PageUp/PageDown игнорируются. (Известно, в роадмапе — подтверждаю как главный барьер для терминальных
+приложений с данными: любой список из сервера упирается в это.)
+
+### Документация
+
+**E1. [P1][docs] `AGENTS.md` в шаблоне `reactx new` устарел:** «Only click, input, change, keydown and submit events exist».
+С v0.9.0 есть pointer/hover/focus/blur/scroll. ИИ-агент, который читает его первым, не станет пользоваться мышью и фокусом.
+Там же стоит упомянуть `reactx/ui.hpp` (компоненты) — шаблон им пользуется, а правила о них молчат.
+
+**E2. [P1][docs] `llms.txt` не называет тип варианта `ui::select`.** Литерал `{{"m", "Medium"}}` работает, но список,
+собранный в цикле, требует имя типа; я угадал `ui::SelectOption` — ошибка. Правильно `ui::Option{.value, .label}`.
+
+**E3. [P1][docs] Сигнатура `ui::input` `.onSubmit` не указана.** Я передал `Callback` (как у `ui::button`) — ошибка
+«no viable conversion to InputHandler». Нужно: `onSubmit(text)` получает текст. Одно слово в llms.txt.
+
+**E4. [P2][docs] Как читать число из `json::Value` без ключа?** Документированы `get<T>(key, fb)`, `require<T>(key)`,
+`asString()`; для значения в `asObject()`-цикле (`{"EUR": 0.92}`) пришлось угадать `asNumber()` (угадал). Добавить
+`asNumber()/asInt()/asBool()` в строку про JSON.
+
+**E5. [P2][docs] Тесты в веб-проекте.** Рецепт `TextRenderer` есть, но не сказано, как завести тестовую цель в проекте
+от `reactx new`. Нативная конфигурация собирает и приложение, и падает на `mountDom` в `main.cpp`; работает только
+`cmake --build build/native --target <tests>`. Нужен готовый кусок CMake (или `reactx test`), и чтобы `reactx_add_app`
+нативно не собирал веб-`main` (или шаблон сразу с `#ifdef __EMSCRIPTEN__`).
+
+**E6. [P2][dx] Сообщение компилятора, когда в props нет поля `key`.** `h(Row, {.key = "1", ...})` без `std::string key{}`
+в структуре → 40 строк «cannot convert initializer list», слово `key` в ошибке не встречается. Добавить в «Common errors».
+
+### Размер
+
+**S1. [P2][size]** Пустой шаблон `reactx new` — 119 КБ `.wasm`; budget — 238 КБ (102 КБ gzip). `reactx build` печатает
+размер, но ничего не называет (format/print нет). По линкер-карте: libc++ `from_chars` для double (JSON), `fetch`, `json`,
+`ui_web`, сам код приложения. Ничего неправильного, но совет из llms.txt «build назовёт виновника» тут молчит;
+полезно было бы печатать топ-5 объектников из `*.link.map`, раз он и так создаётся.
+
+### Что понравилось
+
+- Props-структуры + designated initializers: опечатки ловит компилятор, автодополнение работает.
+- `setLocalFetch` + `useFetch` с сохранением старого ответа во время reload — без мигания.
+- `ui::confirm` и `ui::toast` в обоих бэкендах: одна строка вместо собственного диалога; Escape, фокус и
+  возврат фокуса в поле в терминале — сделаны аккуратно.
+- Тот же `App` под `TextRenderer` рисует терминальные теги — тест увидел `‹ All ›` и `Total: 1.99` без браузера.
+- `useFetch` к выключенному серверу: понятный текст «can't connect to 127.0.0.1:8097 (Connection refused)».
+
+### Приоритет на исправление
+
+C1, C2 (P0, маленькие фиксы) → E1–E3 (по строке) → C3 + D1 (вместе: прокрутка и размер корня терминала) → E4–E6, S1.
+
+**Статус (2026-11-01, после отчёта):** исправлено в `[Unreleased]` — C1 (`<option value="">`), C2 (клавиши идут в модалку без фокуса),
+C3 (`position: "fixed"` у `ui::modal`/`ui::confirm`/`ui::toaster`), D1 (`overflow: "scroll"`, `ui::list({.scroll = true})`,
+`ref.scrollIntoView()`, `onScroll` в терминале), E1–E6 (AGENTS.md шаблона, llms.txt). Проверено повторным прогоном
+budget (браузер) и notes (pty). Не сделано: S1 (топ объектников в выводе `reactx build`), `reactx test` для веб-проектов.

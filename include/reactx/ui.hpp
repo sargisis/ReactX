@@ -152,6 +152,10 @@ struct ListProps {
     std::string emptyText = "nothing here";
     std::vector<Element> items{};
     std::string key{};
+    // Scroll inside the list instead of growing: in a terminal the list takes the
+    // rows that are left (the selected item stays visible); in the browser it
+    // scrolls when its parent limits its height.
+    bool scroll = false;
 };
 Element list(ListProps props);
 

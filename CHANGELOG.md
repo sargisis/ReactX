@@ -6,6 +6,21 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Added
+
+- **Scrolling in the terminal**: `overflow: "scroll"` makes a `box` a vertical scroll container. In a column it takes the rows that are left (no height to compute); the mouse wheel over it and PageUp/PageDown scroll it, moving the focus keeps the focused node visible, a border shows the position (`┃`), and `onScroll` now works in the terminal too (a `ScrollEvent` in rows). `TerminalRenderer::scrollBy` / `scrollTop` for code and tests.
+- `ui::list({.scroll = true})`: a long list scrolls inside its border instead of growing; `ui::listItem` keeps a newly selected item in view (both backends).
+- `ref.scrollIntoView()` (`NodeRef`): scrolls an element into view, the least needed, in the browser and in a terminal (`Renderer::scrollIntoView`).
+- `position: "fixed"` in the terminal: placed on the screen and drawn over everything. `ui::modal`, `ui::confirm` and `ui::toaster()` use it, so they show however tall the page is.
+
+### Fixed
+
+- `ui::select` (and any `<option value="">`) in the browser: an option with an empty value wasn't selected and its `onChange` sent the label ("All") instead of `""`.
+- A terminal `ui::modal` with nothing focusable inside (only text) couldn't be closed: Escape didn't reach it. Keys now go to the open modal when nothing in it has focus.
+- Terminal: a page taller than the screen pushed `ui::modal`, `ui::confirm` and toasts below the bottom edge.
+- The `AGENTS.md` of new projects said only click, input, change, keydown and submit events exist; it now lists all of them, the `rx::ui` components, how to add tests to a web project and (terminal) how long lists scroll.
+- llms.txt: the type of a `ui::select` option (`ui::Option`), `ui::input`'s `onSubmit(text)`, `asNumber()`/`asInt()`/`asBool()` for JSON values, tests in a web project, the error for a missing `key` field.
+
 ## [0.10.0] — 2026-11-01
 
 Ready-made pieces for everyday screens, the same in the browser and the terminal: `ui::confirm` (a "Delete it?" dialog in one line), `ui::toast` (messages in a corner from any handler), `ui::select`, `ui::tooltip`, and `ui::card` / `ui::stack` / `ui::text` for layout without CSS. Also a fix for `mountDom` into a container that already held an app. Apps update without changes.

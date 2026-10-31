@@ -152,6 +152,11 @@ public:
     // can't or isn't on the page.
     bool focus() const;
 
+    // Scroll so the element is visible, the least needed (the browser's
+    // scrollIntoView({block: "nearest"}); in a terminal the overflow="scroll"
+    // boxes around it). False if it isn't on the page.
+    bool scrollIntoView() const;
+
 private:
     friend class detail::Reconciler;
     struct State {

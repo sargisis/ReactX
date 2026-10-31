@@ -111,7 +111,8 @@ void quick(const fs::path& tmp) {
     CHECK(contains(read(app / ".vscode/settings.json"), "${env:EMSDK}/upstream/bin/clangd"));
     auto agents = read(app / "AGENTS.md");  // notes for AI agents: filled in, web rules, the API link
     CHECK(contains(agents, "# my-app — notes for coding agents") && contains(agents, "reactx/dom.hpp"));
-    CHECK(contains(agents, "llms.txt") && contains(agents, "keydown") && !contains(agents, "{{"));
+    CHECK(contains(agents, "llms.txt") && contains(agents, "onPointerDown") && !contains(agents, "{{"));
+    CHECK(contains(agents, "reactx/ui.hpp") && contains(agents, "--target app_tests"));  // components, tests
     auto manifest = rx::json::parse(read(app / "reactx.json"));
     CHECK(manifest["name"].asString() == "my-app");
     CHECK(manifest["template"].asString() == "web");
@@ -129,7 +130,8 @@ void quick(const fs::path& tmp) {
     CHECK(!tui.contains("web"));
     CHECK(contains(read(tmp / "tui/src/main.cpp"), "TerminalApp app;"));
     auto tuiAgents = read(tmp / "tui/AGENTS.md");  // terminal flavour: no browser rules
-    CHECK(contains(tuiAgents, "reactx/terminal.hpp") && !contains(tuiAgents, "keydown") && !contains(tuiAgents, "{{"));
+    CHECK(contains(tuiAgents, "reactx/terminal.hpp") && !contains(tuiAgents, "onPointerDown") && !contains(tuiAgents, "{{"));
+    CHECK(contains(tuiAgents, ".scroll = true"));  // long lists
     CHECK(contains(read(tmp / "tui/.clangd"), "CompilationDatabase: build/native"));
     CHECK(!contains(read(tmp / "tui/.vscode/settings.json"), "clangd.path"));  // any clangd: no Emscripten needed
     auto container = rx::json::parse(read(tmp / "tui/.devcontainer/devcontainer.json"));  // this release's image

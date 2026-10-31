@@ -168,6 +168,7 @@ void HtmlRenderer::print(std::string& out, NodeHandle h, std::string_view parent
     out += tag;
     for (const auto& [name, v] : n.props) {
         if (std::holds_alternative<std::monostate>(v)) continue;
+        if (name == "scrollIntoView") continue;  // an action of the live page, not an attribute
         if (name == "value" && (tag == "textarea" || tag == "select")) {
             value = valueText(v);
             hasValue = true;

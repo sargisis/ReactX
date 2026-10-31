@@ -38,6 +38,10 @@ public:
     // Move the keyboard focus to `node` (NodeRef::focus). False if the
     // backend has no focus or the node can't take it.
     virtual bool focus(NodeHandle) { return false; }
+
+    // Scroll the containers around `node` so it is visible (NodeRef::scrollIntoView).
+    // False if the backend can't.
+    virtual bool scrollIntoView(NodeHandle) { return false; }
 };
 
 }  // namespace rx

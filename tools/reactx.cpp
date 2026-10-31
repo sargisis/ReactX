@@ -574,7 +574,9 @@ Native builds need GCC 16+; web builds need Emscripten: `reactx install` downloa
 - Runtime errors (input, network, files) are `std::expected` values; numbers from text with
   `rx::parseNumber` (`reactx/parse.hpp`), not `std::stoi`.
 - Never change component state from another thread; use `useDebounce` / effects for timers.
-- Prefer the C++ standard library to extra dependencies.{{web_rules}}
+- Prefer the C++ standard library to extra dependencies.
+- Ready components that work in the browser and the terminal: `reactx/ui.hpp` (`ui::button`, `input`,
+  `select`, `checkbox`, `list`, `modal`, `confirm`, `toast` + `toaster`, `card`, `stack`, `text`, ...).{{web_rules}}
 - Test components without a browser or terminal: `rx::TextRenderer` + `rx::Root`, then
   `root.dispatch(node, "onClick")` and check `renderer.toString()`.
 )md";
@@ -627,10 +629,16 @@ int cmdNew(const std::vector<std::string>& args) {
         {"output", terminal ? "build/native/" + cmakeName(name) : "build/web/dist/ (static files for any host)"},
         {"kind", terminal ? "terminal" : "web"},
         {"backend", terminal ? "plus `reactx/terminal.hpp` for `TerminalApp`" : "plus `reactx/dom.hpp` for `mountDom`"},
-        {"web_rules", terminal ? ""
+        {"web_rules", terminal ? "\n- Long lists scroll: `ui::list({..., .scroll = true})` or a `box` with `overflow: \"scroll\"`"
+                                 "\n  (wheel, PageUp/PageDown, the focus stays visible). Content taller than the terminal is cut off."
                                : "\n- The browser build has no threads, sockets or files, and no C++26 reflection or"
-                                 "\n  `std::generator`. Only click, input, change, keydown and submit events exist."
-                                 "\n- Styles live in `public/style.css`."}};
+                                 "\n  `std::generator`. Events: onClick, onInput/onChange, onKey, onSubmit, onFocus/onBlur,"
+                                 "\n  onScroll, onPointerDown/Move/Up, onMouseEnter/Leave."
+                                 "\n- Styles live in `public/style.css`."
+                                 "\n- Tests run natively: keep components in their own file (not `main.cpp`, which calls"
+                                 "\n  `mountDom`), add `if(NOT EMSCRIPTEN) add_executable(app_tests tests/app_tests.cpp src/app.cpp)`"
+                                 "\n  + `target_link_libraries(app_tests PRIVATE reactx::reactx) endif()` to CMakeLists.txt and build"
+                                 "\n  only that target: `cmake -S . -B build/test && cmake --build build/test --target app_tests`."}};
     writeManifest(dir, manifest);
     writeOrFail(dir / "CMakeLists.txt", fill(std::string(kCMakeLists), vars));
     writeOrFail(dir / "CMakePresets.json", kPresets);

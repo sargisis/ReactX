@@ -309,8 +309,9 @@ inline const std::vector<Page>& pagesEn() {
                 {"Keys", "KeyEvent.key is a character (\"a\") or a name: Enter, Escape, Tab, Backspace, Delete, Up, Down, Left, "
                          "Right, Home, End. Plus ctrl, alt and shift.", ""},
                 {"Bubbling", "As in React, the handler of the element runs first, then those of its parents.", ""},
-                {"Focus and scrolling", "onFocus and onBlur fire when an element gets or loses focus. onScroll (browser) tells "
-                                        "you the position; nearBottom() says it's time to load more.",
+                {"Focus and scrolling", "onFocus and onBlur fire when an element gets or loses focus. onScroll tells you the "
+                                        "position (pixels in the browser, rows on a terminal scroll box); nearBottom() says it's "
+                                        "time to load more. ref.scrollIntoView() shows an element.",
                  "h(\"div\", {{\"style\", \"height: 400px; overflow: auto\"},\n"
                  "            {\"onScroll\", [loadMore](const ScrollEvent& e) { if (e.nearBottom()) loadMore(); }}}, rows)"},
             },
@@ -326,6 +327,15 @@ inline const std::vector<Page>& pagesEn() {
                            "width and height in cells or percent, padding, margin, gap, borders.",
                  "h(\"box\", {{\"flexGrow\", 1}, {\"justifyContent\", \"center\"}, {\"alignItems\", \"center\"}}, {\n"
                  "    h(\"box\", {{\"border\", true}, {\"title\", \"Window\"}, {\"padding\", 1}}, {h(\"text\", {}, {\"Hello\"})}),\n"
+                 "})"},
+                {"Scrolling", "What is taller than the terminal is cut off, so long lists go in a box with overflow: \"scroll\". "
+                              "In a column it takes the rows that are left; the mouse wheel and PageUp/PageDown scroll it, the "
+                              "focused element stays visible, a border shows the position and onScroll reports it in rows. "
+                              "ui::list({.items, .scroll = true}) scrolls inside its border. Modals and toasts use "
+                              "position: \"fixed\", so they show on the screen however tall the page is.",
+                 "h(\"box\", {{\"flexGrow\", 1}}, {\n"
+                 "    h(\"text\", {}, {\"Logs\"}),\n"
+                 "    h(\"box\", {{\"overflow\", \"scroll\"}, {\"border\", true}}, std::move(lines)),\n"
                  "})"},
             },
         },

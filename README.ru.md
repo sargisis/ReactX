@@ -44,7 +44,7 @@
   ```sh
   brew install cmake ninja git gcc emscripten
   ```
-  Соберите `reactx` из исходников: `cmake --preset release -DCMAKE_CXX_COMPILER=g++-14 && cmake --build --preset release && cmake --install build/release --prefix ~/.local`.
+  Соберите `reactx` из исходников: `cmake --preset release -DCMAKE_CXX_COMPILER=g++-16 && cmake --build --preset release && cmake --install build/release --prefix ~/.local` (Homebrew называет компилятор по старшей версии: `brew install gcc` даёт `g++-16`; проверить — `ls $(brew --prefix)/bin/g++-*`).
 
 - **Windows (WSL 2)**:
   В PowerShell от администратора выполните `wsl --install`. Внутри WSL (Ubuntu/Arch) установите инструменты: `sudo apt install cmake ninja-build gcc-16 git` и Emscripten. Локальный сервер `http://127.0.0.1:8090/` открывается прямо в браузере Windows.
@@ -153,7 +153,7 @@ int main() { mountDom(h(App)); }
 - `useReducer(reducer, initial)` → `[state, dispatch]`: состояние, которое меняют действия; берётся самый свежий reducer.
 - `useTimeout(fn, std::optional(5s))`, `useInterval(fn, 1s)` — таймеры в потоке интерфейса; `std::nullopt` выключает, размонтирование отменяет.
 - `useKeyboard(handler)` — сочетания клавиш для всего приложения, где бы ни был фокус: вызывается раньше `onKey` элемента, `return true` забирает клавишу; пока фокус в поле ввода, клавиши набора текста сюда не приходят.
-- `useDebounce(value, 300ms)`, `useLocalStorage("key", default)` (браузер — `localStorage`, нативно — память), `useWindowSize()`.
+- `useDebounce(value, 300ms)`, `useLocalStorage("key", default)` (браузер — `localStorage`; нативно — только память, теряется при выходе), `useWindowSize()`.
 - **Общее состояние** (как Zustand): `const auto Cart = createStore<std::vector<Item>>({});`, `Cart.set(v)` / `Cart.update([](auto items) { ...; return items; })` где угодно в потоке интерфейса; `useStore(Cart)` перерисовывает при каждом изменении, `useStore(Cart, [](const auto& c) { return c.size(); })` — только когда меняется выбранная часть.
 - `useId()` — id, уникальный в приложении и одинаковый при каждой отрисовке: для `<label for>` и `aria-*`.
 - **Границы ошибок**: `errorBoundary([](const RenderError& e) { return h("p", {}, {e.message}); }, {children})` — если дети бросили исключение при отрисовке (в том числе позже, при обновлении состояния), вместо них показывается запасной вариант, а остальное приложение работает; `e.retry()` пробует снова. Исключения в обработчиках событий и эффектах не ловятся (как в React).
@@ -163,7 +163,7 @@ int main() { mountDom(h(App)); }
 - **memo**: `h(memo<Item>, props)` пропускает перерисовку при тех же props. Для props-структуры — её `operator==`; для `Props` — значения через `==`, обработчики равны, только если из одного `useCallback`; элементы с детьми перерисовываются всегда.
 - **Батчинг**: `setState` только помечает компонент; перерисовка в `flush()` (сама — после `render`, `dispatch`, ответов `fetch` и таймеров), родители раньше детей.
 
-**События** — четыре вида обработчиков: `Callback` (`void()`: `onClick`, `onFocus`, `onBlur`, `onSubmit`), `KeyHandler` (`void(const KeyEvent&)`: `onKey`), `InputHandler` (`void(const std::string&)`: `onInput`, `onChange`) и `ScrollHandler` (`void(const ScrollEvent&)`: `onScroll`, с `nearBottom()` для подгрузки). Бэкенд передаёт данные через `Root::dispatch(node, "onKey", KeyEvent{"Enter"})`; если данные не подходят обработчику, `dispatch` вернёт `false`. Обработчики остаются в ядре и в бэкенд не передаются.
+**События** — четыре вида обработчиков: `Callback` (`void()`: `onClick`, `onFocus`, `onBlur`, `onSubmit`), `KeyHandler` (`void(const KeyEvent&)`: `onKey`), `InputHandler` (`void(const std::string&)`: `onInput`, `onChange`; флажок присылает `"true"` / `"false"`, `rx::boolHandler([](bool on) { ... })` делает из этого bool) и `ScrollHandler` (`void(const ScrollEvent&)`: `onScroll`, с `nearBottom()` для подгрузки). Бэкенд передаёт данные через `Root::dispatch(node, "onKey", KeyEvent{"Enter"})`; если данные не подходят обработчику, `dispatch` вернёт `false`. Обработчики остаются в ядре и в бэкенд не передаются.
 
 </details>
 
@@ -265,7 +265,7 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 | `checked`, `disabled`, `selected` | свойства DOM |
 | остальное | атрибуты (`true` — есть, `false` — убрать) |
 | `onClick`, `onInput(text)`, `onChange`, `onKey(KeyEvent)`, `onSubmit`, `onFocus`, `onBlur` | события; всплывают как в React; `onSubmit` не перезагружает страницу |
-| `onScroll(ScrollEvent)` | прокрутка элемента (не всплывает): `top`, `scrollHeight`, `clientHeight`, `nearBottom()` |
+| `onScroll(ScrollEvent)` | прокрутка элемента (не всплывает): `top` (он же `scrollTop()`), `scrollHeight`, `clientHeight`, `nearBottom()` |
 | `svg`, `rect`, `circle`, `path`, `g`, … | SVG в своём пространстве имён; `svg:text`, `svg:a` — для тегов, которые есть и в HTML |
 | `data-rx-self` | элемент получает только клики по себе, не по детям (фон окна) |
 | `data-rx-trap` | Tab не выходит из элемента; при появлении он забирает фокус, при удалении — возвращает |
@@ -400,7 +400,7 @@ rx::json::Value v = rx::json::to(*m);
 
 - **Hardening** (`REACTX_HARDENING`, включено): выход за границы в `v[i]`, `s[i]`, `front()` пустого контейнера останавливает программу, а не портит память. Действует и на программы, подключившие ReactX.
 - **Предусловия** `REACTX_PRE(условие)` ([`reactx/contract.hpp`](include/reactx/contract.hpp)) — для ошибок программиста. На GCC 16 это контракт C++26 `contract_assert`; без контрактов макрос печатает условие, место и стек вызовов.
-- **Ошибки как значения** (`std::expected`) там, где сбой — нормальная ситуация: `json::tryParse`, `FetchResponse::tryJson`, `HttpServer::tryStart`, `net::parseRequestHead`, `rx::parseNumber` / `rx::parsePort` вместо `std::stoi`, файлы в CLI.
+- **Ошибки как значения** (`std::expected`) там, где сбой — нормальная ситуация: `json::tryParse`, `json::Value::require<T>` (строгое чтение внешних данных), `FetchResponse::tryJson`, `HttpServer::tryStart`, `net::parseRequestHead`, `rx::parseNumber` / `rx::parsePort` вместо `std::stoi`, файлы в CLI.
 - **Санитайзеры в CI**: каждый push — все тесты под ASan + UBSan + LeakSanitizer и под ThreadSanitizer.
 
 </details>
@@ -478,6 +478,25 @@ cmake/            ReactXApp.cmake — reactx_add_app(); version.hpp.in
 llms.txt          API для AI-помощников, которые пишут приложения на ReactX
 AGENTS.md         правила и проверки для тех, кто меняет сам ReactX
 ```
+
+</details>
+
+<details>
+<summary><b>Частые ошибки и что они значат</b></summary>
+
+| Что видите | Почему | Что сделать |
+|---|---|---|
+| `'router' is not a member of 'rx'` (или `ui`, `fetch`, `json`, `mountDom`, `TerminalApp`, `TextRenderer`) | `reactx/reactx.hpp` — только ядро: элементы, хуки, контекст, memo, store, `Root` | подключите нужную часть: `reactx/router.hpp`, `ui.hpp`, `fetch.hpp`, `json.hpp`, `dom.hpp`, `terminal.hpp`, `text_renderer.hpp`, `http.hpp`, `path.hpp`, `parse.hpp` — или, в нативной сборке, `import reactx;` |
+| `missing initializer for member 'CardProps::onClick'` с `-Wextra -Werror` | у поля props нет значения по умолчанию | дайте его каждому полю: `Callback onClick{};`, `std::string title{};` |
+| `memo<C>: the props struct needs operator==` | `memo` сравнивает props, а `= default` невозможен, если в структуре есть обработчики (у `std::function` нет `==`) | напишите `operator==` сами и сравнивайте только поля с данными; обработчики делайте через `useCallback`, чтобы они сохраняли идентичность |
+| `use of deleted function 'rx::mountDom'` в нативной сборке | `mountDom` есть только в браузере | уберите его под `#ifdef __EMSCRIPTEN__`, иначе — `TerminalApp` (см. «Быстрый старт») |
+| длинная ошибка про `TypedComponent` / `h(...)` с лямбдой | лямбда с захватом не может быть компонентом | передайте данные через props; лямбда без захвата или функция работают |
+| `no matching function for call to 'println'` | `std::println` объявлен в `<print>` | `#include <print>` |
+| `no matching ... PropValue` для `size_t` / `unsigned` в props | props хранят `int64_t`, `double`, `bool`, строки и обработчики | `static_cast<std::int64_t>(n)` |
+| при запуске: `component called more hooks than on its previous render` | хук внутри `if` или цикла | вызывайте хуки в начале компонента; элементу списка — свой компонент |
+| при запуске: `precondition failed: ... onOwnThread()` | сеттер вызван из другого потока | меняйте состояние только в потоке интерфейса: в обработчиках, эффектах, колбэках `fetch`, `useTimeout` / `useInterval` |
+| CMake: `invalid reference: v0.x.y` при скачивании ReactX | `"rev"` в `reactx.json` указывает на несуществующий тег | `reactx update` (или впишите существующий тег из GitHub Releases) |
+| тест проходит, но ничего не проверяет | после `setState` вне `dispatch` дерево ещё не перерисовано | вызовите `root.flush()` перед `r.toString()` |
 
 </details>
 

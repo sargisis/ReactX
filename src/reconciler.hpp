@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -80,6 +81,9 @@ public:
     void schedule(Fiber& fiber);
     void queueEffect(std::weak_ptr<Fiber> fiber, std::size_t index);
 
+    // The UI thread: the one that created the Root.
+    bool onOwnThread() const { return std::this_thread::get_id() == thread_; }
+
 private:
     std::shared_ptr<Fiber> mount(Element element, Fiber& parent);
     void update(Fiber& fiber, Element element);
@@ -103,6 +107,7 @@ private:
     std::vector<NodeHandle> toDestroy_;
     std::unordered_map<NodeHandle, Fiber*> hosts_;
     bool busy_ = false;
+    std::thread::id thread_ = std::this_thread::get_id();
 };
 
 }  // namespace rx::detail

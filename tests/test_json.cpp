@@ -1,4 +1,5 @@
 // Tests for rx::json.
+#include <cstdint>
 #include <functional>
 #include <utility>
 #include <iostream>
@@ -130,6 +131,24 @@ TEST(get_with_fallback) {
     CHECK(v.get<std::string>("s") == "str");
     CHECK(v.get<bool>("b"));
     CHECK(v.contains("n") && !v.contains("zzz"));
+}
+
+TEST(require_is_strict) {
+    auto v = json::parse(R"({"n": 5, "f": 2.9, "big": 300, "s": "str", "b": true})");
+    CHECK(v.require<int>("n") == 5);
+    CHECK(v.require<double>("f") == 2.9);
+    CHECK(v.require<std::string>("s") == "str");
+    CHECK(v.require<bool>("b") == true);
+    auto missing = v.require<int>("zzz");
+    CHECK(!missing && std::string(missing.error().what()) == R"(missing field "zzz")");
+    auto fraction = v.require<int>("f");  // get<int> would give 2
+    CHECK(!fraction && std::string(fraction.error().what()) == R"(field "f": expected an integer that fits)");
+    CHECK(!v.require<std::uint8_t>("big"));
+    CHECK(v.require<int>("big") == 300);
+    auto wrong = v.require<int>("s");
+    CHECK(!wrong && std::string(wrong.error().what()) == R"(field "s": expected a number)");
+    CHECK(!v.require<bool>("n"));
+    CHECK(!json::parse("[1]").require<int>("n"));  // not an object
 }
 
 TEST(type_mismatch_throws) {

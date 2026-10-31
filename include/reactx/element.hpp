@@ -78,6 +78,9 @@ struct ScrollEvent {
 
     // Within `margin` pixels of the bottom: time to load more.
     bool nearBottom(int margin = 100) const { return top + clientHeight >= scrollHeight - margin; }
+    // The DOM's names for `top` / `left`.
+    int scrollTop() const { return top; }
+    int scrollLeft() const { return left; }
     bool operator==(const ScrollEvent&) const = default;
 };
 
@@ -87,6 +90,12 @@ using Callback = std::function<void()>;                         // onClick, onFo
 using KeyHandler = std::function<void(const KeyEvent&)>;        // onKey
 using InputHandler = std::function<void(const std::string&)>;   // onInput, onChange
 using ScrollHandler = std::function<void(const ScrollEvent&)>;  // onScroll
+
+// A checkbox's onChange with a bool instead of the text "true" / "false":
+//   {"onChange", rx::boolHandler([setDone](bool on) { setDone(on); })}
+inline InputHandler boolHandler(std::function<void(bool)> handler) {
+    return [handler = std::move(handler)](const std::string& value) { handler(value == "true"); };
+}
 
 // Data a backend sends with an event: nothing, a key press, text, or a scroll position.
 using EventData = std::variant<std::monostate, KeyEvent, std::string, ScrollEvent>;

@@ -108,7 +108,7 @@ Element App(const Props& props) {
 
     // ---- About tab ----
     std::vector<Element> aboutTab = {
-        h("text", {}, {"ReactX: a React-like UI framework in C++20, drawn in your terminal. "
+        h("text", {}, {"ReactX: a React-like UI framework in C++26, drawn in your terminal. "
                        "Layout by Yoga (Flexbox), components from rx::ui."}),
     };
 

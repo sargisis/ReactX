@@ -260,7 +260,7 @@ inline const std::vector<Page>& pagesEn() {
                  "});"},
                 {"useDebounce, useLocalStorage, useWindowSize, useId",
                  "useDebounce gives a value only after it stopped changing (search boxes). useLocalStorage remembers state across "
-                 "page reloads. useWindowSize re-renders on resize. useId gives an id for <label for>.",
+                 "page reloads (natively it lives in memory only, until the program exits). useWindowSize re-renders on resize. useId gives an id for <label for>.",
                  "std::string debounced = useDebounce(query, 300ms);\n"
                  "auto [theme, setTheme] = useLocalStorage(\"theme\", std::string(\"dark\"));\n"
                  "WindowSize size = useWindowSize();\n"
@@ -323,8 +323,10 @@ inline const std::vector<Page>& pagesEn() {
             {
                 {"mountDom", "Puts your app into <div id=\"app\"> of the page.", "int main() { mountDom(h(App)); }"},
                 {"HTML props", "Any HTML tag works. className becomes class, style is a CSS string, value and checked keep "
-                               "inputs in sync with your state, everything else becomes an attribute.",
-                 "h(\"input\", {{\"type\", \"checkbox\"}, {\"checked\", done}, {\"onChange\", toggle}})"},
+                               "inputs in sync with your state, everything else becomes an attribute. A checkbox's onChange gets \"true\" or "
+                               "\"false\"; rx::boolHandler turns that into a bool.",
+                 "h(\"input\", {{\"type\", \"checkbox\"}, {\"checked\", done},\n"
+                 "              {\"onChange\", boolHandler([setDone](bool on) { setDone(on); })}})"},
                 {"CSS", "Put your styles in public/style.css of the project; it is copied next to the page.", ""},
                 {"SVG", "SVG tags (svg, rect, circle, path, g, ...) just work. For text and links inside SVG write svg:text "
                         "and svg:a.",
@@ -386,6 +388,10 @@ inline const std::vector<Page>& pagesEn() {
                  "auto v = json::parse(R\"({\"title\": \"Milk\", \"done\": false})\");\n"
                  "std::string title = v[\"title\"].asString();\nbool done = v.get<bool>(\"done\");\n"
                  "json::Value todo = json::object({{\"id\", 1}, {\"title\", title}});\ntodo.dump();"},
+                {"Strict reading", "get<T> falls back to a default; for data from outside (an import, a server) require<T> "
+                                   "returns std::expected: a missing field, another type or 2.9 for an int is an error that names the field.",
+                 "auto id = task.require<int>(\"id\");\n"
+                 "if (!id) return showError(id.error().what());   // field \"id\": expected an integer that fits"},
                 {"Backend (Flask)", "ReactX works with Flask and REST APIs via fetch and useFetch. "
                                     "During development, requests are proxied via reactx dev --proxy. "
                                     "See the «Backend and Flask» page for details and limitations.", ""},

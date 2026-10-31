@@ -97,7 +97,7 @@ Element App(const Props&) {
 
     // ---- About tab ----
     std::vector<Element> aboutTab = {
-        h("p", {{"style", "margin: 0"}}, {"ReactX is a React-like UI framework in C++20. This page is WebAssembly; "
+        h("p", {{"style", "margin: 0"}}, {"ReactX is a React-like UI framework in C++26. This page is WebAssembly; "
                                           "the same rx::ui code also runs in a terminal."}),
     };
 

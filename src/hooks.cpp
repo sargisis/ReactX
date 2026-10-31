@@ -38,6 +38,16 @@ void scheduleUpdate(Fiber& fiber) {
     if (fiber.alive && fiber.owner) fiber.owner->schedule(fiber);
 }
 
+void checkUiThread(const Fiber& fiber) {
+#if !defined(__EMSCRIPTEN__)  // the browser build has one thread
+    // A setter called from a worker thread (a std::thread, a network callback
+    // that didn't go through fetch) would race with rendering.
+    REACTX_PRE(!fiber.alive || !fiber.owner || fiber.owner->onOwnThread());
+#else
+    (void)fiber;
+#endif
+}
+
 void useEffectImpl(EffectFn effect, std::unique_ptr<DepsBase> deps) {
     auto slot = nextHook([] { return std::make_unique<EffectHook>(); });
     auto& hook = checkedHook<EffectHook>(slot.hook);

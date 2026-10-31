@@ -3,6 +3,7 @@
 #include <functional>
 #include <iostream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "reactx/dsl.hpp"
@@ -190,6 +191,43 @@ TEST(precondition_violation_stops_with_a_message) {
     CHECK(diesWith([] { REACTX_PRE(1 + 1 == 3); }, std::string(kViolation) + "1 + 1 == 3"));
     CHECK(diesWith([] { router::navigate("todos/7"); }, std::string(kViolation) + "path.starts_with('/')"));
     CHECK(!diesWith([] { REACTX_PRE(2 > 1); }, ""));  // a true condition is free
+}
+
+Setter<int> leakedSetter;  // default-constructed: does nothing until a render fills it
+Element LeaksSetter(const Props&) {
+    auto [n, setN] = useState(0);
+    leakedSetter = setN;
+    return text("n=" + std::to_string(n));
+}
+
+TEST(setter_from_another_thread_stops) {
+    leakedSetter(5);  // empty: ignored
+    CHECK(diesWith(
+        [] {
+            TextRenderer r;
+            Root root(r);
+            root.render(h(LeaksSetter));
+            std::thread([] { leakedSetter(1); }).join();
+        },
+        "onOwnThread"));
+    TextRenderer r;  // on the UI thread it works
+    Root root(r);
+    root.render(h(LeaksSetter));
+    leakedSetter(2);
+    root.flush();
+    CHECK(r.toString().find("n=2") != std::string::npos);
+}
+
+TEST(default_dispatch_does_nothing) {
+    Dispatch<int, int> dispatch;
+    dispatch(1);
+    ScrollEvent e{.top = 7, .left = 3};
+    CHECK(e.scrollTop() == 7 && e.scrollLeft() == 3);
+    std::vector<bool> seen;
+    InputHandler onChange = boolHandler([&seen](bool on) { seen.push_back(on); });
+    onChange("true");
+    onChange("false");
+    CHECK((seen == std::vector<bool>{true, false}));
 }
 
 TEST(version_is_semver) {

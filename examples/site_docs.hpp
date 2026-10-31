@@ -370,8 +370,10 @@ inline const std::vector<Page>& pages() {
                 {"mountDom", "Монтирует приложение в <div id=\"app\"> страницы и живёт после main().",
                  "int main() { mountDom(h(App)); }"},
                 {"Props в DOM", "className → class, style — строка CSS, value — управляемое поле ввода, checked/disabled — "
-                                "свойства, остальное — атрибуты (true — есть, false — убрать).",
-                 "h(\"input\", {{\"type\", \"checkbox\"}, {\"checked\", done}, {\"onChange\", toggle}})"},
+                                "свойства, остальное — атрибуты (true — есть, false — убрать). onChange флажка получает \"true\" или "
+                                "\"false\"; rx::boolHandler превращает это в bool.",
+                 "h(\"input\", {{\"type\", \"checkbox\"}, {\"checked\", done},\n"
+                 "              {\"onChange\", boolHandler([setDone](bool on) { setDone(on); })}})"},
                 {"События", "onClick, onInput(text), onChange, onKey(KeyEvent), onSubmit (форма не перезагружает страницу), "
                             "onFocus, onBlur, onScroll(ScrollEvent).", ""},
                 {"SVG", "Теги SVG (svg, rect, circle, path, line, g, ...) создаются в пространстве имён SVG сами. "
@@ -434,6 +436,10 @@ inline const std::vector<Page>& pages() {
                  "auto v = json::parse(R\"({\"title\": \"Молоко\", \"done\": false})\");\n"
                  "std::string title = v[\"title\"].asString();\nbool done = v.get<bool>(\"done\");\n"
                  "json::Value todo = json::object({{\"id\", 1}, {\"title\", title}});\ntodo.dump();"},
+                {"Строгое чтение", "get<T> подставляет запасное значение; для данных извне (импорт, сервер) require<T> "
+                                   "возвращает std::expected: нет поля, другой тип или 2.9 для int — ошибка с именем поля.",
+                 "auto id = task.require<int>(\"id\");\n"
+                 "if (!id) return showError(id.error().what());   // field \"id\": expected an integer that fits"},
                 {"Бэкенд (Flask)", "ReactX работает с Flask и другими REST API через fetch / useFetch. "
                                    "В разработке запросы проксируются через reactx dev --proxy. "
                                    "Подробно о проверенных возможностях и текущих ограничениях — в разделе «Бэкенд и Flask».", ""},

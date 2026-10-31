@@ -52,6 +52,9 @@ struct HookSlot {
 HookSlot nextHook(const std::function<std::unique_ptr<HookBase>()>& make);
 HookBase* hookAt(Fiber& fiber, std::size_t index);
 void scheduleUpdate(Fiber& fiber);
+// Stops the program (REACTX_PRE) if a setter runs on a thread other than the
+// one that owns the component's Root: state changes only on the UI thread.
+void checkUiThread(const Fiber& fiber);
 
 template <class H>
 H& checkedHook(HookBase* hook) {
@@ -148,10 +151,12 @@ EffectFn wrapEffect(F&& f) {
 
 // State setter returned by useState. Accepts a new value or an updater
 // function: setCount(5) or setCount([](int c) { return c + 1; }).
-// Calls after the component unmounted are ignored.
+// Calls after the component unmounted are ignored. A default-constructed
+// Setter (a props field nobody filled in) does nothing.
 template <class T>
 class Setter {
 public:
+    Setter() = default;
     Setter(std::weak_ptr<detail::Fiber> fiber, std::size_t index)
         : fiber_(std::move(fiber)), index_(index) {}
 
@@ -160,6 +165,7 @@ public:
     void operator()(U&& next) const {
         auto fiber = fiber_.lock();
         if (!fiber) return;
+        detail::checkUiThread(*fiber);
         auto& hook = static_cast<detail::StateHook<T>&>(*detail::hookAt(*fiber, index_));
         T value = [&]() -> T {
             if constexpr (std::is_invocable_r_v<T, U, const T&>)
@@ -176,7 +182,7 @@ public:
 
 private:
     std::weak_ptr<detail::Fiber> fiber_;
-    std::size_t index_;
+    std::size_t index_ = 0;
 };
 
 template <class T>
@@ -366,13 +372,16 @@ struct ReducerTraits<R (*)(S, A)> {
 }  // namespace detail
 
 // Sends an action to a reducer (from useReducer). Calls after unmounting
-// are ignored, like setters.
+// are ignored, like setters. A default-constructed Dispatch (a props field
+// nobody filled in) does nothing.
 template <class State, class Action>
 class Dispatch {
 public:
+    Dispatch() = default;
     Dispatch(Setter<State> set, std::shared_ptr<std::function<State(const State&, const Action&)>> reducer)
         : set_(std::move(set)), reducer_(std::move(reducer)) {}
     void operator()(Action action) const {
+        if (!reducer_) return;
         set_([reducer = reducer_, action = std::move(action)](const State& s) { return (*reducer)(s, action); });
     }
 

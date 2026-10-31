@@ -6,6 +6,10 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-11-01
+
+Ready-made pieces for everyday screens, the same in the browser and the terminal: `ui::confirm` (a "Delete it?" dialog in one line), `ui::toast` (messages in a corner from any handler), `ui::select`, `ui::tooltip`, and `ui::card` / `ui::stack` / `ui::text` for layout without CSS. Also a fix for `mountDom` into a container that already held an app. Apps update without changes.
+
 ### Added
 
 - **New `rx::ui` components**, the same in the browser and the terminal: `ui::select` (a native `<select>`; ‹ › with arrows or a click in a terminal), `ui::confirm` (a ready "Delete it?" dialog), `ui::toast` + `ui::toaster()` (messages in a corner that go away by themselves, sent from any handler), `ui::tooltip` (on hover, and on focus in the browser), `ui::card`, `ui::stack` (rows and columns with gaps, no CSS) and `ui::text`. Each also exists as a `Props` component (`ui::Select`, `ui::Confirm`, …). The rx::ui demos use them.
@@ -280,7 +284,8 @@ The first release.
 - **A documentation site** built with ReactX: https://sargisis.github.io/ReactX/, published by GitHub Actions through the `gh-pages` branch.
 - The version in one place (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; new projects from `reactx new` use ReactX by release tag.
 
-[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/sargisis/ReactX/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/sargisis/ReactX/compare/v0.8.3...v0.9.0
 [0.8.3]: https://github.com/sargisis/ReactX/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/sargisis/ReactX/compare/v0.8.1...v0.8.2

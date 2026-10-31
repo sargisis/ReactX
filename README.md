@@ -21,7 +21,7 @@
 
 </div>
 
-> The documentation site and the CHANGELOG are in Russian for now; the code, its comments, the CLI and [llms.txt](llms.txt) are in English.
+> The documentation site is in English and Russian; the [CHANGELOG](CHANGELOG.md) is in English ([Russian](CHANGELOG.ru.md)); the code, its comments, the CLI and [llms.txt](llms.txt) are in English.
 
 ## Start with an AI assistant
 
@@ -38,7 +38,7 @@ Don't invent anything that isn't there.
 - **Like React, but C++.** Components are plain functions, state lives in hooks, and a reconciler with keys and batched updates applies the changes.
 - **One codebase, two worlds.** A terminal (ANSI, Flexbox on Yoga, focus, keyboard) and a browser (WebAssembly + DOM). The ready-made `rx::ui` components look at home in both.
 - **Types catch mistakes.** Props are your own struct: `h(Counter, {.start = 5})`. A typo in a field name or a wrong type is found by the compiler, not by your users.
-- **The whole stack in C++.** A router, `useFetch`, its own JSON (with C++26 reflection), an HTTP server and the `reactx` CLI — no Node, npm or webpack. A counter in the browser weighs ~135 KB.
+- **The whole stack in C++.** A router, `useFetch`, its own JSON (with C++26 reflection), an HTTP server and the `reactx` CLI — no Node, npm or webpack. A counter in the browser is a 91 KB `.wasm` (40 KB over the network, gzip).
 - **Modern, strict C++.** C++26 contracts, `std::expected` for errors, a hardened standard library; every push runs under ASan, UBSan and ThreadSanitizer.
 - **This site is built with ReactX too:** [sargisis.github.io/ReactX](https://sargisis.github.io/ReactX/).
 
@@ -95,7 +95,8 @@ Open http://127.0.0.1:8090/ and edit `src/main.cpp`. `reactx build --native` bui
 Next:
 
 ```sh
-reactx build                        # build/web/dist — files for any static host
+reactx build                        # build/web/dist — files for any static host; prints the .wasm size
+                                    # and warns about std::format / printed doubles (~100 KB each)
 reactx add magic_enum https://github.com/Neargye/magic_enum.git --rev v0.9.8 --target magic_enum::magic_enum
 reactx update                       # move to the newest ReactX release
 reactx dev --proxy http://127.0.0.1:5000   # /api goes to your backend (Flask, Django, Express, ...)

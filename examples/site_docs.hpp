@@ -3,21 +3,23 @@
 // Documentation pages of the ReactX site (/docs, /docs/<slug>). The texts are
 // plain data; examples/web_app.cpp renders them with ReactX itself.
 
-#include <string>
+#include <string_view>
 #include <vector>
 
 namespace site_docs {
 
+// string_view, not std::string: the texts stay data in the .wasm instead of
+// code that builds hundreds of strings at startup.
 struct Section {
-    std::string heading{};
-    std::string text{};  // paragraphs separated by "\n\n"
-    std::string code{};  // C++ (or shell) example, may be empty
+    std::string_view heading{};
+    std::string_view text{};  // paragraphs separated by "\n\n"
+    std::string_view code{};  // C++ (or shell) example, may be empty
 };
 
 struct Page {
-    std::string slug;
-    std::string title;
-    std::string summary;
+    std::string_view slug;
+    std::string_view title;
+    std::string_view summary;
     std::vector<Section> sections;
 };
 
@@ -173,7 +175,7 @@ inline const std::vector<Page>& pages() {
                 {"SemVer", "Версии — MAJOR.MINOR.PATCH (Semantic Versioning), теги в git — vMAJOR.MINOR.PATCH. "
                            "PATCH — исправления, MINOR — новые возможности, MAJOR — несовместимые изменения. "
                            "Пока MAJOR = 0, API ещё может меняться: несовместимые изменения поднимают MINOR. "
-                           "Что изменилось в каждой версии — в CHANGELOG.md.", ""},
+                           "Что изменилось в каждой версии — в CHANGELOG.ru.md.", ""},
                 {"Версия в коде", "Номер версии записан в одном месте — project(ReactX VERSION ...) в CMakeLists.txt; "
                                   "из него генерируется reactx/version.hpp.",
                  "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"0.8.1\"\n"

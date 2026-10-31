@@ -8,6 +8,8 @@
   <!-- The folder of the app (from CMake); assets and router paths are relative to it. -->
   <base href="@REACTX_WEB_BASE@">
   <link rel="icon" href="data:,">
+  <!-- Start downloading the app right away, not after index.js asks for it. -->
+  <link rel="preload" href="index.wasm" as="fetch" type="application/wasm" crossorigin>
   <style>
     :root {
       --bg: #f6f7fb; --card: #ffffff; --text: #1d2130; --muted: #6b7280;

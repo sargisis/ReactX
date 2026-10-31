@@ -1,11 +1,39 @@
 #include "reactx/element.hpp"
 
 #include "reactx/contract.hpp"
+#include "number_text.hpp"
+
+#include <charconv>
+#include <cstdlib>
+
+#if defined(__EMSCRIPTEN__)
+#include <emscripten.h>
+#endif
 
 #include <concepts>
-#include <format>
 
 namespace rx {
+
+namespace detail {
+
+#if defined(__EMSCRIPTEN__)
+EM_JS(char*, rx_js_number_text, (double x), { return stringToNewUTF8(String(x)); });
+#endif
+
+std::string numberText(double x) {
+#if defined(__EMSCRIPTEN__)
+    char* raw = rx_js_number_text(x);
+    std::string text(raw);
+    std::free(raw);
+    return text;
+#else
+    char buf[32];
+    auto [end, ec] = std::to_chars(buf, buf + sizeof buf, x);
+    return ec == std::errc{} ? std::string(buf, end) : std::string("nan");
+#endif
+}
+
+}  // namespace detail
 
 bool isHandler(const PropValue& value) {
     return std::holds_alternative<Callback>(value) || std::holds_alternative<KeyHandler>(value) ||
@@ -42,7 +70,7 @@ std::string propToString(const PropValue& value) {
             else if constexpr (std::is_same_v<T, bool>) return x ? "true" : "false";
             else if constexpr (std::is_same_v<T, std::int64_t>) return std::to_string(x);
             else if constexpr (std::is_same_v<T, double>) {
-                return std::format("{}", x);  // shortest form that reads back exactly
+                return detail::numberText(x);  // shortest form that reads back exactly
             } else if constexpr (std::is_same_v<T, std::string>) return x;
             else return "<handler>";
         },

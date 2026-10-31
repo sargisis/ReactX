@@ -354,7 +354,7 @@ Element LiveCounter(const LiveCounterProps& p) {
         line.push_back(h("span", {{"className", "c-dim"}}, {" │\n"}));
         return fragment(std::move(line));
     };
-    std::string label = std::format("Count: {}", count);
+    std::string label = "Count: " + std::to_string(count);
     return h("div", {{"className", "demo-pair"}}, {
         h(CodeBlock, {.code = "struct CounterProps { int start = 0; };\n\n"
                               "Element Counter(const CounterProps& p) {\n"
@@ -415,7 +415,7 @@ Element Home(const Props&) {
     return h("div", {{"className", "wrap"}}, {
         h("section", {{"className", "hero"}}, {
             h("div", {}, {
-                h("span", {{"className", "eyebrow"}}, {h("b", {}, {"●"}), std::format("v{} · C++26 · WebAssembly", rx::version())}),
+                h("span", {{"className", "eyebrow"}}, {h("b", {}, {"●"}), "v" + std::string(rx::version()) + " · C++26 · WebAssembly"}),
                 en ? h("h1", {}, {"React", h("br"), "for ", h("em", {}, {"C++26"}), "."})
                    : h("h1", {}, {"React", h("br"), "на ", h("em", {}, {"C++26"}), "."}),
                 h("p", {{"className", "lead"}},
@@ -553,7 +553,7 @@ Element Sidebar(const SidebarProps& p) {
             if (!page) continue;
             if (!q.empty() && lower(page->title).find(q) == std::string::npos && lower(page->summary).find(q) == std::string::npos)
                 continue;
-            links.push_back(router::link({.to = "/docs/" + page->slug, .label = page->title, .key = page->slug}));
+            links.push_back(router::link({.to = "/docs/" + std::string(page->slug), .label = std::string(page->title), .key = std::string(page->slug)}));
         }
         if (links.empty()) continue;
         std::string title(en ? g.en : g.ru);
@@ -567,7 +567,7 @@ Element Sidebar(const SidebarProps& p) {
     return fragment({
         h("button", {{"className", "menu-btn"}, {"aria-expanded", open ? "true" : "false"},
                      {"onClick", [open, setOpen] { setOpen(!open); }}},
-          {page ? page->title : tr(en, "Sections", "Разделы"), h("span", {}, {open ? "✕" : "☰"})}),
+          {page ? std::string(page->title) : tr(en, "Sections", "Разделы"), h("span", {}, {open ? "✕" : "☰"})}),
         h("aside", {{"className", open ? "sidebar open" : "sidebar"}, {"aria-label", tr(en, "Documentation sections", "Разделы документации")}}, {
             h("div", {{"className", "search-wrap"}}, {
                 h("input", {{"className", "search"}, {"type", "text"}, {"placeholder", tr(en, "search", "поиск")}, {"value", query},
@@ -695,10 +695,10 @@ Element DocsIndex(bool en) {
         for (auto slug : g.slugs) {
             const auto* page = findPage(slug, en);
             if (!page) continue;
-            blocks.push_back(router::link({.to = "/docs/" + page->slug,
-                                           .children = {h("small", {}, {std::string(en ? g.en : g.ru)}), h("b", {}, {page->title}),
-                                                        h("span", {}, {page->summary})},
-                                           .className = "doc-card", .activeClassName = "", .key = page->slug}));
+            blocks.push_back(router::link({.to = "/docs/" + std::string(page->slug),
+                                           .children = {h("small", {}, {std::string(en ? g.en : g.ru)}), h("b", {}, {std::string(page->title)}),
+                                                        h("span", {}, {std::string(page->summary)})},
+                                           .className = "doc-card", .activeClassName = "", .key = std::string(page->slug)}));
         }
     }
     return h("div", {{"className", "article"}}, {
@@ -714,7 +714,7 @@ Element Docs(const Props&) {
     bool en = useEnglish();
     std::string slug = router::useParam("page");
     const auto* page = findPage(slug, en);
-    useTitle(page ? page->title + " — ReactX" : tr(en, "Documentation — ReactX", "Документация — ReactX"));
+    useTitle(page ? std::string(page->title) + " — ReactX" : tr(en, "Documentation — ReactX", "Документация — ReactX"));
 
     Element body;
     Element toc = fragment({});
@@ -732,27 +732,27 @@ Element Docs(const Props&) {
         std::vector<Element> article{
             h("div", {{"className", "crumbs"}}, {router::link({.to = "/docs", .label = "~/docs", .activeClassName = ""}),
                                                  " / " + groupOf(slug, en)}),
-            h("h1", {}, {page->title}),
-            h("p", {{"className", "lead"}}, {page->summary}),
+            h("h1", {}, {std::string(page->title)}),
+            h("p", {{"className", "lead"}}, {std::string(page->summary)}),
         };
         std::vector<std::string> headings;
         for (std::size_t i = 0; i < page->sections.size(); ++i) {
             const auto& s = page->sections[i];
-            std::vector<Element> section{h("h2", {}, {s.heading})};
-            for (auto& elem : renderSectionText(s.text)) section.push_back(std::move(elem));
-            if (!s.code.empty()) section.push_back(h(CodeBlock, {.code = s.code}));
-            article.push_back(h("section", {{"id", "s-" + std::to_string(i)}, {"key", slug + s.heading}}, std::move(section)));
-            headings.push_back(s.heading);
+            std::vector<Element> section{h("h2", {}, {std::string(s.heading)})};
+            for (auto& elem : renderSectionText(std::string(s.text))) section.push_back(std::move(elem));
+            if (!s.code.empty()) section.push_back(h(CodeBlock, {.code = std::string(s.code)}));
+            article.push_back(h("section", {{"id", "s-" + std::to_string(i)}, {"key", slug + std::string(s.heading)}}, std::move(section)));
+            headings.push_back(std::string(s.heading));
         }
         auto it = std::ranges::find(all, slug, &site_docs::Page::slug);
         std::vector<Element> pager;
         if (it != all.begin())
-            pager.push_back(router::link({.to = "/docs/" + (it - 1)->slug,
-                                          .children = {h("small", {}, {tr(en, "← previous", "← назад")}), h("b", {}, {(it - 1)->title})},
+            pager.push_back(router::link({.to = "/docs/" + std::string((it - 1)->slug),
+                                          .children = {h("small", {}, {tr(en, "← previous", "← назад")}), h("b", {}, {std::string((it - 1)->title)})},
                                           .className = "prev", .activeClassName = "", .key = "prev"}));
         if (it + 1 != all.end())
-            pager.push_back(router::link({.to = "/docs/" + (it + 1)->slug,
-                                          .children = {h("small", {}, {tr(en, "next →", "дальше →")}), h("b", {}, {(it + 1)->title})},
+            pager.push_back(router::link({.to = "/docs/" + std::string((it + 1)->slug),
+                                          .children = {h("small", {}, {tr(en, "next →", "дальше →")}), h("b", {}, {std::string((it + 1)->title)})},
                                           .className = "next", .activeClassName = "", .key = "next"}));
         article.push_back(h("nav", {{"className", "pager"}, {"aria-label", tr(en, "Previous and next", "Соседние разделы")}}, std::move(pager)));
         body = h("article", {{"className", "article"}, {"key", slug}}, std::move(article));
@@ -830,7 +830,7 @@ Element Site(const Props&) {
         }),
         h("footer", {{"className", "footer"}}, {
             h("div", {{"className", "wrap"}}, {
-                h("span", {}, {std::format("ReactX v{} · C++26 → WebAssembly", rx::version())}),
+                h("span", {}, {"ReactX v" + std::string(rx::version()) + " · C++26 → WebAssembly"}),
                 h("span", {}, {tr(en, "This site is built with ReactX · ", "Этот сайт написан на ReactX · "),
                                h("a", {{"href", "https://github.com/sargisis/ReactX"}}, {tr(en, "source", "исходники")})}),
             }),

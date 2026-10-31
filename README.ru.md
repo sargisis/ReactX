@@ -9,13 +9,13 @@
 **Русский** · [English](README.md)
 
 [![CI](https://github.com/sargisis/ReactX/actions/workflows/pages.yml/badge.svg)](https://github.com/sargisis/ReactX/actions/workflows/pages.yml)
-[![Версия](https://img.shields.io/github/v/tag/sargisis/ReactX?sort=semver&label=%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F&color=f5a524)](CHANGELOG.md)
+[![Версия](https://img.shields.io/github/v/tag/sargisis/ReactX?sort=semver&label=%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F&color=f5a524)](CHANGELOG.ru.md)
 [![C++26](https://img.shields.io/badge/C%2B%2B-26-0d0f12?logo=cplusplus)](https://sargisis.github.io/ReactX/docs/safety)
 [![WebAssembly](https://img.shields.io/badge/WebAssembly-Emscripten-654ff0?logo=webassembly&logoColor=white)](https://sargisis.github.io/ReactX/docs/browser)
 [![Сайт](https://img.shields.io/badge/%D1%81%D0%B0%D0%B9%D1%82-sargisis.github.io%2FReactX-b45309)](https://sargisis.github.io/ReactX/)
 [![Лицензия: MIT или Apache-2.0](https://img.shields.io/badge/%D0%BB%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F-MIT%20%7C%20Apache--2.0-6b675e)](#лицензия)
 
-[Сайт и документация](https://sargisis.github.io/ReactX/) · [Быстрый старт](#быстрый-старт) · [Примеры](examples) · [Изменения](CHANGELOG.md) · [Для AI-помощников](#для-ai-помощников)
+[Сайт и документация](https://sargisis.github.io/ReactX/) · [Быстрый старт](#быстрый-старт) · [Примеры](examples) · [Изменения](CHANGELOG.ru.md) · [Для AI-помощников](#для-ai-помощников)
 
 <img src=".github/assets/two-backends.svg" width="860" alt="Один компонент: в терминале и в браузере">
 
@@ -26,7 +26,7 @@
 - **Как React, только C++.** Компоненты — обычные функции, состояние — хуки, изменения вносит reconciler с ключами и пакетными обновлениями.
 - **Один код — два мира.** Терминал (ANSI, Flexbox на Yoga, фокус, клавиатура) и браузер (WebAssembly + DOM). Готовые компоненты `rx::ui` выглядят уместно и там, и там.
 - **Типы ловят ошибки.** Props — своя структура: `h(Counter, {.start = 5})`. Опечатку в имени поля или неверный тип найдёт компилятор, а не пользователь.
-- **Весь стек на C++.** Роутер, `useFetch`, свой JSON (с рефлексией C++26), HTTP-сервер и CLI `reactx` — без Node, npm и webpack. Счётчик в браузере весит ~135 КБ.
+- **Весь стек на C++.** Роутер, `useFetch`, свой JSON (с рефлексией C++26), HTTP-сервер и CLI `reactx` — без Node, npm и webpack. Счётчик в браузере — это `.wasm` на 91 КБ (40 КБ по сети, gzip).
 - **Современный и строгий C++.** Контракты C++26, `std::expected` для ошибок, hardening стандартной библиотеки; каждый push проверяется под ASan, UBSan и ThreadSanitizer.
 - **Этот сайт тоже на ReactX:** [sargisis.github.io/ReactX](https://sargisis.github.io/ReactX/).
 
@@ -83,7 +83,8 @@ reactx dev                          # сервер на C++, пересборк�
 Дальше:
 
 ```sh
-reactx build                        # build/web/dist — файлы для любого хостинга
+reactx build                        # build/web/dist — файлы для любого хостинга; печатает размер .wasm
+                                    # и предупреждает о std::format / печати double (~100 КБ каждое)
 reactx add magic_enum https://github.com/Neargye/magic_enum.git --rev v0.9.8 --target magic_enum::magic_enum
 reactx update                       # перейти на новейший релиз ReactX
 reactx dev --proxy http://127.0.0.1:5000   # /api — на свой бэкенд (Flask, Django, Express, ...)
@@ -561,6 +562,6 @@ ReactX распространяется **на ваш выбор** на усло
 
 <div align="center">
 
-Версии по [SemVer](https://semver.org/lang/ru/) (`vX.Y.Z`), номер — в `project(ReactX VERSION ...)` и `rx::version()` · [CHANGELOG](CHANGELOG.md) · [Сайт](https://sargisis.github.io/ReactX/)
+Версии по [SemVer](https://semver.org/lang/ru/) (`vX.Y.Z`), номер — в `project(ReactX VERSION ...)` и `rx::version()` · [CHANGELOG](CHANGELOG.ru.md) · [Сайт](https://sargisis.github.io/ReactX/)
 
 </div>

@@ -142,6 +142,14 @@ if(EMSCRIPTEN)
     "SHELL:-sEXPORTED_RUNTIME_METHODS=ccall"
     "SHELL:-sDEFAULT_LIBRARY_FUNCS_TO_INCLUDE=$stringToNewUTF8"
     "SHELL:-sALLOW_MEMORY_GROWTH=1")
+  # Release builds for the browser optimize for size: the .wasm is downloaded
+  # and compiled before the page shows anything, and -Oz makes it ~25% smaller
+  # than -O3 at no visible cost for UI code. PUBLIC: the app's own code too.
+  option(REACTX_WEB_OPTIMIZE_SIZE "Release web builds use -Oz instead of -O3" ON)
+  if(REACTX_WEB_OPTIMIZE_SIZE)
+    target_compile_options(reactx PUBLIC $<$<CONFIG:Release>:-Oz>)
+    target_link_options(reactx PUBLIC $<$<CONFIG:Release>:-Oz>)
+  endif()
   message(STATUS "ReactX: web build (Emscripten) - DOM backend")
   if(NOT REACTX_BUILD_EXAMPLES AND NOT REACTX_BUILD_TESTS)
     return()

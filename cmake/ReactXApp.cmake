@@ -33,6 +33,9 @@ function(reactx_add_app target)
   set(dist ${CMAKE_BINARY_DIR}/dist)
   set_target_properties(${target} PROPERTIES OUTPUT_NAME index SUFFIX ".html" RUNTIME_OUTPUT_DIRECTORY ${dist})
   target_link_options(${target} PRIVATE "SHELL:--shell-file ${shell}")
+  # What each source file costs in the .wasm; `reactx build` reads it to warn
+  # about std::format and printed doubles (~100 KB each in the browser).
+  target_link_options(${target} PRIVATE "-Wl,-Map=${CMAKE_BINARY_DIR}/${target}.link.map")
   set_property(TARGET ${target} APPEND PROPERTY LINK_DEPENDS ${shell})
 
   set(steps COMMAND ${CMAKE_COMMAND} -E copy ${dist}/index.html ${dist}/404.html)

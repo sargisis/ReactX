@@ -2,7 +2,7 @@
 
 Instructions for AI coding agents (and people) changing the ReactX framework itself. To write an *app* with ReactX, read [llms.txt](llms.txt) instead.
 
-ReactX is a React-like UI framework in C++26: components, hooks and a reconciler (`src/reconciler.cpp`), with a terminal backend (ANSI + Yoga Flexbox) and a browser backend (WebAssembly + DOM), a router, `useFetch`, JSON, an HTTP server and the `reactx` CLI. The docs and comments in the code are the source of truth; user-facing docs come in English and Russian (README.md / README.ru.md, the site in `examples/site_docs_en.hpp` / `site_docs.hpp`); CHANGELOG.md is in Russian; code and comments in English.
+ReactX is a React-like UI framework in C++26: components, hooks and a reconciler (`src/reconciler.cpp`), with a terminal backend (ANSI + Yoga Flexbox) and a browser backend (WebAssembly + DOM), a router, `useFetch`, JSON, an HTTP server and the `reactx` CLI. The docs and comments in the code are the source of truth; user-facing docs come in English and Russian (README.md / README.ru.md, the site in `examples/site_docs_en.hpp` / `site_docs.hpp`); so does the changelog (CHANGELOG.md in English — GitHub Release notes come from it — and CHANGELOG.ru.md); code and comments in English.
 
 ## Toolchains
 
@@ -39,6 +39,14 @@ Run what CI runs; a green native build alone proved nothing in the past (v0.3.0 
 - **Props structs** (`h(Card, {.title = "x"})`) are the preferred component API; every field gets a default (`{}`) so designated initializers can skip fields under `-Wextra -Werror`.
 - **No breaking changes without a reason**: add, don't rename. While MAJOR is 0, a breaking change means a MINOR bump and a CHANGELOG note.
 
+## WebAssembly size
+
+Every byte of the `.wasm` is downloaded and compiled before a page shows anything (Lighthouse LCP). In code that goes into the web build:
+
+- No `std::format` / `std::print` / `std::println`, not even in error paths: libc++ formats arguments at run time, so one call pulls in all of it, floating point included (~100 KB). Use `+` and `std::to_string`.
+- No floating-point `std::to_chars` / `std::format("{}", double)`: libc++ brings ~110 KB of Ryu tables. Use `detail::numberText` (`src/number_text.hpp`), which is the browser's own `Number -> String` there.
+- Check the size of `web_counter.wasm` and the site's `index.wasm` (raw and `gzip -9`) before and after a change to `src/` or the web shells; a linker map (`-DCMAKE_EXE_LINKER_FLAGS=-Wl,-Map=link.map`) shows what each object file costs.
+
 ## Known compiler traps (GCC 16.0.1)
 
 - A `std::inplace_vector` data member in a class reachable from the `reactx` module (`modules/reactx.cppm`) breaks reading the module back ("Bad file data"). Keep such types in `.cpp` files (see `TerminalRenderer::Frame`).
@@ -59,10 +67,10 @@ web/              HTML shells for the web builds
 
 ## Changes that need more than code
 
-- Public API or behaviour: README.md and README.ru.md, the docs pages in `examples/site_docs_en.hpp` and `site_docs.hpp`, [llms.txt](llms.txt), and `## [Не выпущено]` in CHANGELOG.md (sections Добавлено / Изменено / Исправлено).
+- Public API or behaviour: README.md and README.ru.md, the docs pages in `examples/site_docs_en.hpp` and `site_docs.hpp`, [llms.txt](llms.txt), and the unreleased section of both changelogs: `## [Unreleased]` in CHANGELOG.md (Added / Changed / Fixed) and `## [Не выпущено]` in CHANGELOG.ru.md (Добавлено / Изменено / Исправлено), with the same entries.
 - New source file: add it to **both** source lists in CMakeLists.txt (native and `if(EMSCRIPTEN)`) when the web build needs it.
 - CLI templates (`kWebMain`, `kTerminalMain`, ...): new projects pin ReactX to the release tag of the CLI, so a template may only use API that exists in that release.
 
 ## Releases
 
-Semantic Versioning, tags `vX.Y.Z`. The version lives only in `project(ReactX VERSION ...)`. A release is one commit "Release vX.Y.Z" (version, CHANGELOG section, README/docs mentions) plus an annotated tag on it; merge it with a merge commit, not a squash. Never move or rewrite a published tag — fix forward with the next version. Don't push or tag without the maintainer's OK.
+Semantic Versioning, tags `vX.Y.Z`. The version lives only in `project(ReactX VERSION ...)`. A release is one commit "Release vX.Y.Z" (version, the section in both changelogs, README/docs mentions) plus an annotated tag on it; merge it with a merge commit, not a squash. Never move or rewrite a published tag — fix forward with the next version. Don't push or tag without the maintainer's OK.

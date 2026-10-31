@@ -307,6 +307,15 @@ void endToEnd(const fs::path& tmp) {
     CHECK(wb.code == 0);
     for (const char* f : {"index.html", "index.js", "index.wasm", "404.html", "style.css"}) CHECK(fs::exists(web / "build/web/dist" / f));
 
+    std::cout << "e2e: build reports the .wasm size and what makes it big\n";
+    CHECK(contains(wb.out, "index.wasm: ") && !contains(wb.out, "reactx: size:"));  // a fresh project is lean
+    {
+        std::ofstream main(web / "src/main.cpp", std::ios::app);
+        main << "\n#include <format>\nstatic const std::string sizeProbe = std::format(\"{}\", 42);\n";
+    }
+    auto heavy = reactx({"build"}, web);
+    CHECK(heavy.code == 0 && contains(heavy.out, "reactx: size: std::format") && contains(heavy.out, "src/main.cpp"));
+
     std::cout << "e2e: dev serves, proxies /api, rebuilds after an edit, survives a broken edit\n";
     rx::net::HttpServer backend("127.0.0.1", 0);  // the app's own API server (Flask, ...)
     backend.get("/api/ping", [](const rx::net::Request& q) { return rx::net::Response::text("pong " + q.query); });

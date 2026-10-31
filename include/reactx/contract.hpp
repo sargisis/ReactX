@@ -17,8 +17,9 @@
 
 #include <cstdio>
 #include <cstdlib>
-#include <print>
+#include <print>  // not used here; kept so code that relied on it still builds
 #include <source_location>
+#include <string>
 
 // std::stacktrace needs libstdc++exp with GCC; CMake defines
 // REACTX_HAS_STACKTRACE when it links it (see CMakeLists.txt).
@@ -38,8 +39,12 @@
 namespace rx::detail {
 
 [[noreturn]] inline void contractViolation(const char* condition, std::source_location where) {
-    std::println(stderr, "ReactX: precondition failed: {}\n  at {}:{} in {}", condition, where.file_name(),
-                 where.line(), where.function_name());
+    // fputs, not std::println: std::format would add ~100 KB to every
+    // WebAssembly app for a message that is printed at most once.
+    const std::string line = std::to_string(where.line());
+    for (const char* part : {"ReactX: precondition failed: ", condition, "\n  at ", where.file_name(), ":",
+                             line.c_str(), " in ", where.function_name(), "\n"})
+        std::fputs(part, stderr);
 #if REACTX_STD_STACKTRACE
     std::println(stderr, "{}", std::stacktrace::current(1));  // skip this function
 #endif

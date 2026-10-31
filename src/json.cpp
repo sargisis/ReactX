@@ -1,5 +1,7 @@
 #include "reactx/json.hpp"
 
+#include "number_text.hpp"
+
 #include <charconv>
 #include <cmath>
 #include <system_error>
@@ -56,8 +58,7 @@ void writeNumber(std::string& out, double d) {
         auto [p, ec] = std::to_chars(buf, buf + sizeof buf, static_cast<std::int64_t>(d));
         out.append(buf, p);
     } else {
-        auto [p, ec] = std::to_chars(buf, buf + sizeof buf, d);  // shortest round-trip form
-        out.append(buf, p);
+        out += rx::detail::numberText(d);  // shortest round-trip form
     }
 }
 

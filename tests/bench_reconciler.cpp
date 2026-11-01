@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "reactx/reactx.hpp"
+#include "reactx/terminal.hpp"
 
 using namespace rx;
 
@@ -98,6 +99,45 @@ void report(const char* what, double ms, const CountingRenderer& r) {
                  r.removes, r.props, r.texts);
 }
 
+// A log viewer in a terminal: rows in an overflow="scroll" box, 20 new rows per update.
+struct LogRowProps {
+    int n = 0;
+    std::string key{};
+    bool operator==(const LogRowProps& o) const { return n == o.n; }
+};
+
+Element LogRow(const LogRowProps& p) {
+    return h("box", {{"direction", "row"}, {"gap", 1}}, {h("text", {{"wrap", false}}, {std::to_string(p.n)}),
+                                                       h("text", {{"wrap", false}}, {"INFO"}),
+                                                       h("text", {{"wrap", false}}, {"GET /api/users 200 12ms"})});
+}
+
+struct LogProps {
+    int count = 0;
+};
+
+Element Log(const LogProps& p) {
+    std::vector<Element> rows;
+    for (int i = 0; i < p.count; ++i) rows.push_back(h(memo<LogRow>, {.n = i, .key = std::to_string(i)}));
+    return h("box", {{"flexGrow", 1}}, {h("text", {}, {"head"}),
+                                       h("box", {{"overflow", "scroll"}, {"border", true}}, std::move(rows))});
+}
+
+void terminalLog(int n) {
+    std::size_t bytes = 0;
+    TerminalRenderer r([&](std::string_view s) { bytes += s.size(); });
+    r.setSize(100, 30);
+    Root root(r);
+    root.render(h(Log, {.count = n}));
+    double update = 0, repaint = 0;
+    for (int k = 1; k <= 10; ++k) {
+        update += millis([&] { root.render(h(Log, {.count = n + 20 * k})); });
+        repaint += millis([&] { r.repaint(); });
+    }
+    std::println("terminal, {:>6} log rows in a scroll box: add 20 rows {:>8.2f} ms, repaint {:>8.2f} ms", n,
+                 update / 10, repaint / 10);
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -155,5 +195,8 @@ int main(int argc, char** argv) {
                  rssKb() - before);
     std::println("heap held by the mounted list: {} bytes per row (component + <li> + text)", heapRows / ids.size());
     root.render(h("empty"));
+
+    std::println("");
+    for (int rows : {1000, n / 2, n}) terminalLog(rows);
     return 0;
 }

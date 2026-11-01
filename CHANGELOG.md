@@ -6,6 +6,22 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Added
+
+- `useCallback` takes any handler: `PointerHandler`, and lambdas of their own signature, e.g. `std::function<void(int)> onOpen = useCallback([setOpen](int id) { setOpen(id); }, deps());` for the `onOpen(id)` of a memo row. Before, only `void()`, key, text and scroll handlers compiled.
+- `ui::checkbox({.onChange = [setOn](bool on) { ... }})`: the new state, next to `onToggle`.
+- `FetchResponse::errorText()` ("network error: ..." / "HTTP 422"), like `FetchState::errorText()`, for `fetch` callbacks.
+- `rx::EqualityComparable<T>`: `==` exists and compiles, also inside `std::vector`, `std::map`, `std::optional`, `std::pair`, `std::tuple`, `std::variant`.
+
+### Changed
+
+- Terminal: the layout is kept between repaints and only what changed is laid out again; rows scrolled out of an `overflow: "scroll"` box aren't drawn. A log viewer with 10,000 rows: a repaint with nothing changed 124 ms → 0.3 ms, adding 20 rows 143 ms → 35 ms; CPU of the trial app 66% → 32%, and its 100 ms timer keeps up again.
+- `ui::input` in a `ui::stack` row takes the free room (a search box next to a button), in the browser and in the terminal; in a column it stays as it was.
+
+### Fixed
+
+- `useState` (and stores, context values, `memo` props) of a type whose `==` doesn't compile, such as `std::vector<MyStruct>` without `operator==`, was a compile error deep in the standard library; it now re-renders on every set. `deps(...)` with such a value says what is missing.
+
 ## [0.13.0] — 2026-11-01
 
 Live data without polling: `useWebSocket` keeps a connection open in the browser and in the terminal, with reconnects after a drop, and `HttpServer` serves WebSockets itself (`server.webSocket(path, ...)`, broadcast with `server.webSockets(path)`), so a chat or a dashboard is one C++ program on both sides. `reactx dev --proxy` passes WebSockets through. Only additions; apps update without changes.

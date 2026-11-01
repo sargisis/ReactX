@@ -184,9 +184,9 @@ For a terminal: `#include "reactx/terminal.hpp"` and `TerminalApp().run(h(App))`
 <details>
 <summary><b>Hooks and events</b></summary>
 
-- `useState` — a value or an updater function; an equal value doesn't re-render.
+- `useState` — a value or an updater function; an equal value doesn't re-render (a type without `==`, like `std::vector<MyStruct>`, re-renders on every set).
 - `useEffect` — without deps (every render), `deps(a, b)` or `deps()` (once); may return a cleanup function.
-- `useRef`, `useMemo` (recomputes only when deps change), `useCallback` (a handler keeps its identity until deps change).
+- `useRef`, `useMemo` (recomputes only when deps change), `useCallback` (a handler keeps its identity until deps change; any signature — `std::function<void(int)> open = useCallback([setOpen](int id) { setOpen(id); }, deps());` for a memo row).
 - `useReducer(reducer, initial)` → `[state, dispatch]`: state changed by actions; the newest reducer is used.
 - `useTimeout(fn, std::optional(5s))`, `useInterval(fn, 1s)` — timers on the UI thread; `std::nullopt` switches them off, unmounting cancels them.
 - `useKeyboard(handler)` — keyboard shortcuts for the whole app, wherever the focus is: runs before the element's `onKey`, `return true` consumes the key; while a text field has focus, keys that type text don't reach it.
@@ -291,8 +291,8 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 | Component | Does |
 |---|---|
 | `button` | `label`, `onClick`, `variant` (`Default`, `Primary`, `Danger`, `Success`), `disabled` (doesn't take focus) |
-| `input` | `value`, `onChange(text)`, `onSubmit(text)` on Enter, `placeholder`, `label`; Escape clears it |
-| `checkbox` | `label`, `checked`, `onToggle` (Enter / Space) |
+| `input` | `value`, `onChange(text)`, `onSubmit(text)` on Enter, `placeholder`, `label`; Escape clears it; takes the free room in a `stack` row |
+| `checkbox` | `label`, `checked`, `onToggle` (Enter / Space), `onChange(bool)` with the new state |
 | `tabs` | tabs `{label, content}`, `initial`; Enter on a title opens the tab |
 | `modal` | `title`, `open`, `onClose` (Escape), `width`; covers what is under it, keeps the focus inside and gives it back when closed |
 | `list` / `listItem` | a bordered box with a title, `emptyText`, `scroll` (scrolls inside instead of growing); an item: `label`, `detail` on the right, `selected` (a newly selected item scrolls into view), `onSelect`, `onKey` |

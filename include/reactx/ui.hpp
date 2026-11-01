@@ -110,7 +110,8 @@ Element input(InputProps props);
 struct CheckboxProps {
     std::string label{};
     bool checked = false;
-    Callback onToggle{};
+    Callback onToggle{};                     // the box was clicked
+    std::function<void(bool)> onChange{};    // ... with the new state: [setOn](bool on) { setOn(on); }
     std::string key{};
 };
 Element checkbox(CheckboxProps props);

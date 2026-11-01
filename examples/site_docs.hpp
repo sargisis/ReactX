@@ -278,9 +278,11 @@ inline const std::vector<Page>& pages() {
                 {"useRef", "Изменяемое значение, которое живёт между перерисовками и не вызывает их.",
                  "int& renders = useRef(0);\n++renders;"},
                 {"useMemo и useCallback", "useMemo пересчитывает значение только при смене deps. useCallback сохраняет "
-                                          "«личность» обработчика, чтобы memo-компоненты не перерисовывались.",
+                                          "«личность» обработчика, чтобы memo-компоненты не перерисовывались. Подходит любая сигнатура, "
+                                          "и onOpen(id) строки тоже.",
                  "const auto& sorted = useMemo([&] { return sortItems(items); }, deps(items));\n"
-                 "Callback onSave = useCallback([setSaved] { setSaved(true); }, deps());"},
+                 "Callback onSave = useCallback([setSaved] { setSaved(true); }, deps());\n"
+                 "std::function<void(int)> onOpen = useCallback([setOpen](int id) { setOpen(id); }, deps());"},
                 {"useDebounce", "Значение, но только после того, как оно перестало меняться на заданное время (std::chrono): "
                                 "для поиска и ввода текста. Таймер работает в потоке интерфейса и отменяется сам.",
                  "auto [query, setQuery] = useState(std::string{});\n"

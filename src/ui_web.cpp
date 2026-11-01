@@ -42,6 +42,7 @@ constexpr const char* kCss = R"css(
 
 .rx-field { display: flex; align-items: center; gap: 8px; }
 .rx-field__label { color: var(--rx-muted); white-space: nowrap; }
+.rx-stack--row > .rx-field--input { flex: 1 1 10em; min-width: 0; }
 .rx-input {
   flex: 1; min-width: 0; font: inherit; padding: 8px 12px; border-radius: var(--rx-radius);
   border: 1px solid var(--rx-border); background: transparent; color: inherit;
@@ -211,7 +212,7 @@ Element Input(const Props& p) {
              if (e.key == "Escape" && onChange && !value.empty()) onChange(std::string{});
          }},
     }));
-    return h("label", {{"className", "rx-field"}}, std::move(parts));
+    return h("label", {{"className", "rx-field rx-field--input"}}, std::move(parts));
 }
 
 Element Checkbox(const Props& p) {
@@ -332,7 +333,8 @@ Element Stack(const Props& p) {
                         "; gap: " + std::to_string(p.get<int>("gap", 1) * 8) + "px; align-items: " + flex(align) +
                         "; justify-content: " + (justify == "between" ? std::string("space-between") : flex(justify)) +
                         (p.get<bool>("wrap") ? "; flex-wrap: wrap" : "");
-    return h("div", {{"className", "rx-stack"}, {"style", style}}, p.children());
+    bool row = p.get<std::string>("direction", "column").starts_with("row");
+    return h("div", {{"className", row ? "rx-stack rx-stack--row" : "rx-stack"}, {"style", style}}, p.children());
 }
 
 Element Select(const Props& p) {

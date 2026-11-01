@@ -51,8 +51,9 @@ Element Input(const Props& p) {
              if (e.key == "Escape" && onChange && !value.empty()) onChange(std::string{});
          }},
     });
-    if (label.empty()) return h("box", {{"direction", "row"}}, {std::move(field)});
-    return h("box", {{"direction", "row"}, {"gap", 1}}, {
+    // growInRow: takes the free room in a row (a search box next to buttons), not in a column.
+    if (label.empty()) return h("box", {{"direction", "row"}, {"growInRow", 1}}, {std::move(field)});
+    return h("box", {{"direction", "row"}, {"gap", 1}, {"growInRow", 1}}, {
         h("text", {{"color", t.muted}, {"wrap", false}}, {label}),
         std::move(field),
     });

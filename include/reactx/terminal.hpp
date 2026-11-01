@@ -104,6 +104,11 @@ public:
     void destroyNode(NodeHandle node) override;
     // scrollIntoView=true: the node is scrolled into view when it gets it.
     void setProp(NodeHandle node, std::string_view name, const PropValue& value) override;
+    // The layout is kept between repaints; these tell it what changed.
+    void setText(NodeHandle node, std::string_view text) override;
+    void removeProp(NodeHandle node, std::string_view name) override;
+    void insertChild(NodeHandle parent, NodeHandle child, std::size_t index) override;
+    void removeChild(NodeHandle parent, NodeHandle child) override;
 
     // Lay out and draw now (also called by commit). Writes only changed lines.
     void repaint();
@@ -171,7 +176,7 @@ private:
         int left = 0, top = 0, right = 0, bottom = 0;  // right/bottom exclusive
         Rect intersect(const Rect& o) const;
     };
-    struct Layout;  // Yoga tree for one repaint (terminal_renderer.cpp)
+    struct Layout;  // Yoga tree, kept between repaints and updated where the tree changed (terminal_renderer.cpp)
 
     Style styleOf(const Node& n, Style inherited) const;
     std::string textOf(const Node& n) const;
@@ -187,6 +192,7 @@ private:
     bool scrollKey(const KeyEvent& key);
     bool inside(NodeHandle h, NodeHandle ancestor) const;
     void bringIntoView(const Layout& layout, NodeHandle node);
+    void propChanged(NodeHandle node, std::string_view name);
 
 
     Output output_;
@@ -194,6 +200,7 @@ private:
     int height_ = 24;
     bool unicode_ = true;
     std::unique_ptr<Frame> frame_;  // last repaint
+    std::unique_ptr<Layout> layout_;
     std::vector<std::string> shown_;  // ANSI lines currently on screen
     bool fullRedraw_ = true;
     NodeHandle focused_ = 0;

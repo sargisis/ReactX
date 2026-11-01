@@ -161,6 +161,34 @@ TEST(input_types_and_submits) {
     CHECK(contains(s.text(), "Name: _"));
 }
 
+TEST(input_takes_the_free_room_in_a_row_but_not_in_a_column) {
+    // A search box next to a button: the field fills the row up to the button.
+    Screen row(ui::stack({.direction = ui::Direction::Row, .children = {
+        ui::input({.placeholder = "find"}),
+        ui::button({.label = "Go"}),
+    }}), 30, 5);
+    auto lines = row.renderer.frameLines();
+    CHECK(!lines.empty() && lines[0].ends_with("[ Go ]") && lines[0].size() >= 28);
+    // In a column (a full-height app) it stays one line high.
+    Screen column(h("box", {{"flexGrow", 1}}, {ui::input({.placeholder = "find"}), h("text", {}, {"next"})}), 30, 6);
+    auto rows = column.renderer.frameLines();
+    CHECK(rows.size() > 1 && contains(rows[1], "next"));
+}
+
+Element BoolCheckbox(const Props&) {
+    auto [on, setOn] = useState(false);
+    return ui::checkbox({.label = on ? "on" : "off", .checked = on, .onChange = [setOn](bool next) { setOn(next); }});
+}
+
+TEST(checkbox_on_change_gets_the_new_state) {
+    Screen s(h(BoolCheckbox));
+    CHECK(contains(s.text(), "[ ] off"));
+    s.press("Enter");
+    CHECK(contains(s.text(), "[x] on"));
+    s.press("Enter");
+    CHECK(contains(s.text(), "[ ] off"));
+}
+
 TEST(checkbox_toggles_with_enter_and_space) {
     Screen s(h(Form));
     CHECK(contains(s.text(), "[ ] I agree"));

@@ -172,9 +172,9 @@ int main() { mountDom(h(App)); }
 <details>
 <summary><b>Хуки и события</b></summary>
 
-- `useState` — значение или функция-updater; равное значение не вызывает перерисовку.
+- `useState` — значение или функция-updater; равное значение не вызывает перерисовку (тип без `==`, например `std::vector<MyStruct>`, перерисовывается при каждом set).
 - `useEffect` — без deps (каждый раз), `deps(a, b)` или `deps()` (один раз); может вернуть функцию очистки.
-- `useRef`, `useMemo` (пересчёт только при смене deps), `useCallback` (обработчик сохраняет «личность», пока не сменились deps).
+- `useRef`, `useMemo` (пересчёт только при смене deps), `useCallback` (обработчик сохраняет «личность», пока не сменились deps; любая сигнатура — `std::function<void(int)> open = useCallback([setOpen](int id) { setOpen(id); }, deps());` для memo-строки).
 - `useReducer(reducer, initial)` → `[state, dispatch]`: состояние, которое меняют действия; берётся самый свежий reducer.
 - `useTimeout(fn, std::optional(5s))`, `useInterval(fn, 1s)` — таймеры в потоке интерфейса; `std::nullopt` выключает, размонтирование отменяет.
 - `useKeyboard(handler)` — сочетания клавиш для всего приложения, где бы ни был фокус: вызывается раньше `onKey` элемента, `return true` забирает клавишу; пока фокус в поле ввода, клавиши набора текста сюда не приходят.
@@ -279,8 +279,8 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 | Компонент | Что умеет |
 |---|---|
 | `button` | `label`, `onClick`, `variant` (`Default`, `Primary`, `Danger`, `Success`), `disabled` (не получает фокус) |
-| `input` | `value`, `onChange(text)`, `onSubmit(text)` по Enter, `placeholder`, `label`; Escape очищает |
-| `checkbox` | `label`, `checked`, `onToggle` (Enter / Space) |
+| `input` | `value`, `onChange(text)`, `onSubmit(text)` по Enter, `placeholder`, `label`; Escape очищает; в строке `stack` занимает свободное место |
+| `checkbox` | `label`, `checked`, `onToggle` (Enter / Space), `onChange(bool)` с новым состоянием |
 | `tabs` | вкладки `{label, content}`, `initial`; Enter на заголовке открывает вкладку |
 | `modal` | `title`, `open`, `onClose` (Escape), `width`; закрывает то, что под ним, держит фокус внутри и возвращает его после закрытия |
 | `list` / `listItem` | рамка с заголовком, `emptyText`, `scroll` (прокрутка внутри вместо роста); пункт: `label`, `detail` справа, `selected` (новый выбранный пункт прокручивается на виду), `onSelect`, `onKey` |

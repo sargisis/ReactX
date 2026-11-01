@@ -2,6 +2,7 @@
 // Nothing here needs a real terminal.
 #include <functional>
 #include <iostream>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -574,6 +575,89 @@ TEST(node_ref_focus_moves_the_terminal_focus) {
     root.render(h(FocusOnOpen));
     CHECK(focusedByRef != 0);
     CHECK(r.focused() == focusedByRef);
+}
+
+// ---- the layout kept between repaints ----
+
+// A random tree of boxes and text with layout props, keyed so that updates
+// move, add, remove and change nodes.
+Element randomBox(std::mt19937& rng, int depth) {
+    auto pick = [&](int n) { return static_cast<int>(rng() % static_cast<unsigned>(n)); };
+    static const char* words[] = {"alpha", "be", "gamma delta", "e", "a longer line of text that wraps", "z"};
+    auto maybe = [&](Element& e, int odds, const char* name, PropValue value) {
+        if (pick(odds) == 0) e.props.set(name, std::move(value));
+    };
+    if (depth > 3 || pick(4) == 0) {
+        std::string text = words[pick(6)];
+        if (pick(2)) text += std::string(" ") + words[pick(6)];
+        Element e = h("text", {}, {text});
+        e.key = "t" + std::to_string(pick(6));
+        maybe(e, 3, "wrap", false);
+        maybe(e, 4, "width", std::int64_t{pick(12) + 1});
+        return e;
+    }
+    std::vector<Element> children;
+    std::vector<std::string> keys;
+    for (int i = 0, count = pick(5); i < count; ++i) {
+        Element c = randomBox(rng, depth + 1);
+        if (std::ranges::contains(keys, c.key)) continue;  // keys are unique among siblings
+        keys.push_back(c.key);
+        children.push_back(std::move(c));
+    }
+    Element e = h("box", {}, std::move(children));
+    e.key = "b" + std::to_string(pick(6));
+    maybe(e, 2, "direction", std::string("row"));
+    maybe(e, 3, "gap", std::int64_t{pick(3)});
+    maybe(e, 3, "padding", std::int64_t{pick(2)});
+    maybe(e, 3, "border", true);
+    maybe(e, 3, "flexGrow", std::int64_t{pick(3)});
+    maybe(e, 6, "overflow", std::string("scroll"));
+    maybe(e, 8, "height", std::int64_t{pick(6) + 1});
+    maybe(e, 12, "display", std::string("none"));
+    if (depth > 0) maybe(e, 14, "position", std::string("fixed"));
+    maybe(e, 5, "alignItems", std::string(pick(2) ? "center" : "end"));
+    return e;
+}
+
+TEST(kept_layout_draws_the_same_as_a_fresh_one) {
+    int mismatches = 0;
+    for (unsigned seed : {11u, 12u, 13u}) {
+    std::mt19937 rng(seed);
+    TerminalRenderer kept;
+    kept.setSize(40, 16);
+    Root root(kept);
+    for (int step = 0; step < 400; ++step) {
+        Element tree = randomBox(rng, 0);
+        root.render(tree);
+        TerminalRenderer fresh;
+        fresh.setSize(40, 16);
+        Root freshRoot(fresh);
+        freshRoot.render(tree);
+        if (kept.frameText() != fresh.frameText() && ++mismatches == 1)
+            std::cerr << "  step " << step << " kept:\n" << kept.frameText() << "\n  fresh:\n" << fresh.frameText() << '\n';
+    }
+    }
+    CHECK(mismatches == 0);
+}
+
+TEST(kept_layout_follows_text_and_size_changes) {
+    TerminalRenderer r;
+    r.setSize(20, 4);
+    Root root(r);
+    auto view = [](const std::string& t, int w) {
+        return h("box", {{"direction", "row"}}, {h("text", {{"width", w}}, {t}), h("text", {}, {"|end"})});
+    };
+    root.render(view("abc", 5));
+    CHECK(contains(r.frameText(), "abc  |end"));
+    root.render(view("abcdef", 8));
+    CHECK(contains(r.frameText(), "abcdef  |end"));
+    r.setSize(10, 4);
+    r.repaint();
+    TerminalRenderer fresh;
+    fresh.setSize(10, 4);
+    Root freshRoot(fresh);
+    freshRoot.render(view("abcdef", 8));
+    CHECK(r.frameText() == fresh.frameText());
 }
 
 }  // namespace

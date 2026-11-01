@@ -39,7 +39,7 @@ auto makeMemo() {
         return registerMemo(&memoWrapper<C>);
     } else {
         using P = typename PropsOf<decltype(C)>::type;
-        static_assert(std::equality_comparable<P>,
+        static_assert(EqualityComparable<P>,
                       "memo<C>: the props struct needs operator== (bool operator==(const P&) const = default;)");
         TypedComponent<P> wrapper = &typedMemoWrapper<C, P>;
         registerTypedMemo(addressOf(wrapper));

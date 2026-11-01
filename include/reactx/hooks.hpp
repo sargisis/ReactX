@@ -115,8 +115,17 @@ struct CallbackHook : HookBase {
     std::unique_ptr<DepsBase> deps;
 };
 
-// Handler signature for a callable: void(), void(const KeyEvent&) or
-// void(const std::string&).
+template <class>
+struct FunctionSignature;
+template <class Sig>
+struct FunctionSignature<std::function<Sig>> {
+    using type = Sig;
+};
+
+// Handler signature for a callable: the event handlers' own types (void(),
+// void(const KeyEvent&), void(const std::string&), ...), so the result is a
+// prop value; otherwise the lambda's own signature (void(int) for a row's
+// onOpen(id)).
 template <class F>
 constexpr auto handlerSignature() {
     if constexpr (std::is_invocable_v<F&>) return std::type_identity<void()>{};
@@ -126,7 +135,11 @@ constexpr auto handlerSignature() {
         return std::type_identity<void(const std::string&)>{};
     else if constexpr (std::is_invocable_v<F&, const ScrollEvent&>)
         return std::type_identity<void(const ScrollEvent&)>{};
-    else static_assert(sizeof(F) == 0, "useCallback: not a ReactX event handler");
+    else if constexpr (std::is_invocable_v<F&, const PointerEvent&>)
+        return std::type_identity<void(const PointerEvent&)>{};
+    else if constexpr (requires { std::function{std::declval<F>()}; })
+        return std::type_identity<typename FunctionSignature<decltype(std::function{std::declval<F>()})>::type>{};
+    else static_assert(sizeof(F) == 0, "useCallback: write the parameter types out (a generic lambda has no signature)");
 }
 
 template <class F>
@@ -175,7 +188,7 @@ public:
             else
                 return T(std::forward<U>(next));
         }();
-        if constexpr (std::equality_comparable<T>) {
+        if constexpr (EqualityComparable<T>) {
             if (value == hook.value) return;  // nothing changed: skip re-render
         }
         hook.value = std::move(value);
@@ -228,6 +241,8 @@ inline std::string useId() {
 // Dependency list for useEffect: rx::deps(a, b). rx::deps() means "run once".
 template <class... D>
 std::tuple<std::decay_t<D>...> deps(D&&... values) {
+    static_assert((EqualityComparable<std::decay_t<D>> && ...),
+                  "deps(...): every dependency needs operator== (a struct: bool operator==(const T&) const = default;)");
     return {std::forward<D>(values)...};
 }
 
@@ -263,7 +278,8 @@ REACTX_NO_DANGLING const std::decay_t<std::invoke_result_t<F&>>& useMemo(F&& com
 // Event handler that keeps the same identity until a dependency changes, so
 // memo() components that receive it are not re-rendered:
 //   auto onToggle = useCallback([setDone] { setDone(true); }, deps());
-// Returns Callback, KeyHandler or InputHandler depending on the lambda.
+// Returns Callback, KeyHandler, InputHandler, ... depending on the lambda, or a
+// std::function of the lambda's own signature (e.g. a row's onOpen(int id)).
 template <class F, class... D>
 std::function<detail::HandlerSig<F>> useCallback(F&& handler, std::tuple<D...> dependencies) {
     using Sig = detail::HandlerSig<F>;
@@ -298,7 +314,7 @@ void storageSet(std::string_view key, std::string_view value);
 // boxes and other input that shouldn't trigger work on every key press:
 //   std::string query = useDebounce(text, 300ms);
 template <class T>
-    requires std::copy_constructible<T> && std::equality_comparable<T>
+    requires std::copy_constructible<T> && EqualityComparable<T>
 T useDebounce(const T& value, std::chrono::milliseconds delay) {
     auto [debounced, setDebounced] = useState(value);
     // A new value cancels the pending timer (the effect's cleanup) and starts

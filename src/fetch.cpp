@@ -240,11 +240,15 @@ FetchHandle fetch(FetchRequest request, std::function<void(const FetchResponse&)
 #endif
 }
 
+std::string FetchResponse::errorText() const {
+    if (!error.empty()) return "network error: " + error;
+    if (!ok()) return "HTTP " + std::to_string(status);
+    return {};
+}
+
 std::string FetchState::errorText() const {
     if (loading) return {};
-    if (!response.error.empty()) return "network error: " + response.error;
-    if (!response.ok()) return "HTTP " + std::to_string(response.status);
-    return {};
+    return response.errorText();
 }
 
 FetchState useFetch(const std::string& url) { return useFetch(FetchRequest{.method = "GET", .url = url}); }

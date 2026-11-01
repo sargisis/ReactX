@@ -64,7 +64,13 @@ Element input(InputProps p) {
 }
 
 Element checkbox(CheckboxProps p) {
-    return withKey(h(Checkbox, {{"label", std::move(p.label)}, {"checked", p.checked}, {"onToggle", std::move(p.onToggle)}}),
+    Callback toggle = std::move(p.onToggle);
+    if (p.onChange)
+        toggle = [toggle = std::move(toggle), onChange = std::move(p.onChange), next = !p.checked] {
+            if (toggle) toggle();
+            onChange(next);
+        };
+    return withKey(h(Checkbox, {{"label", std::move(p.label)}, {"checked", p.checked}, {"onToggle", std::move(toggle)}}),
                    p.key);
 }
 

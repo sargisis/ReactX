@@ -60,6 +60,8 @@ struct FetchResponse {
     // A response header by name, any case; "" if there is none.
     std::string header(std::string_view name) const;
     bool ok() const { return error.empty() && status >= 200 && status < 300; }
+    // Why it failed, for people: "network error: ..." or "HTTP 422"; "" if ok().
+    std::string errorText() const;
     // Parses the body; throws json::Error for invalid JSON.
     json::Value json() const { return json::parse(body); }
     // The same without exceptions (a server can always send broken JSON).

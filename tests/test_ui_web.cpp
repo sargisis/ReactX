@@ -120,7 +120,7 @@ int main() {
     CHECK(clicks == 1);
 
     std::cout << "input: change, submit, escape\n";
-    CHECK(has("<label class=\"rx-field\"><span class=\"rx-field__label\">Name</span><input class=\"rx-input\""));
+    CHECK(has("<label class=\"rx-field rx-field--input\"><span class=\"rx-field__label\">Name</span><input class=\"rx-input\""));
     js("rxTest.typeClass('rx-input', 'Ann')");
     CHECK(has("name=Ann "));
     js("rxTest.keyClass('rx-input', 'Enter')");

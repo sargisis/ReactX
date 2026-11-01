@@ -2,6 +2,8 @@
 #include <algorithm>
 #include <functional>
 #include <iostream>
+#include <map>
+#include <optional>
 #include <string>
 #include <thread>
 #include <vector>
@@ -426,6 +428,65 @@ TEST(use_memo_recomputes_only_when_deps_change) {
     root.dispatch(byId(r, "relabel"), "onClick");
     CHECK(memoComputes == 2);
     CHECK(r.toString().find("doubled=bb") != std::string::npos);
+}
+
+// A struct without operator==: containers of it can't be compared, so state
+// and stores holding them re-render on every set instead of failing to compile.
+struct NoEq {
+    int v = 0;
+};
+static_assert(!EqualityComparable<NoEq>);
+static_assert(!EqualityComparable<std::vector<NoEq>>);
+static_assert(!EqualityComparable<std::map<std::string, NoEq>>);
+static_assert(!EqualityComparable<std::optional<NoEq>>);
+static_assert(!EqualityComparable<std::pair<int, std::vector<NoEq>>>);
+static_assert(EqualityComparable<std::vector<int>>);
+static_assert(EqualityComparable<std::map<std::string, std::vector<std::string>>>);
+static_assert(EqualityComparable<std::string>);
+
+TEST(state_of_a_vector_of_structs_without_equality) {
+    TextRenderer r;
+    Root root(r);
+    static int renders = 0;
+    struct List {
+        static Element render(const Props&) {
+            ++renders;
+            auto [items, setItems] = useState(std::vector<NoEq>{});
+            return h("button", {{"id", "add"}, {"onClick", [setItems] {
+                         setItems([](std::vector<NoEq> v) { v.push_back({7}); return v; });
+                     }}}, {std::to_string(items.size())});
+        }
+    };
+    root.render(h(&List::render));
+    root.dispatch(byId(r, "add"), "onClick");
+    CHECK(renders == 2);
+    CHECK(r.toString().find("\"1\"") != std::string::npos);
+    const auto store = createStore(std::vector<NoEq>{});
+    store.set({{1}, {2}});
+    CHECK(store.get().size() == 2);
+}
+
+TEST(use_callback_takes_any_signature) {
+    TextRenderer r;
+    Root root(r);
+    static std::vector<std::function<void(int)>> rows;
+    static std::vector<PointerHandler> pointers;
+    struct Capture {
+        static Element render(const Props&) {
+            auto [n, setN] = useState(0);
+            std::function<void(int)> open = useCallback([setN](int id) { setN(id); }, deps());
+            PointerHandler down = useCallback([](const PointerEvent&) {}, deps());
+            rows.push_back(open);
+            pointers.push_back(down);
+            return h("p", {}, {std::to_string(n)});
+        }
+    };
+    root.render(h(&Capture::render));
+    rows.back()(5);
+    root.flush();
+    CHECK(r.toString().find("\"5\"") != std::string::npos);
+    CHECK(rows.size() == 2 && pointers.size() == 2);
+    CHECK(propEquals(PropValue(pointers[0]), PropValue(pointers[1])));  // the same handler across renders
 }
 
 TEST(use_callback_keeps_identity_until_deps_change) {

@@ -35,7 +35,7 @@ public:
 
     // A new value; readers re-render. An equal value changes nothing.
     void set(T value) const {
-        if constexpr (std::equality_comparable<T>) {
+        if constexpr (EqualityComparable<T>) {
             if (value == state_->value) return;
         }
         state_->value = std::move(value);
@@ -115,7 +115,7 @@ std::decay_t<std::invoke_result_t<F&, const T&>> useStore(const Store<T>& store,
     (void)tick;
     auto check = [store, &selector, &shown, setTick] {  // the refs live as long as the subscription
         R next = selector(store.get());
-        if constexpr (std::equality_comparable<R>) {
+        if constexpr (EqualityComparable<R>) {
             if (shown && *shown == next) return;
         }
         setTick([](std::uint64_t t) { return t + 1; });

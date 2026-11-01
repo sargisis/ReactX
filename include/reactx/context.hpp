@@ -18,7 +18,7 @@ struct ContextValue : ContextValueBase {
     T value;
     ContextValue(const void* contextId, T v) : value(std::move(v)) { id = contextId; }
     bool equals(const ContextValueBase& other) const override {
-        if constexpr (std::equality_comparable<T>) {
+        if constexpr (EqualityComparable<T>) {
             auto* o = dynamic_cast<const ContextValue*>(&other);
             return o && o->value == value;
         } else {

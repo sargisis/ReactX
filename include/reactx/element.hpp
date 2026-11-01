@@ -11,6 +11,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -27,6 +28,47 @@ class Reconciler;
 
 // A node of the backend (a DOM element, a terminal box); 0 means none.
 using NodeHandle = std::uint64_t;
+
+namespace detail {
+
+// std::equality_comparable says yes for std::vector<T>, std::optional<T>,
+// std::pair, ... whatever T is (their operator== isn't constrained), and
+// comparing them then fails to compile. These look inside.
+template <class T>
+struct EqualParts : std::true_type {};
+
+template <class T>
+constexpr bool equalityComparable() {
+    if constexpr (!std::equality_comparable<T>) return false;
+    else return EqualParts<T>::value;
+}
+
+template <class T>
+    requires requires(const T& t) {
+        typename T::value_type;
+        t.begin();
+    } && (!std::same_as<std::remove_cv_t<typename T::value_type>, T>)
+struct EqualParts<T> : std::bool_constant<equalityComparable<std::remove_cv_t<typename T::value_type>>()> {};
+
+template <class A, class B>
+struct EqualParts<std::pair<A, B>>
+    : std::bool_constant<equalityComparable<std::remove_cv_t<A>>() && equalityComparable<std::remove_cv_t<B>>()> {};
+
+template <class... Ts>
+struct EqualParts<std::tuple<Ts...>> : std::bool_constant<(equalityComparable<std::remove_cv_t<Ts>>() && ...)> {};
+
+template <class... Ts>
+struct EqualParts<std::variant<Ts...>> : std::bool_constant<(equalityComparable<Ts>() && ...)> {};
+
+template <class T>
+struct EqualParts<std::optional<T>> : std::bool_constant<equalityComparable<T>()> {};
+
+}  // namespace detail
+
+// Values that ReactX can compare to skip work (useState, stores, context,
+// memo): `==` exists and compiles, also inside containers.
+template <class T>
+concept EqualityComparable = detail::equalityComparable<T>();
 
 namespace detail {
 
@@ -344,7 +386,7 @@ struct TypedPropsOf final : TypedProps {
     std::uintptr_t component() const override { return addressOf(fn); }
     Element render() const override;
     bool equals(const TypedProps& other) const override {
-        if constexpr (std::equality_comparable<P>) {
+        if constexpr (EqualityComparable<P>) {
             auto* o = dynamic_cast<const TypedPropsOf*>(&other);
             return o && o->fn == fn && o->props == props;
         } else {

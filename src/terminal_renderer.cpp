@@ -10,6 +10,7 @@
 #include <span>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 #include "reactx/terminal.hpp"
@@ -271,78 +272,79 @@ int cells(float v) { return static_cast<int>(std::floor(v + 0.5f)); }
 
 }  // namespace
 
-// Yoga tree for one repaint.
+// The Yoga tree, kept between repaints. Changes to the node tree mark what
+// they touched (restyle_, relist_) and the path to it from the root (path_);
+// sync() updates only those Yoga nodes, so Yoga's cached layout of everything
+// else stays valid and a long list costs little when a few rows change.
 struct TerminalRenderer::Layout {
+    struct Entry {
+        YGNodeRef y = nullptr;
+        std::unique_ptr<Leaf> leaf;  // text, button, input: measured by us
+        bool parentRow = false;      // flexShrink depends on the parent's direction
+        bool fresh = true;           // not synced yet
+    };
+
     YGConfigRef config = YGConfigNew();
-    YGNodeRef root = nullptr;
-    std::unordered_map<NodeHandle, YGNodeRef> nodes;
-    std::deque<Leaf> leaves;  // stable addresses for YGNodeSetContext
-    // position="fixed" nodes, in tree order: each is laid out in its own
-    // screen-sized wrapper instead of its parent.
+    YGNodeRef scratch = nullptr;  // styles are built here, then copied if they changed
+    YGNodeRef blank = nullptr;    // the default style
+    std::unordered_map<NodeHandle, Entry> nodes;
+    // position="fixed" nodes: each is laid out in its own screen-sized wrapper
+    // instead of its parent. `fixed` is them in tree order, for this repaint.
+    std::unordered_map<NodeHandle, YGNodeRef> wraps;
     std::vector<std::pair<NodeHandle, YGNodeRef>> fixed;
+
+    std::unordered_set<NodeHandle> restyle;  // props or text changed
+    std::unordered_set<NodeHandle> relist;   // children changed
+    std::unordered_set<NodeHandle> path;     // on the way from the root to a change
 
     // No rounding inside Yoga: it rounds text and boxes differently, which can
     // make neighbours overlap by a cell. draw() rounds every edge the same way.
-    Layout() { YGConfigSetPointScaleFactor(config, 0.0f); }
+    Layout() {
+        YGConfigSetPointScaleFactor(config, 0.0f);
+        scratch = YGNodeNewWithConfig(config);
+        blank = YGNodeNewWithConfig(config);
+    }
     ~Layout() {
-        for (auto& [h, wrap] : fixed)
-            if (wrap) YGNodeFreeRecursive(wrap);
-        if (root) YGNodeFreeRecursive(root);
+        for (auto& [h, e] : nodes) YGNodeFree(e.y);
+        for (auto& [h, w] : wraps) YGNodeFree(w);
+        YGNodeFree(scratch);
+        YGNodeFree(blank);
         YGConfigFree(config);
     }
     Layout(const Layout&) = delete;
     Layout& operator=(const Layout&) = delete;
 
-    YGNodeRef build(const TerminalRenderer& r, NodeHandle h, bool parentRow) {
-        const Node* n = r.findNode(h);
-        if (!n) return nullptr;
-        YGNodeRef y = YGNodeNewWithConfig(config);
-        nodes[h] = y;
-        // Rows squeeze their children (text gets narrower); columns cut off.
-        // Buttons never shrink: a half button is useless.
-        bool button = !n->isText && n->type == "button";
-        YGNodeStyleSetFlexShrink(y, parentRow && !button ? 1.0f : 0.0f);
+    YGNodeRef yoga(NodeHandle h) const {
+        auto it = nodes.find(h);
+        return it == nodes.end() ? nullptr : it->second.y;
+    }
 
-        if (n->isText || isLeafType(n->type)) {
-            Leaf& leaf = leaves.emplace_back();
-            if (n->isText || n->type == "text") {
-                leaf.text = r.textOf(*n);
-                leaf.wrap = n->isText || prop(n->props, "wrap") != "false";
-            } else if (n->type == "button") {
-                leaf.kind = Leaf::Button;
-                leaf.text = r.textOf(*n);
-            } else {
-                leaf.kind = Leaf::Input;
-                leaf.text = prop(n->props, "value");
-                if (leaf.text.empty()) leaf.text = prop(n->props, "placeholder");
-            }
-            if (!n->isText) applyStyle(y, n->props, false);
-            YGNodeSetContext(y, &leaf);
-            YGNodeSetMeasureFunc(y, measureLeaf);
-            return y;
-        }
+    void markPath(const TerminalRenderer& r, NodeHandle h) {
+        for (const Node* n; h && path.insert(h).second && (n = r.findNode(h));) h = n->parent;
+    }
+    void changed(const TerminalRenderer& r, NodeHandle h) {
+        restyle.insert(h);
+        markPath(r, h);
+    }
+    void childrenChanged(const TerminalRenderer& r, NodeHandle h) {
+        relist.insert(h);
+        markPath(r, h);
+    }
 
-        if (prop(n->props, "overflow") == "scroll") {
-            YGNodeStyleSetOverflow(y, YGOverflowScroll);  // children keep their size
-            if (!parentRow) {  // take the room that is left, like CSS `flex: 1; min-height: 0`
-                YGNodeStyleSetFlexShrink(y, 1.0f);
-                if (prop(n->props, "height").empty() && prop(n->props, "flexBasis").empty()) {
-                    YGNodeStyleSetFlexBasis(y, 0.0f);
-                    if (prop(n->props, "flexGrow").empty()) YGNodeStyleSetFlexGrow(y, 1.0f);
-                }
-            }
+    void destroy(NodeHandle h) {
+        if (auto it = nodes.find(h); it != nodes.end()) {
+            // Through the owner, so it is marked for layout (YGNodeFree alone doesn't).
+            if (YGNodeRef owner = YGNodeGetOwner(it->second.y)) YGNodeRemoveChild(owner, it->second.y);
+            YGNodeFree(it->second.y);
+            nodes.erase(it);
         }
-        applyStyle(y, n->props, true);
-        bool row = isRow(n->props);
-        std::size_t index = 0;
-        for (NodeHandle c : n->children) {
-            if (isFixed(r, c)) {
-                buildFixed(r, c);
-                continue;
-            }
-            if (YGNodeRef child = build(r, c, row)) YGNodeInsertChild(y, child, index++);
+        if (auto w = wraps.find(h); w != wraps.end()) {
+            YGNodeFree(w->second);
+            wraps.erase(w);
         }
-        return y;
+        restyle.erase(h);
+        relist.erase(h);
+        path.erase(h);
     }
 
     static bool isFixed(const TerminalRenderer& r, NodeHandle h) {
@@ -350,15 +352,163 @@ struct TerminalRenderer::Layout {
         return n && !n->isText && prop(n->props, "position") == "fixed";
     }
 
-    void buildFixed(const TerminalRenderer& r, NodeHandle h) {
-        std::size_t i = fixed.size();
-        fixed.emplace_back(h, nullptr);  // before its subtree: outer fixed nodes are drawn first
-        YGNodeRef node = build(r, h, false);
-        if (!node) return;
-        YGNodeStyleSetPositionType(node, YGPositionTypeAbsolute);
-        YGNodeRef wrap = YGNodeNewWithConfig(config);
-        YGNodeInsertChild(wrap, node, 0);
-        fixed[i].second = wrap;
+    static void detach(YGNodeRef y) {
+        if (YGNodeRef owner = YGNodeGetOwner(y)) YGNodeRemoveChild(owner, y);
+    }
+
+    Entry& entry(NodeHandle h) {
+        Entry& e = nodes[h];
+        if (!e.y) e.y = YGNodeNewWithConfig(config);
+        return e;
+    }
+
+    // Style of `n` from its props, built on `scratch` and copied to `y` only if
+    // it changed (copying marks the node for layout).
+    void applyStyleTo(YGNodeRef y, const Node& n, bool parentRow, bool fixedNode) {
+        YGNodeCopyStyle(scratch, blank);
+        // Rows squeeze their children (text gets narrower); columns cut off.
+        // Buttons never shrink: a half button is useless.
+        bool button = !n.isText && n.type == "button";
+        YGNodeStyleSetFlexShrink(scratch, parentRow && !button ? 1.0f : 0.0f);
+        if (!n.isText) {
+            bool leaf = isLeafType(n.type);
+            if (!leaf && prop(n.props, "overflow") == "scroll") {
+                YGNodeStyleSetOverflow(scratch, YGOverflowScroll);  // children keep their size
+                if (!parentRow) {  // take the room that is left, like CSS `flex: 1; min-height: 0`
+                    YGNodeStyleSetFlexShrink(scratch, 1.0f);
+                    if (prop(n.props, "height").empty() && prop(n.props, "flexBasis").empty()) {
+                        YGNodeStyleSetFlexBasis(scratch, 0.0f);
+                        if (prop(n.props, "flexGrow").empty()) YGNodeStyleSetFlexGrow(scratch, 1.0f);
+                    }
+                }
+            }
+            applyStyle(scratch, n.props, !leaf);
+        }
+        if (parentRow && !n.isText)  // growInRow=N: flexGrow, but only along a row
+            if (Value v = parseValue(prop(n.props, "growInRow")); v.kind == Value::Points)
+                YGNodeStyleSetFlexGrow(scratch, v.number);
+        if (fixedNode) YGNodeStyleSetPositionType(scratch, YGPositionTypeAbsolute);
+        YGNodeCopyStyle(y, scratch);
+    }
+
+    void refreshLeaf(const TerminalRenderer& r, Entry& e, const Node& n) {
+        if (!e.leaf) {
+            e.leaf = std::make_unique<Leaf>();
+            YGNodeSetContext(e.y, e.leaf.get());
+            YGNodeSetMeasureFunc(e.y, measureLeaf);
+        }
+        Leaf next;
+        if (n.isText || n.type == "text") {
+            next.text = r.textOf(n);
+            next.wrap = n.isText || prop(n.props, "wrap") != "false";
+        } else if (n.type == "button") {
+            next.kind = Leaf::Button;
+            next.text = r.textOf(n);
+        } else {
+            next.kind = Leaf::Input;
+            next.text = prop(n.props, "value");
+            if (next.text.empty()) next.text = prop(n.props, "placeholder");
+        }
+        if (e.fresh || next.kind != e.leaf->kind || next.text != e.leaf->text || next.wrap != e.leaf->wrap) {
+            *e.leaf = std::move(next);
+            YGNodeMarkDirty(e.y);
+        }
+        for (NodeHandle c : n.children) {  // the text nodes inside are part of this leaf
+            restyle.erase(c);
+            path.erase(c);
+        }
+    }
+
+    // Puts the Yoga children of `y` in the order of the node's children,
+    // touching only those that came, went or moved.
+    void relistChildren(const TerminalRenderer& r, YGNodeRef y, const Node& n) {
+        std::vector<YGNodeRef> want;
+        want.reserve(n.children.size());
+        for (NodeHandle c : n.children) {
+            Entry& ce = entry(c);
+            if (isFixed(r, c)) {
+                YGNodeRef& w = wraps[c];
+                if (!w) w = YGNodeNewWithConfig(config);
+                if (YGNodeGetOwner(ce.y) != w) {
+                    detach(ce.y);
+                    YGNodeInsertChild(w, ce.y, 0);
+                }
+                continue;
+            }
+            if (auto w = wraps.find(c); w != wraps.end()) {  // no longer fixed
+                detach(ce.y);
+                YGNodeFree(w->second);
+                wraps.erase(w);
+            }
+            want.push_back(ce.y);
+        }
+        std::size_t count = YGNodeGetChildCount(y);
+        bool prefix = count <= want.size();
+        for (std::size_t i = 0; prefix && i < count; ++i) prefix = YGNodeGetChild(y, i) == want[i];
+        if (!prefix) {
+            std::unordered_set<YGNodeRef> wanted(want.begin(), want.end());
+            for (std::size_t i = count; i-- > 0;)
+                if (YGNodeRef c = YGNodeGetChild(y, i); !wanted.contains(c)) YGNodeRemoveChild(y, c);
+        }
+        for (std::size_t i = 0; i < want.size(); ++i) {
+            if (i < YGNodeGetChildCount(y) && YGNodeGetChild(y, i) == want[i]) continue;
+            detach(want[i]);
+            YGNodeInsertChild(y, want[i], i);
+        }
+    }
+
+    void sync(const TerminalRenderer& r, NodeHandle h, bool parentRow) {
+        const Node* n = r.findNode(h);
+        if (!n) return;
+        Entry& e = entry(h);
+        bool fresh = e.fresh;
+        bool restyled = restyle.erase(h) > 0;
+        bool relisted = relist.erase(h) > 0;
+        bool onPath = path.erase(h) > 0;
+        bool fixedNode = isFixed(r, h);
+        if (fresh || restyled || e.parentRow != parentRow) applyStyleTo(e.y, *n, parentRow, fixedNode);
+        e.parentRow = parentRow;
+
+        if (n->isText || isLeafType(n->type)) {
+            if (fresh || restyled || onPath) refreshLeaf(r, e, *n);
+            e.fresh = false;
+            return;
+        }
+        e.fresh = false;
+        if (fresh || relisted) relistChildren(r, e.y, *n);
+        if (!(fresh || restyled || relisted || onPath)) return;
+        bool row = isRow(n->props);
+        for (NodeHandle c : n->children) {
+            auto it = nodes.find(c);
+            bool childFixed = wraps.contains(c);
+            bool childRow = childFixed ? false : row;  // a fixed node is laid out on the screen
+            if (it == nodes.end() || it->second.fresh || it->second.parentRow != childRow || restyle.contains(c) ||
+                relist.contains(c) || path.contains(c))
+                sync(r, c, childRow);
+        }
+    }
+
+    // Fixed nodes that are on the page, in tree order (outer ones first).
+    void collectFixed(const TerminalRenderer& r) {
+        fixed.clear();
+        std::vector<std::pair<std::vector<std::size_t>, NodeHandle>> order;
+        for (auto& [h, w] : wraps) {
+            std::vector<std::size_t> where;  // child indexes from the root, reversed
+            NodeHandle at = h;
+            const Node* n = r.findNode(at);
+            while (n && n->parent) {
+                const Node* p = r.findNode(n->parent);
+                if (!p) break;
+                where.push_back(static_cast<std::size_t>(std::ranges::find(p->children, at) - p->children.begin()));
+                at = n->parent;
+                n = p;
+            }
+            if (at != kRoot) continue;  // not on the page
+            std::ranges::reverse(where);
+            order.emplace_back(std::move(where), h);
+        }
+        std::ranges::sort(order);
+        for (auto& [where, h] : order) fixed.emplace_back(h, wraps.at(h));
     }
 };
 
@@ -391,7 +541,7 @@ TerminalRenderer::Rect TerminalRenderer::Rect::intersect(const Rect& o) const {
     return {std::max(left, o.left), std::max(top, o.top), std::min(right, o.right), std::min(bottom, o.bottom)};
 }
 
-TerminalRenderer::TerminalRenderer(Output output) : output_(std::move(output)) {}
+TerminalRenderer::TerminalRenderer(Output output) : output_(std::move(output)), layout_(std::make_unique<Layout>()) {}
 TerminalRenderer::~TerminalRenderer() = default;
 
 void TerminalRenderer::setSize(int width, int height) {
@@ -418,10 +568,42 @@ void TerminalRenderer::commit() {
 
 void TerminalRenderer::setProp(NodeHandle h, std::string_view name, const PropValue& value) {
     TextRenderer::setProp(h, name, value);
+    propChanged(h, name);
     if (name == "scrollIntoView" && std::holds_alternative<bool>(value) && std::get<bool>(value)) scrollRequest_ = h;
 }
 
+void TerminalRenderer::propChanged(NodeHandle h, std::string_view name) {
+    // Props that only change how a node is drawn don't touch the layout.
+    static constexpr std::string_view drawOnly[] = {"color", "bg", "bold", "dim", "underline", "title",
+                                                    "focusable", "trapFocus", "opaque", "scrollIntoView", "key"};
+    if (std::ranges::contains(drawOnly, name) || name.starts_with("on")) return;
+    layout_->changed(*this, h);
+    if (name == "position")  // fixed nodes leave their parent's layout
+        if (const Node* n = findNode(h); n && n->parent) layout_->childrenChanged(*this, n->parent);
+}
+
+void TerminalRenderer::removeProp(NodeHandle h, std::string_view name) {
+    TextRenderer::removeProp(h, name);
+    propChanged(h, name);
+}
+
+void TerminalRenderer::setText(NodeHandle h, std::string_view text) {
+    TextRenderer::setText(h, text);
+    layout_->changed(*this, h);
+}
+
+void TerminalRenderer::insertChild(NodeHandle parent, NodeHandle child, std::size_t index) {
+    TextRenderer::insertChild(parent, child, index);
+    layout_->childrenChanged(*this, parent);
+}
+
+void TerminalRenderer::removeChild(NodeHandle parent, NodeHandle child) {
+    TextRenderer::removeChild(parent, child);
+    layout_->childrenChanged(*this, parent);
+}
+
 void TerminalRenderer::destroyNode(NodeHandle h) {
+    layout_->destroy(h);
     if (h == focused_) focused_ = 0;  // fixFocus picks a neighbour on commit
     if (h == scrolledTo_) scrolledTo_ = 0;
     if (h == scrollRequest_) scrollRequest_ = 0;
@@ -469,9 +651,8 @@ void TerminalRenderer::draw(const Layout& layout, NodeHandle h, float originX, f
                             Rect clip, Frame& frame) {
     Frame::Screen screen = frame.screen();
     const Node* n = findNode(h);
-    auto it = layout.nodes.find(h);
-    if (!n || it == layout.nodes.end()) return;
-    YGNodeRef y = it->second;
+    YGNodeRef y = layout.yoga(h);
+    if (!n || !y) return;
     if (!n->isText && prop(n->props, "display") == "none") return;
 
     // Absolute position in fractional cells; each edge is rounded on its own,
@@ -570,10 +751,10 @@ void TerminalRenderer::draw(const Layout& layout, NodeHandle h, float originX, f
     if (scroll) {
         float bottom = 0;
         for (NodeHandle c : n->children) {
-            auto ci = layout.nodes.find(c);
-            if (ci == layout.nodes.end() || Layout::isFixed(*this, c)) continue;
-            bottom = std::max(bottom, YGNodeLayoutGetTop(ci->second) + YGNodeLayoutGetHeight(ci->second) +
-                                          YGNodeLayoutGetMargin(ci->second, YGEdgeBottom));
+            YGNodeRef cy = layout.yoga(c);
+            if (!cy || layout.wraps.contains(c)) continue;
+            bottom = std::max(bottom, YGNodeLayoutGetTop(cy) + YGNodeLayoutGetHeight(cy) +
+                                          YGNodeLayoutGetMargin(cy, YGEdgeBottom));
         }
         int content = cells(bottom + YGNodeLayoutGetPadding(y, YGEdgeBottom)) + b;  // from the box's top
         ScrollBox box{.max = std::max(content - hgt, 0), .content = std::max(content - 2 * b, 0),
@@ -588,8 +769,16 @@ void TerminalRenderer::draw(const Layout& layout, NodeHandle h, float originX, f
             thumbTop = y0 + 1 + (track - thumbLen) * top / box.max;
         }
     }
-    for (NodeHandle c : n->children)
-        if (!Layout::isFixed(*this, c)) draw(layout, c, fx, childY, st, inner, frame);  // fixed: drawn last
+    for (NodeHandle c : n->children) {
+        if (layout.wraps.contains(c)) continue;  // fixed: drawn last
+        if (scroll) {  // rows scrolled out of view: skip them (and their subtrees) at once
+            YGNodeRef cy = layout.yoga(c);
+            if (!cy) continue;
+            float top = childY + YGNodeLayoutGetTop(cy);
+            if (cells(top + YGNodeLayoutGetHeight(cy)) <= inner.top || cells(top) >= inner.bottom) continue;
+        }
+        draw(layout, c, fx, childY, st, inner, frame);
+    }
 
     if (b && w >= 2 && hgt >= 2) {
         Style bs = st;
@@ -654,11 +843,13 @@ std::string TerminalRenderer::Frame::lineToAnsi(std::span<const Cell> line) {
 }
 
 void TerminalRenderer::repaint() {
-    Layout layout;
-    layout.root = layout.build(*this, kRoot, false);
-    YGNodeStyleSetWidth(layout.root, static_cast<float>(width_));
-    YGNodeStyleSetHeight(layout.root, static_cast<float>(height_));
-    YGNodeCalculateLayout(layout.root, static_cast<float>(width_), static_cast<float>(height_), YGDirectionLTR);
+    Layout& layout = *layout_;
+    layout.sync(*this, kRoot, false);
+    layout.collectFixed(*this);
+    YGNodeRef root = layout.yoga(kRoot);
+    YGNodeStyleSetWidth(root, static_cast<float>(width_));
+    YGNodeStyleSetHeight(root, static_cast<float>(height_));
+    YGNodeCalculateLayout(root, static_cast<float>(width_), static_cast<float>(height_), YGDirectionLTR);
     for (auto& [h, wrap] : layout.fixed) {
         if (!wrap) continue;
         YGNodeStyleSetWidth(wrap, static_cast<float>(width_));
@@ -1040,21 +1231,20 @@ bool TerminalRenderer::scrollIntoView(NodeHandle node) {
 // least needed to show it. `top` is the node's top within the current
 // ancestor, as laid out (before scrolling).
 void TerminalRenderer::bringIntoView(const Layout& layout, NodeHandle node) {
-    auto self = layout.nodes.find(node);
-    if (self == layout.nodes.end()) return;
-    float height = YGNodeLayoutGetHeight(self->second);
+    YGNodeRef self = layout.yoga(node);
+    if (!self) return;
+    float height = YGNodeLayoutGetHeight(self);
     float top = 0;
     for (NodeHandle h = node; h && h != kRoot;) {
         const Node* n = findNode(h);
-        auto it = layout.nodes.find(h);
-        if (!n || it == layout.nodes.end()) return;
-        top += YGNodeLayoutGetTop(it->second);
-        if (Layout::isFixed(*this, h)) return;  // placed on the screen: nothing above scrolls it
+        YGNodeRef y = layout.yoga(h);
+        if (!n || !y) return;
+        top += YGNodeLayoutGetTop(y);
+        if (layout.wraps.contains(h)) return;  // placed on the screen: nothing above scrolls it
         const Node* parent = findNode(n->parent);
-        auto py = layout.nodes.find(n->parent);
-        if (!parent || py == layout.nodes.end()) return;
+        YGNodeRef p = layout.yoga(n->parent);
+        if (!parent || !p) return;
         if (!parent->isText && prop(parent->props, "overflow") == "scroll") {
-            YGNodeRef p = py->second;
             float from = YGNodeLayoutGetBorder(p, YGEdgeTop) + YGNodeLayoutGetPadding(p, YGEdgeTop);
             float to = YGNodeLayoutGetHeight(p) - YGNodeLayoutGetBorder(p, YGEdgeBottom) -
                        YGNodeLayoutGetPadding(p, YGEdgeBottom);

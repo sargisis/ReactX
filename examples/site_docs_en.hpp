@@ -244,9 +244,10 @@ inline const std::vector<Page>& pagesEn() {
                  "useEffect([id] {\n    subscribe(id);\n    return [id] { unsubscribe(id); };\n}, deps(id));"},
                 {"useRef", "A value that survives re-renders without causing them.", "int& renders = useRef(0);\n++renders;"},
                 {"useMemo and useCallback", "useMemo recomputes only when its deps change. useCallback keeps the same handler "
-                                            "between renders, so memo() components can skip work.",
+                                            "between renders, so memo() components can skip work. Any signature works: a row's onOpen(id) too.",
                  "const auto& sorted = useMemo([&] { return sortItems(items); }, deps(items));\n"
-                 "Callback onSave = useCallback([setSaved] { setSaved(true); }, deps());"},
+                 "Callback onSave = useCallback([setSaved] { setSaved(true); }, deps());\n"
+                 "std::function<void(int)> onOpen = useCallback([setOpen](int id) { setOpen(id); }, deps());"},
                 {"useReducer", "State changed by actions: a function (state, action) -> new state. Handy for many fields or undo.",
                  "enum class Op { Add, Undo };\n"
                  "auto [doc, dispatch] = useReducer([](const Doc& d, Op op) { /* ... */ return next; }, Doc{});\n"

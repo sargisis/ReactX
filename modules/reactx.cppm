@@ -54,6 +54,7 @@ using rx::errorBoundary;
 // hooks.hpp
 using rx::Cleanup;
 using rx::Setter;
+using rx::EqualityComparable;
 using rx::useState;
 using rx::useRef;
 using rx::useNodeRef;

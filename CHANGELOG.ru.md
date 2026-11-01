@@ -6,6 +6,10 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ## [Не выпущено]
 
+## [0.13.0] — 2026-11-01
+
+Живые данные без опроса: `useWebSocket` держит соединение открытым в браузере и в терминале и переподключается после обрыва, а `HttpServer` сам обслуживает WebSocket (`server.webSocket(path, ...)`, рассылка через `server.webSockets(path)`), так что чат или дашборд — одна программа на C++ с обеих сторон. `reactx dev --proxy` пропускает WebSocket. Только добавления; приложения обновляются без правок.
+
 ### Добавлено
 
 - **`useWebSocket`** (`reactx/websocket.hpp`): живые данные без опроса, в браузере (WebSocket страницы; относительный URL идёт на хост страницы) и в терминале (`ws://`, свой поток, события в UI-потоке). Статус, `send`, переподключение после обрыва с растущей задержкой, обработчики могут менять состояние.
@@ -324,7 +328,8 @@ ReactX без установки компиляторов: готовый `react
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.12.0...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/sargisis/ReactX/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/sargisis/ReactX/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/sargisis/ReactX/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/sargisis/ReactX/compare/v0.9.0...v0.10.0

@@ -6,6 +6,10 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-11-01
+
+Live data without polling: `useWebSocket` keeps a connection open in the browser and in the terminal, with reconnects after a drop, and `HttpServer` serves WebSockets itself (`server.webSocket(path, ...)`, broadcast with `server.webSockets(path)`), so a chat or a dashboard is one C++ program on both sides. `reactx dev --proxy` passes WebSockets through. Only additions; apps update without changes.
+
 ### Added
 
 - **`useWebSocket`** (`reactx/websocket.hpp`): live data without polling, in the browser (the page's WebSocket; relative URLs go to the page's host) and in the terminal (`ws://`, its own thread, events on the UI thread). Status, `send`, reconnect after a drop with a growing delay, handlers that may set state.
@@ -324,7 +328,8 @@ The first release.
 - **A documentation site** built with ReactX: https://sargisis.github.io/ReactX/, published by GitHub Actions through the `gh-pages` branch.
 - The version in one place (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; new projects from `reactx new` use ReactX by release tag.
 
-[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/sargisis/ReactX/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/sargisis/ReactX/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/sargisis/ReactX/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/sargisis/ReactX/compare/v0.9.0...v0.10.0

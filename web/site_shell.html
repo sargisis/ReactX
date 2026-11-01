@@ -144,6 +144,16 @@
                             mask-image: radial-gradient(ellipse 60% 70% at 50% 40%, #000 30%, transparent 75%);
                     opacity: .7; }
     .hero h1 em { font-style: normal; color: var(--accent); text-shadow: 0 0 42px rgb(245 165 36 / 0.35); }
+    /* Spotlight (site.cpp): a glow in the accent color under the mouse */
+    .spot::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; opacity: 0;
+                   transition: opacity .35s; }
+    .spot.lit::after { opacity: 1; }
+    .hero.spot::after { z-index: -1; inset: -200px;  /* past the hero's edges, so the light isn't cut off */
+                        background: radial-gradient(520px circle at calc(var(--mx) + 200px) calc(var(--my) + 200px),
+                                                    color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%); }
+    .features.spot { position: relative; }
+    .features.spot.lit { background: radial-gradient(380px circle at var(--mx) var(--my), color-mix(in srgb, var(--accent) 70%, transparent), var(--border) 70%); }
+    .features.spot::after { background: radial-gradient(420px circle at var(--mx) var(--my), color-mix(in srgb, var(--accent) 12%, transparent), transparent 70%); }
     .stats { display: flex; gap: 28px; flex-wrap: wrap; list-style: none; margin: 36px 0 0; padding: 0; }
     .stats li { display: flex; flex-direction: column; color: var(--muted); font-size: 13.5px; }
     .stats b { font: 700 22px/1.2 var(--mono); color: var(--text); letter-spacing: -0.03em; }

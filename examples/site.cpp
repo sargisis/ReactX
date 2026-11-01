@@ -532,6 +532,28 @@ Element LiveDemos(const Props&) {
     });
 }
 
+struct SpotlightProps {
+    std::string className{};
+    std::vector<Element> children{};
+    std::string key{};
+};
+
+// A soft glow in the site's color that follows the mouse (onPointerMove):
+// the position goes into --mx / --my, the CSS draws the light. Touch screens
+// don't hover, so only the mouse lights it.
+Element Spotlight(const SpotlightProps& p) {
+    auto [at, setAt] = useState(std::pair<int, int>{-1, -1});
+    bool lit = at.first >= 0;
+    std::string style = lit ? "--mx: " + std::to_string(at.first) + "px; --my: " + std::to_string(at.second) + "px" : std::string();
+    return h("div", {{"className", p.className + (lit ? " spot lit" : " spot")},
+                     {"style", style},
+                     {"onPointerMove", [setAt](const PointerEvent& e) {
+                          if (e.type == "mouse") setAt(std::pair{static_cast<int>(e.localX), static_cast<int>(e.localY)});
+                      }},
+                     {"onMouseLeave", [setAt] { setAt(std::pair{-1, -1}); }}},
+             p.children);
+}
+
 Element Feature(std::string title, std::vector<Element> text) {
     return h("div", {{"className", "feature"}, {"key", title}}, {h("b", {}, {title}), h("p", {}, std::move(text))});
 }
@@ -542,7 +564,7 @@ Element Home(const Props&) {
     bool en = useEnglish();
     useTitle(tr(en, "ReactX — React for C++26", "ReactX — React на C++26"));
     return h("div", {{"className", "wrap"}}, {
-        h("section", {{"className", "hero"}}, {
+        h(Spotlight, {.className = "hero", .children = {
             h("div", {}, {
                 h("a", {{"className", "eyebrow"}, {"href", "https://github.com/sargisis/ReactX/releases/tag/v" + std::string(rx::version())}},
                   {h("b", {}, {"●"}), "v" + std::string(rx::version()) + tr(en, " is out — what's new →", " вышла — что нового →")}),
@@ -562,7 +584,7 @@ Element Home(const Props&) {
                 }),
             }),
             h(LiveCounter, {.start = 3}),
-        }),
+        }}),
 
         h("section", {{"className", "section"}}, {
             h("div", {{"className", "section-head"}}, {h("h2", {}, {tr(en, "Try it live", "Попробуйте вживую")}),
@@ -573,7 +595,7 @@ Element Home(const Props&) {
         h("section", {{"className", "section"}}, {
             h("div", {{"className", "section-head"}}, {h("h2", {}, {tr(en, "What's inside", "Что внутри")}),
                                                        h("span", {}, {tr(en, "all C++, no JavaScript", "всё на C++, без JavaScript")})}),
-            h("div", {{"className", "features"}}, {
+            h(Spotlight, {.className = "features", .children = {
                 Feature(tr(en, "Hooks", "Хуки"), {code("useState"), " ", code("useEffect"), " ", code("useReducer"), " ", code("useStore"), " ",
                                                   code("useContext"), tr(en, " — like in React.", " — как в React.")}),
                 Feature(tr(en, "Typed props", "Props — структура"), {code("h(Counter, {.start = 5})"),
@@ -587,7 +609,7 @@ Element Home(const Props&) {
                 Feature(tr(en, "Safe by default", "Надёжность"), {tr(en, "Error boundaries, ", "Границы ошибок, "), code("std::expected"),
                                                                   tr(en, ", contracts; every change runs sanitizers and fuzzing.",
                                                                      ", контракты; каждое изменение проверяется санитайзерами и фаззингом.")}),
-            }),
+            }}),
         }),
 
         h("section", {{"className", "section"}}, {

@@ -166,7 +166,13 @@ inline const std::vector<Page>& pagesEn() {
                 {"Version numbers", "ReactX uses Semantic Versioning: MAJOR.MINOR.PATCH. PATCH fixes bugs, MINOR adds features. "
                                     "While MAJOR is 0, a MINOR release may also change the API — the CHANGELOG says what "
                                     "to adjust.", ""},
-                {"Upgrading", "reactx update finds the newest release and writes it into reactx.json; the next build downloads it. "
+                {"Upgrading reactx", "Two steps: the tool, then each project. reactx upgrade replaces the reactx tool with the newest "
+                                     "release (checking its SHA-256); before v0.14.0 run the installer again. Once a day reactx also "
+                                     "checks for a new release in the background and tells you (REACTX_NO_UPDATE_CHECK=1 turns it off).",
+                 "reactx upgrade      # v0.14.0 and newer\n"
+                 "# older: curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh\n"
+                 "cd my-app && reactx update && reactx build"},
+                {"Upgrading a project", "reactx update finds the newest release and writes it into reactx.json; the next build downloads it. "
                               "By hand: change rev to the new tag.",
                  "reactx update\n# or in reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.13.0\" }"},
                 {"The version in code", "",
@@ -399,6 +405,14 @@ inline const std::vector<Page>& pagesEn() {
                  "ui::button({.label = \"Save\", .onClick = save, .variant = ui::Variant::Primary})\n"
                  "ui::input({.value = name, .onChange = setNameFn, .onSubmit = addFn, .label = \"Name\"})\n"
                  "ui::modal({.title = \"Delete?\", .open = asking, .onClose = closeFn, .children = {...}})"},
+                {"Long lists", "ui::useVirtualList draws only the rows on screen: 100,000 rows cost what 40 do, in both backends. "
+                               "Draw rows first..last yourself and pass them to view(). follow keeps the end in view while "
+                               "rows are added (logs, chats).",
+                 "auto list = ui::useVirtualList({.count = n, .follow = atEnd,\n"
+                 "    .onScroll = [setAtEnd](const ScrollEvent& e) { setAtEnd(e.nearBottom(1)); }});\n"
+                 "std::vector<Element> rows;\n"
+                 "for (int i = list.first; i < list.last; ++i) rows.push_back(h(Line, {.n = i}));\n"
+                 "return list.view(std::move(rows));"},
                 {"Confirm and toasts", "ui::confirm is a ready \"Delete it?\" dialog. ui::toast shows a short message in a corner "
                                        "from any handler, effect or fetch callback; it goes away by itself. Put one ui::toaster() "
                                        "in the app.",

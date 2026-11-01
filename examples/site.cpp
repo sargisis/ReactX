@@ -437,7 +437,8 @@ Element Home(const Props&) {
     return h("div", {{"className", "wrap"}}, {
         h("section", {{"className", "hero"}}, {
             h("div", {}, {
-                h("span", {{"className", "eyebrow"}}, {h("b", {}, {"●"}), "v" + std::string(rx::version()) + " · C++26 · WebAssembly"}),
+                h("a", {{"className", "eyebrow"}, {"href", "https://github.com/sargisis/ReactX/releases/tag/v" + std::string(rx::version())}},
+                  {h("b", {}, {"●"}), "v" + std::string(rx::version()) + tr(en, " is out — what's new →", " вышла — что нового →")}),
                 en ? h("h1", {}, {"React", h("br"), "for ", h("em", {}, {"C++26"}), "."})
                    : h("h1", {}, {"React", h("br"), "на ", h("em", {}, {"C++26"}), "."}),
                 h("p", {{"className", "lead"}},

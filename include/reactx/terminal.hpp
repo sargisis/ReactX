@@ -217,6 +217,7 @@ private:
     };
     std::unordered_map<NodeHandle, int> scrollTop_;
     std::unordered_map<NodeHandle, ScrollBox> scrollBoxes_;
+    std::unordered_map<NodeHandle, ScrollBox> lastScrollBoxes_;  // of the repaint before (followEnd)
     std::vector<NodeHandle> scrolled_;  // onScroll still to send
     NodeHandle scrolledTo_ = 0;         // the focus last scrolled into view
     NodeHandle scrollRequest_ = 0;      // scrollIntoView for the next repaint

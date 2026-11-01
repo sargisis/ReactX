@@ -32,6 +32,13 @@ std::string focused() { return js("rxTest.focused()"); }
 int clicks = 0;
 std::string submitted;
 
+Element BigList(const Props&) {
+    auto list = ui::useVirtualList({.count = 10000, .rowHeight = 20, .height = 200});
+    std::vector<Element> rows;
+    for (int i = list.first; i < list.last; ++i) rows.push_back(h("span", {}, {"row " + std::to_string(i)}));
+    return list.view(std::move(rows));
+}
+
 Element App(const Props&) {
     auto [name, setName] = useState(std::string{});
     auto [agree, setAgree] = useState(false);
@@ -92,6 +99,7 @@ Element Atoms(const Props&) {
                      .danger = true,
                      .onConfirm = [setAsking, setResult] { setResult("deleted"); setAsking(false); },
                      .onCancel = [setAsking, setResult] { setResult("kept"); setAsking(false); }}),
+        h(BigList),
         ui::toaster(),
     }});
 }
@@ -121,6 +129,7 @@ int main() {
 
     std::cout << "input: change, submit, escape\n";
     CHECK(has("<label class=\"rx-field rx-field--input\"><span class=\"rx-field__label\">Name</span><input class=\"rx-input\""));
+    CHECK(js("String(document.getElementById('rx-ui-styles').textContent.includes('.rx-field--above'))") == "true");
     js("rxTest.typeClass('rx-input', 'Ann')");
     CHECK(has("name=Ann "));
     js("rxTest.keyClass('rx-input', 'Enter')");
@@ -177,6 +186,16 @@ int main() {
     CHECK(has("<section aria-label=\"Stats\" class=\"rx-card\"><h3 class=\"rx-card__title\">Stats</h3>"));
     CHECK(has("flex-direction: row; gap: 16px; align-items: stretch; justify-content: space-between"));
     CHECK(has("<p class=\"rx-text\">one</p><p class=\"rx-text rx-text--muted\">two</p>"));
+
+    std::cout << "virtual list: only the rows on screen exist\n";
+    {
+        std::string page = html();
+        std::size_t rows = 0;
+        for (auto at = page.find("rx-vlist__row"); at != std::string::npos; at = page.find("rx-vlist__row", at + 1)) ++rows;
+        CHECK(rows > 5 && rows < 60);
+        CHECK(has("<span>row 0</span>") && !has("<span>row 9999</span>"));
+        CHECK(has("class=\"rx-vlist\" style=\"height: 200px\""));
+    }
 
     std::cout << "select\n";
 

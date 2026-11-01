@@ -67,6 +67,8 @@ curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh
 
 It downloads the prebuilt `reactx` into `~/.local/bin`, then `reactx install` downloads the compiler for the browser (Emscripten) and, if your system lacks them, CMake and Ninja into `~/.reactx` — no sudo, like npm. `reactx build` and `reactx dev` find them on their own (no `source emsdk_env.sh`). It needs `curl`, `git`, `python3`, `tar` and `xz` (`xz-utils` on Debian/Ubuntu); `reactx install --check` shows what is there. Terminal apps also need GCC 16+ from your package manager.
 
+**Already installed?** Get the newest release: `reactx upgrade` (v0.14.0 and newer; before that, run the line above again), then `reactx update` in each project. `reactx` itself tells you once a day when a new release is out.
+
 **By hand**, or on other platforms:
 
 - **Arch Linux**:
@@ -121,7 +123,8 @@ Next:
 reactx build                        # build/web/dist — files for any static host; prints the .wasm size
                                     # and warns about std::format / printed doubles (~100 KB each)
 reactx add magic_enum https://github.com/Neargye/magic_enum.git --rev v0.9.8 --target magic_enum::magic_enum
-reactx update                       # move to the newest ReactX release
+reactx update                       # move the project to the newest ReactX release
+reactx upgrade                      # replace the reactx tool with the newest release
 reactx install [--check]            # download Emscripten (+ CMake, Ninja if missing) into ~/.reactx
 reactx dev --proxy http://127.0.0.1:5000   # /api goes to your backend (Flask, Django, Express, ...)
 ```
@@ -291,12 +294,13 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 | Component | Does |
 |---|---|
 | `button` | `label`, `onClick`, `variant` (`Default`, `Primary`, `Danger`, `Success`), `disabled` (doesn't take focus) |
-| `input` | `value`, `onChange(text)`, `onSubmit(text)` on Enter, `placeholder`, `label`; Escape clears it; takes the free room in a `stack` row |
+| `input` | `value`, `onChange(text)`, `onSubmit(text)` on Enter, `placeholder`, `label`; Escape clears it; takes the free room in a `stack` row; `labelAbove` puts the label on its own line (forms line up) |
 | `checkbox` | `label`, `checked`, `onToggle` (Enter / Space), `onChange(bool)` with the new state |
 | `tabs` | tabs `{label, content}`, `initial`; Enter on a title opens the tab |
 | `modal` | `title`, `open`, `onClose` (Escape), `width`; covers what is under it, keeps the focus inside and gives it back when closed |
 | `list` / `listItem` | a bordered box with a title, `emptyText`, `scroll` (scrolls inside instead of growing); an item: `label`, `detail` on the right, `selected` (a newly selected item scrolls into view), `onSelect`, `onKey` |
-| `select` | `label`, `value`, `options` (`{value, label}`), `onChange(value)`; a native `<select>` in the browser, ‹ › with Left / Right / Enter or a click in a terminal |
+| `select` | `label`, `value`, `options` (`{value, label}`), `onChange(value)`; a native `<select>` in the browser, ‹ › with Left / Right / Enter or a click in a terminal; `labelAbove` |
+| `useVirtualList` | a hook for lists of any length: `count`, `rowHeight` (px) / `rowLines` (terminal), `follow` (keep the end in view), `border`, `onScroll`; draw rows `first`..`last` yourself and pass them to `view(rows)` — only the rows on screen exist |
 | `confirm` | `title`, `message`, `open`, `confirmLabel`, `cancelLabel`, `danger`, `onConfirm`, `onCancel` (also Escape and a click outside) — a ready "Delete it?" |
 | `toast` / `toaster` | `ui::toast({.text, .variant, .duration})` from any handler or effect shows a message in a corner that goes away by itself (`duration = 0`: until clicked); put one `ui::toaster()` in the app |
 | `tooltip` | `text`, `children`: shows while the pointer is over them (and while they have focus in the browser) |

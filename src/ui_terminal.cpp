@@ -53,6 +53,8 @@ Element Input(const Props& p) {
     });
     // growInRow: takes the free room in a row (a search box next to buttons), not in a column.
     if (label.empty()) return h("box", {{"direction", "row"}, {"growInRow", 1}}, {std::move(field)});
+    if (p.get<bool>("labelAbove"))
+        return h("box", {{"growInRow", 1}}, {h("text", {{"color", t.muted}, {"wrap", false}}, {label}), std::move(field)});
     return h("box", {{"direction", "row"}, {"gap", 1}, {"growInRow", 1}}, {
         h("text", {{"color", t.muted}, {"wrap", false}}, {label}),
         std::move(field),
@@ -199,7 +201,7 @@ Element Select(const Props& p) {
                                }}},
                       {h("text", {{"color", t.accent}, {"wrap", false}}, {"‹ " + shown + " ›"})});
     if (label.empty()) return field;
-    return h("box", {{"direction", "row"}, {"gap", 1}}, {
+    return h("box", {{"direction", p.get<bool>("labelAbove") ? "column" : "row"}, {"gap", p.get<bool>("labelAbove") ? 0 : 1}}, {
         h("text", {{"color", t.muted}, {"wrap", false}}, {label}),
         std::move(field),
     });

@@ -1,6 +1,7 @@
 // Typed helpers of rx::ui (ui::button({.label = ...}) etc.). Shared by the
 // terminal (ui_terminal.cpp) and browser (ui_web.cpp) implementations: they
 // only turn the structs into props for the components.
+#include <algorithm>
 #include <string>
 #include <utility>
 #include <vector>
@@ -59,7 +60,8 @@ Element input(InputProps p) {
                              {"onChange", std::move(p.onChange)},
                              {"onSubmit", std::move(p.onSubmit)},
                              {"placeholder", std::move(p.placeholder)},
-                             {"label", std::move(p.label)}}),
+                             {"label", std::move(p.label)},
+                             {"labelAbove", p.labelAbove}}),
                    p.key);
 }
 
@@ -128,7 +130,8 @@ Element select(SelectProps p) {
         std::string label = o.label.empty() ? o.value : o.label;
         options.push_back(h("ui-option", {{"key", o.value}, {"value", std::move(o.value)}, {"label", std::move(label)}}));
     }
-    return withKey(h(Select, {{"label", std::move(p.label)}, {"value", std::move(p.value)}, {"onChange", std::move(p.onChange)}},
+    return withKey(h(Select, {{"label", std::move(p.label)}, {"value", std::move(p.value)}, {"onChange", std::move(p.onChange)},
+                              {"labelAbove", p.labelAbove}},
                      std::move(options)),
                    p.key);
 }
@@ -199,5 +202,85 @@ void toast(ToastProps p) {
 }
 
 Element toaster() { return h(Toaster); }
+
+// ---- virtualList ----
+
+namespace {
+#ifdef __EMSCRIPTEN__
+constexpr int kGuess = 800, kOverscan = 8;  // px, rows
+int unitOf(const VirtualListOptions& o) { return std::max(o.rowHeight, 1); }
+#else
+constexpr int kGuess = 60, kOverscan = 4;  // terminal rows (plus a screen: PageUp/PageDown land on drawn rows)
+int unitOf(const VirtualListOptions& o) { return std::max(o.rowLines, 1); }
+#endif
+}  // namespace
+
+VirtualList useVirtualList(VirtualListOptions o) {
+    const int unit = unitOf(o);
+    auto box = useNodeRef();
+    auto [viewport, setViewport] = useState(std::pair<int, int>{0, o.height > 0 ? o.height : kGuess});
+    const int count = std::max(o.count, 0);
+    const int total = count * unit;
+
+    // The real size and position, once laid out (and after every change: a
+    // resized window, rows added while following).
+    useEffect([box, setViewport, follow = o.follow, total] {
+        if (follow) box.scrollTo(total);
+        if (auto m = box.scrollMetrics()) setViewport(std::pair{m->top, std::max(m->clientHeight, 1)});
+    });
+
+    const int height = std::max(viewport.second, 1);
+    const int top = o.follow ? std::max(total - height, 0) : std::clamp(viewport.first, 0, std::max(total - height, 0));
+    VirtualList list;
+#ifdef __EMSCRIPTEN__
+    const int overscan = kOverscan;
+#else
+    const int overscan = kOverscan + height / unit;
+#endif
+    list.first = std::clamp(top / unit - overscan, 0, count);
+    list.last = std::clamp((top + height) / unit + 1 + overscan, list.first, count);
+    list.options = std::move(o);
+    list.box = box;
+    list.setViewport = setViewport;
+    return list;
+}
+
+Element VirtualList::view(std::vector<Element> rows) const {
+    const int unit = unitOf(options);
+    const int count = std::max(options.count, 0);
+    const int drawnEnd = std::min(first + static_cast<int>(rows.size()), count);
+    auto onScroll = [setViewport = setViewport, user = options.onScroll](const ScrollEvent& e) {
+        setViewport(std::pair{e.top, std::max(e.clientHeight, 1)});
+        if (user) user(e);
+    };
+    std::vector<Element> parts;
+    parts.reserve(rows.size() + 2);
+#ifdef __EMSCRIPTEN__
+    auto spacer = [](const char* key, int px) {
+        return h("div", {{"key", key}, {"aria-hidden", "true"}, {"style", "height: " + std::to_string(px) + "px"}});
+    };
+    parts.push_back(spacer("before", first * unit));
+    for (int i = first; i < drawnEnd; ++i)
+        parts.push_back(h("div", {{"key", std::to_string(i)}, {"className", "rx-vlist__row"},
+                                  {"style", "height: " + std::to_string(unit) + "px"}},
+                          {std::move(rows[static_cast<std::size_t>(i - first)])}));
+    parts.push_back(spacer("after", (count - drawnEnd) * unit));
+    std::string style = options.height > 0 ? "height: " + std::to_string(options.height) + "px"
+                                           : std::string("flex: 1 1 0; min-height: 4em; max-height: 100vh");
+    return h("div", {{"ref", box}, {"className", options.border ? "rx-vlist rx-vlist--border" : "rx-vlist"},
+                     {"style", style}, {"onScroll", onScroll}},
+             std::move(parts));
+#else
+    auto spacer = [](const char* key, int lines) { return h("box", {{"key", key}, {"height", lines}}); };
+    parts.push_back(spacer("before", first * unit));
+    for (int i = first; i < drawnEnd; ++i)
+        parts.push_back(h("box", {{"key", std::to_string(i)}, {"height", unit}, {"overflow", "hidden"}},
+                          {std::move(rows[static_cast<std::size_t>(i - first)])}));
+    parts.push_back(spacer("after", (count - drawnEnd) * unit));
+    return h("box", {{"ref", box}, {"overflow", "scroll"}, {"border", options.border}, {"followEnd", options.follow},
+                     {"onScroll", onScroll}},
+             std::move(parts));
+#endif
+}
 
 }  // namespace rx::ui

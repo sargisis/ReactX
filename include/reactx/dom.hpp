@@ -65,6 +65,7 @@ public:
     void setProp(NodeHandle node, std::string_view name, const PropValue& value) override;
     void removeProp(NodeHandle node, std::string_view name) override;
     void insertChild(NodeHandle parent, NodeHandle child, std::size_t index) override;
+    void insertBefore(NodeHandle parent, NodeHandle child, NodeHandle before, std::size_t index) override;
     void removeChild(NodeHandle parent, NodeHandle child) override;
     void destroyNode(NodeHandle node) override;
     bool focus(NodeHandle node) override;

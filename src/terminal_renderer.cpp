@@ -575,7 +575,7 @@ void TerminalRenderer::setProp(NodeHandle h, std::string_view name, const PropVa
 void TerminalRenderer::propChanged(NodeHandle h, std::string_view name) {
     // Props that only change how a node is drawn don't touch the layout.
     static constexpr std::string_view drawOnly[] = {"color", "bg", "bold", "dim", "underline", "title",
-                                                    "focusable", "trapFocus", "opaque", "scrollIntoView", "key"};
+                                                    "focusable", "trapFocus", "opaque", "scrollIntoView", "followEnd", "key"};
     if (std::ranges::contains(drawOnly, name) || name.starts_with("on")) return;
     layout_->changed(*this, h);
     if (name == "position")  // fixed nodes leave their parent's layout
@@ -760,7 +760,14 @@ void TerminalRenderer::draw(const Layout& layout, NodeHandle h, float originX, f
         ScrollBox box{.max = std::max(content - hgt, 0), .content = std::max(content - 2 * b, 0),
                       .viewport = std::max(hgt - 2 * b, 0), .width = std::max(w - 2 * b, 0)};
         int& top = scrollTop_[h];
+        int was = top;
+        auto before = lastScrollBoxes_.find(h);
+        bool atEnd = before == lastScrollBoxes_.end() || was >= before->second.max;  // at the end until now
         top = std::clamp(top, 0, box.max);  // the content may have shrunk
+        // followEnd: rows added at the end of a box that was at its end keep it
+        // there in this very repaint (no frame at the old place); scrolling up stops it.
+        if (atEnd && flag(n->props, "followEnd")) top = box.max;
+        if (top != was && std::ranges::find(scrolled_, h) == scrolled_.end()) scrolled_.push_back(h);
         scrollBoxes_[h] = box;
         childY = fy - static_cast<float>(top);
         if (b && box.max > 0 && hgt > 2) {
@@ -868,7 +875,7 @@ void TerminalRenderer::repaint() {
     frame_ = std::make_unique<Frame>(static_cast<std::size_t>(height_), static_cast<std::size_t>(width_));
     hits_.clear();
     origins_.clear();
-    scrollBoxes_.clear();
+    lastScrollBoxes_ = std::exchange(scrollBoxes_, {});
     Rect screenRect{0, 0, width_, height_};
     draw(layout, kRoot, 0, 0, Style{}, screenRect, *frame_);
     for (const auto& [h, wrap] : layout.fixed) {  // over everything, in tree order

@@ -55,6 +55,8 @@ curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh
 
 Команда скачивает готовый `reactx` в `~/.local/bin`, затем `reactx install` скачивает компилятор для браузера (Emscripten) и, если в системе их нет, CMake и Ninja в `~/.reactx` — без sudo, как npm. `reactx build` и `reactx dev` находят их сами (без `source emsdk_env.sh`). Нужны `curl`, `git`, `python3`, `tar` и `xz` (`xz-utils` в Debian/Ubuntu); `reactx install --check` показывает, что уже есть. Терминальным приложениям нужен ещё GCC 16+ из пакетного менеджера.
 
+**Уже установлен?** Новейший релиз: `reactx upgrade` (v0.14.0 и новее; раньше — запустите строку выше ещё раз), затем `reactx update` в каждом проекте. `reactx` сам раз в день сообщает, когда вышла новая версия.
+
 **Вручную** или на других платформах:
 
 - **Arch Linux**:
@@ -109,7 +111,8 @@ reactx dev                          # сервер на C++, пересборк�
 reactx build                        # build/web/dist — файлы для любого хостинга; печатает размер .wasm
                                     # и предупреждает о std::format / печати double (~100 КБ каждое)
 reactx add magic_enum https://github.com/Neargye/magic_enum.git --rev v0.9.8 --target magic_enum::magic_enum
-reactx update                       # перейти на новейший релиз ReactX
+reactx update                       # перевести проект на новейший релиз ReactX
+reactx upgrade                      # заменить сам reactx новейшим релизом
 reactx install [--check]            # скачать Emscripten (+ CMake, Ninja, если их нет) в ~/.reactx
 reactx dev --proxy http://127.0.0.1:5000   # /api — на свой бэкенд (Flask, Django, Express, ...)
 ```
@@ -279,12 +282,13 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 | Компонент | Что умеет |
 |---|---|
 | `button` | `label`, `onClick`, `variant` (`Default`, `Primary`, `Danger`, `Success`), `disabled` (не получает фокус) |
-| `input` | `value`, `onChange(text)`, `onSubmit(text)` по Enter, `placeholder`, `label`; Escape очищает; в строке `stack` занимает свободное место |
+| `input` | `value`, `onChange(text)`, `onSubmit(text)` по Enter, `placeholder`, `label`; Escape очищает; в строке `stack` занимает свободное место; `labelAbove` — подпись на своей строке (поля формы выровнены) |
 | `checkbox` | `label`, `checked`, `onToggle` (Enter / Space), `onChange(bool)` с новым состоянием |
 | `tabs` | вкладки `{label, content}`, `initial`; Enter на заголовке открывает вкладку |
 | `modal` | `title`, `open`, `onClose` (Escape), `width`; закрывает то, что под ним, держит фокус внутри и возвращает его после закрытия |
 | `list` / `listItem` | рамка с заголовком, `emptyText`, `scroll` (прокрутка внутри вместо роста); пункт: `label`, `detail` справа, `selected` (новый выбранный пункт прокручивается на виду), `onSelect`, `onKey` |
-| `select` | `label`, `value`, `options` (`{value, label}`), `onChange(value)`; в браузере нативный `<select>`, в терминале ‹ › со стрелками ← → / Enter или кликом |
+| `select` | `label`, `value`, `options` (`{value, label}`), `onChange(value)`; в браузере нативный `<select>`, в терминале ‹ › со стрелками ← → / Enter или кликом; `labelAbove` |
+| `useVirtualList` | хук для списков любой длины: `count`, `rowHeight` (px) / `rowLines` (терминал), `follow` (держать конец на виду), `border`, `onScroll`; строки `first`..`last` рисуете сами и отдаёте в `view(rows)` — существуют только строки на экране |
 | `confirm` | `title`, `message`, `open`, `confirmLabel`, `cancelLabel`, `danger`, `onConfirm`, `onCancel` (ещё Escape и клик мимо) — готовое «Удалить?» |
 | `toast` / `toaster` | `ui::toast({.text, .variant, .duration})` из любого обработчика или эффекта показывает сообщение в углу, которое исчезает само (`duration = 0` — до клика); один `ui::toaster()` в приложении |
 | `tooltip` | `text`, `children`: подсказка, пока указатель над ними (и, в браузере, пока у них фокус) |

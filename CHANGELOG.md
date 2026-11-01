@@ -12,11 +12,16 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 - `ui::checkbox({.onChange = [setOn](bool on) { ... }})`: the new state, next to `onToggle`.
 - `FetchResponse::errorText()` ("network error: ..." / "HTTP 422"), like `FetchState::errorText()`, for `fetch` callbacks.
 - `rx::EqualityComparable<T>`: `==` exists and compiles, also inside `std::vector`, `std::map`, `std::optional`, `std::pair`, `std::tuple`, `std::variant`.
+- **`ui::useVirtualList`**: lists of any length draw only the rows on screen, in the browser and in the terminal; `.follow` keeps the end in view while rows come (logs, chats). The trial log viewer with 10,000 rows: 66% CPU → 2.6%; 100,000 rows in the browser keep ~40 in the DOM, a jump to row 50,000 takes 20 ms.
+- **`reactx upgrade`**: replaces the reactx tool with the newest release from GitHub Releases (checks the SHA-256), then says if the compiler needs an update. Once a day `reactx new` / `dev` / `build` / `update` check for a new release in the background and say how to get it; `REACTX_NO_UPDATE_CHECK=1` (or `CI`) turns that off.
+- `ui::input` / `ui::select` `.labelAbove`: the label on its own line, so the fields of a form line up.
+- Terminal box prop `followEnd`: an `overflow: "scroll"` box at its end stays there when rows are added, in the same repaint.
 
 ### Changed
 
 - Terminal: the layout is kept between repaints and only what changed is laid out again; rows scrolled out of an `overflow: "scroll"` box aren't drawn. A log viewer with 10,000 rows: a repaint with nothing changed 124 ms → 0.3 ms, adding 20 rows 143 ms → 35 ms; CPU of the trial app 66% → 32%, and its 100 ms timer keeps up again.
 - `ui::input` in a `ui::stack` row takes the free room (a search box next to a button), in the browser and in the terminal; in a column it stays as it was.
+- Browser: moving keyed rows uses `insertBefore` next to their new neighbour (`Renderer::insertBefore`), without `removeChild` and a search by index: sorting 2,000 table rows is as fast as plain JavaScript.
 
 ### Fixed
 

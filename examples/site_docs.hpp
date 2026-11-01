@@ -190,7 +190,13 @@ inline const std::vector<Page>& pages() {
                                   "из него генерируется reactx/version.hpp.",
                  "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"0.13.0\"\n"
                  "static_assert(REACTX_VERSION_MAJOR == 0);"},
-                {"Обновиться", "reactx update находит новейший релиз и записывает его в reactx.json; reactx build скачивает его. "
+                {"Обновить reactx", "Два шага: сам инструмент, потом каждый проект. reactx upgrade заменяет reactx новейшим релизом "
+                                    "(проверяя SHA-256); до v0.14.0 — запустите установщик ещё раз. Раз в день reactx сам проверяет "
+                                    "в фоне, не вышла ли новая версия, и говорит об этом (выключить: REACTX_NO_UPDATE_CHECK=1).",
+                 "reactx upgrade      # v0.14.0 и новее\n"
+                 "# старее: curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh\n"
+                 "cd my-app && reactx update && reactx build"},
+                {"Обновить проект", "reactx update находит новейший релиз и записывает его в reactx.json; reactx build скачивает его. "
                                "Вручную — поменяйте rev на новый тег.",
                  "reactx update\n# или в reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.13.0\" }"},
             },
@@ -450,6 +456,14 @@ inline const std::vector<Page>& pages() {
                  "ui::button({.label = \"Сохранить\", .onClick = save, .variant = ui::Variant::Primary})\n"
                  "ui::input({.value = name, .onChange = setNameFn, .onSubmit = addFn, .label = \"Имя\"})\n"
                  "ui::modal({.title = \"Удалить?\", .open = asking, .onClose = closeFn, .children = {...}})"},
+                {"Длинные списки", "ui::useVirtualList рисует только строки на экране: 100 000 строк стоят как 40, в обоих бэкендах. "
+                                   "Строки first..last рисуете сами и отдаёте в view(). follow держит конец на виду, пока "
+                                   "приходят строки (логи, чаты).",
+                 "auto list = ui::useVirtualList({.count = n, .follow = atEnd,\n"
+                 "    .onScroll = [setAtEnd](const ScrollEvent& e) { setAtEnd(e.nearBottom(1)); }});\n"
+                 "std::vector<Element> rows;\n"
+                 "for (int i = list.first; i < list.last; ++i) rows.push_back(h(Line, {.n = i}));\n"
+                 "return list.view(std::move(rows));"},
                 {"Подтверждение и уведомления", "ui::confirm — готовое окно «Удалить?». ui::toast показывает короткое сообщение в углу "
                                                 "из любого обработчика, эффекта или ответа fetch; оно исчезает само. Один ui::toaster() "
                                                 "в приложении.",

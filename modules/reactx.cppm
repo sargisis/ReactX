@@ -201,6 +201,9 @@ using rx::ui::SelectProps;
 using rx::ui::TooltipProps;
 using rx::ui::ConfirmProps;
 using rx::ui::ToastProps;
+using rx::ui::VirtualListOptions;
+using rx::ui::VirtualList;
+using rx::ui::useVirtualList;
 
 using rx::ui::button;
 using rx::ui::input;

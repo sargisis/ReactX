@@ -640,6 +640,36 @@ TEST(kept_layout_draws_the_same_as_a_fresh_one) {
     CHECK(mismatches == 0);
 }
 
+Element FollowLog(int rows, bool follow) {
+    std::vector<Element> lines;
+    for (int i = 0; i < rows; ++i) {
+        Element t = h("text", {}, {"row " + std::to_string(i)});
+        t.key = std::to_string(i);
+        lines.push_back(std::move(t));
+    }
+    return h("box", {}, {h("box", {{"overflow", "scroll"}, {"height", 5}, {"followEnd", follow}}, std::move(lines))});
+}
+
+TEST(follow_end_keeps_new_rows_in_view_in_the_same_repaint) {
+    std::vector<std::string> frames;
+    TerminalRenderer* rp = nullptr;
+    TerminalRenderer r([&](std::string_view) { frames.push_back(rp->frameText()); });
+    rp = &r;
+    r.setSize(20, 6);
+    Root root(r);
+    root.render(FollowLog(10, true));
+    CHECK(contains(r.frameText(), "row 9"));
+    frames.clear();
+    root.render(FollowLog(12, true));
+    CHECK(!frames.empty() && contains(frames.front(), "row 11"));  // no frame at the old place
+    // Scrolled up by the user: new rows don't pull it back.
+    auto box = r.findByProp("followEnd", "true");
+    CHECK(box.has_value());
+    r.scrollBy(*box, -3);
+    root.render(FollowLog(14, true));
+    CHECK(!contains(r.frameText(), "row 13") && contains(r.frameText(), "row 8"));
+}
+
 TEST(kept_layout_follows_text_and_size_changes) {
     TerminalRenderer r;
     r.setSize(20, 4);

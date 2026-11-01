@@ -43,6 +43,10 @@ constexpr const char* kCss = R"css(
 .rx-field { display: flex; align-items: center; gap: 8px; }
 .rx-field__label { color: var(--rx-muted); white-space: nowrap; }
 .rx-stack--row > .rx-field--input { flex: 1 1 10em; min-width: 0; }
+.rx-field--above { flex-direction: column; align-items: stretch; gap: 4px; }
+.rx-vlist { overflow-y: auto; overscroll-behavior: contain; }
+.rx-vlist--border { border: 1px solid var(--rx-border); border-radius: var(--rx-radius); }
+.rx-vlist__row { overflow: hidden; }
 .rx-input {
   flex: 1; min-width: 0; font: inherit; padding: 8px 12px; border-radius: var(--rx-radius);
   border: 1px solid var(--rx-border); background: transparent; color: inherit;
@@ -212,7 +216,8 @@ Element Input(const Props& p) {
              if (e.key == "Escape" && onChange && !value.empty()) onChange(std::string{});
          }},
     }));
-    return h("label", {{"className", "rx-field rx-field--input"}}, std::move(parts));
+    return h("label", {{"className", p.get<bool>("labelAbove") ? "rx-field rx-field--input rx-field--above" : "rx-field rx-field--input"}},
+             std::move(parts));
 }
 
 Element Checkbox(const Props& p) {
@@ -351,7 +356,7 @@ Element Select(const Props& p) {
                                  {"value", p.get<std::string>("value")},
                                  {"onChange", p.get<InputHandler>("onChange")}},
                       std::move(options)));
-    return h("label", {{"className", "rx-field"}}, std::move(parts));
+    return h("label", {{"className", p.get<bool>("labelAbove") ? "rx-field rx-field--above" : "rx-field"}}, std::move(parts));
 }
 
 Element Tooltip(const Props& p) {

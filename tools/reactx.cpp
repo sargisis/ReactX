@@ -13,6 +13,7 @@
 // reads it, CMakePresets.json and src/. `reactx dev` serves the web build with
 // rx::net::HttpServer (the same server as reactx_serve) and reloads the page
 // after every successful rebuild.
+#include <fcntl.h>
 #include <signal.h>
 #include <sys/utsname.h>
 #include <sys/wait.h>
@@ -213,19 +214,29 @@ std::optional<SemVer> parseVersion(std::string_view text) {
     return v;
 }
 
+// Release tags in the output of `git ls-remote --tags`, newest first.
+std::vector<SemVer> parseTags(std::string_view out) {
+    std::vector<SemVer> versions;
+    for (auto line : std::views::split(out, '\n')) {  // "<sha>\trefs/tags/v0.4.0"
+        std::string_view l(line.begin(), line.end());
+        auto at = l.find("refs/tags/");
+        if (at == std::string_view::npos) continue;
+        if (auto v = parseVersion(l.substr(at + 10))) versions.push_back(std::move(*v));
+    }
+    std::ranges::sort(versions, std::greater{});
+    return versions;
+}
+
 // Release tags of a git repository, newest first (asks the remote; no clone).
 std::expected<std::vector<SemVer>, std::string> remoteVersions(const std::string& url) {
-    return capture({"git", "ls-remote", "--tags", "--refs", url}).transform([](const std::string& out) {
-        std::vector<SemVer> versions;
-        for (auto line : std::views::split(out, '\n')) {  // "<sha>\trefs/tags/v0.4.0"
-            std::string_view l(line.begin(), line.end());
-            auto at = l.find("refs/tags/");
-            if (at == std::string_view::npos) continue;
-            if (auto v = parseVersion(l.substr(at + 10))) versions.push_back(std::move(*v));
-        }
-        std::ranges::sort(versions, std::greater{});
-        return versions;
-    });
+    return capture({"git", "ls-remote", "--tags", "--refs", url}).transform(
+        [](const std::string& out) { return parseTags(out); });
+}
+
+std::optional<SemVer> newestStable(const std::vector<SemVer>& versions) {
+    auto it = std::ranges::find_if(versions, [](const SemVer& v) { return v.pre.empty(); });
+    if (it == versions.end()) return std::nullopt;
+    return *it;
 }
 
 // The folder with reactx.json, from the current one upwards.
@@ -554,6 +565,7 @@ reactx dev      # build, serve at http://127.0.0.1:8090/, rebuild and reload on 
 reactx build    # {{output}}
 reactx add <name> <git-url> --rev <tag> --target <cmake-target>   # a library
 reactx update   # move to the newest ReactX release
+reactx upgrade  # get the newest reactx tool itself
 ```
 
 Native builds need GCC 16+; web builds need Emscripten: `reactx install` downloads it (or set `EMSDK`).
@@ -1247,6 +1259,163 @@ int cmdUpdate(const std::vector<std::string>& args) {
     return 0;
 }
 
+// ---- telling about new releases ----
+//
+// Like npm's update notice: at most once a day `git ls-remote` runs in the
+// background (it never slows a command down) and writes the release tags to
+// ~/.reactx/update-check.tags; the next command says when there is a newer
+// release than this CLI. Off with REACTX_NO_UPDATE_CHECK=1 and in CI.
+
+bool updateChecksOff() {
+    for (const char* name : {"REACTX_NO_UPDATE_CHECK", "CI"})
+        if (const char* v = std::getenv(name); v && *v && std::string_view(v) != "0") return true;
+    return false;
+}
+
+// Starts `args` and doesn't wait for it: it outlives reactx, output goes nowhere.
+void spawnDetached(const std::vector<std::string>& args) {
+    pid_t pid = ::fork();
+    if (pid < 0) return;
+    if (pid == 0) {
+        ::setsid();
+        if (::fork() != 0) ::_exit(0);  // the grandchild is adopted by init: no zombie, no waiting
+        int null = ::open("/dev/null", O_RDWR);
+        if (null >= 0) {
+            ::dup2(null, STDIN_FILENO);
+            ::dup2(null, STDOUT_FILENO);
+            ::dup2(null, STDERR_FILENO);
+        }
+        ::setenv("GIT_TERMINAL_PROMPT", "0", 1);
+        std::vector<char*> argv;
+        for (const auto& a : args) argv.push_back(const_cast<char*>(a.c_str()));
+        argv.push_back(nullptr);
+        ::execvp(argv[0], argv.data());
+        ::_exit(127);
+    }
+    int status = 0;
+    while (::waitpid(pid, &status, 0) < 0 && errno == EINTR) {}
+}
+
+std::string releaseNotesUrl(const SemVer& v) {
+    return "https://github.com/sargisis/ReactX/releases/tag/" + v.tag();
+}
+
+void updateNotice() {
+    if (updateChecksOff()) return;
+    fs::path home = reactxHome();
+    fs::path stamp = home / "update-check", tags = home / "update-check.tags";
+    if (auto text = readFile(tags)) {
+        auto newest = newestStable(parseTags(*text));
+        auto cli = parseVersion(kVersion);
+        if (newest && cli && *cli < *newest) {
+            std::println(stderr, "reactx: ReactX {} is out (this reactx is {}). Update: reactx upgrade", newest->tag(),
+                         cli->tag());
+            std::println(stderr, "        then reactx update in each project. What's new: {}", releaseNotesUrl(*newest));
+        }
+    }
+    std::error_code ec;
+    auto checked = fs::last_write_time(stamp, ec);
+    if (!ec && fs::file_time_type::clock::now() - checked < std::chrono::hours(24)) return;
+    fs::create_directories(home, ec);
+    if (!writeFile(stamp, "")) return;  // can't remember the check: don't run one every time
+    spawnDetached({"sh", "-c", R"(git ls-remote --tags --refs "$1" > "$2.tmp" && mv "$2.tmp" "$2")", "sh",
+                   std::string(kReactXGit), tags.string()});
+}
+
+// ---- reactx upgrade: a new reactx from GitHub Releases ----
+
+int cmdUpgrade(const std::vector<std::string>& args) {
+    bool check = false;
+    std::optional<SemVer> wanted;
+    for (std::size_t i = 0; i < args.size(); ++i) {
+        if (args[i] == "--check") {
+            check = true;
+        } else if (args[i] == "--to" && i + 1 < args.size()) {
+            wanted = parseVersion(args[++i]);
+            if (!wanted) fail("upgrade: --to needs a version like v0.14.0, not " + args[i]);
+        } else {
+            fail("upgrade: unknown option " + args[i] + " (reactx upgrade [--check] [--to vX.Y.Z])");
+        }
+    }
+    std::println("reactx: looking for releases at {}", kReactXGit);
+    std::fflush(stdout);
+    auto versions = remoteVersions(std::string(kReactXGit));
+    if (!versions) fail("upgrade: can't list the releases: " + versions.error());
+    std::optional<SemVer> target = wanted;
+    if (target && std::ranges::find(*versions, *target) == versions->end()) fail("upgrade: there is no release " + target->tag());
+    if (!target) target = newestStable(*versions);
+    if (!target) fail("upgrade: no releases yet");
+    auto cli = parseVersion(kVersion);
+    if (cli && *cli == *target) {
+        std::println("reactx {} — {}", cli->tag(), wanted ? "already this version" : "the newest version");
+        return 0;
+    }
+    if (cli && !wanted && *target < *cli) {
+        std::println("reactx {} is newer than the newest release {}: nothing to do", cli->tag(), target->tag());
+        return 0;
+    }
+    if (check) {
+        std::println("reactx {} → {} is available. Run: reactx upgrade", cli ? cli->tag() : std::string(kVersion),
+                     target->tag());
+        return 0;
+    }
+#if !defined(__linux__) || !defined(__x86_64__)
+    fail("upgrade: the prebuilt reactx is for Linux x86-64; build " + target->tag() + " from source");
+#endif
+    std::error_code ec;
+    fs::path exe = fs::read_symlink("/proc/self/exe", ec);
+    if (ec) fail("upgrade: can't find this program's file");
+    fs::path bin = exe.parent_path();
+    if (::access(bin.c_str(), W_OK) != 0)
+        fail("upgrade: can't write to " + bin.string() + "; install again: curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh");
+
+    std::string version = target->tag().substr(1);
+    std::string name = "reactx-" + version + "-linux-x86_64.tar.gz";
+    std::string url = "https://github.com/sargisis/ReactX/releases/download/" + target->tag() + "/" + name;
+    fs::path tmp = fs::temp_directory_path() / ("reactx-upgrade-" + std::to_string(::getpid()));
+    fs::remove_all(tmp, ec);
+    fs::create_directories(tmp);
+    struct Cleanup {
+        fs::path dir;
+        ~Cleanup() {
+            std::error_code e;
+            fs::remove_all(dir, e);
+        }
+    } cleanup{tmp};
+
+    std::println("Downloading reactx {}...", version);
+    if (run({"curl", "-fL", "--progress-bar", "-o", (tmp / name).string(), url}, tmp) != 0 ||
+        run({"curl", "-fsSL", "-o", (tmp / (name + ".sha256")).string(), url + ".sha256"}, tmp) != 0)
+        fail("upgrade: download failed: " + url);
+    // The checksum file names the archive; compare the hashes only.
+    auto expected = readFile(tmp / (name + ".sha256"));
+    auto actual = capture({"sha256sum", (tmp / name).string()});
+    auto firstWord = [](const std::string& t) { return t.substr(0, t.find_first_of(" \t\n")); };
+    if (!expected || !actual || firstWord(*expected).size() != 64 || firstWord(*expected) != firstWord(*actual))
+        fail("upgrade: the download doesn't match its checksum; nothing was changed");
+    if (run({"tar", "xzf", (tmp / name).string(), "-C", tmp.string()}, tmp) != 0) fail("upgrade: can't unpack " + name);
+
+    fs::path from = tmp / ("reactx-" + version + "-linux-x86_64") / "bin";
+    int replaced = 0;
+    for (const auto& entry : fs::directory_iterator(from, ec)) {
+        fs::path dest = bin / entry.path().filename();
+        fs::path next = dest;
+        next += ".new";
+        fs::copy_file(entry.path(), next, fs::copy_options::overwrite_existing, ec);
+        if (!ec) fs::rename(next, dest, ec);  // atomic, even for the running reactx
+        if (ec) fail("upgrade: can't replace " + dest.string() + ": " + ec.message());
+        ++replaced;
+    }
+    if (replaced == 0) fail("upgrade: " + name + " has no bin/ folder");
+    std::println("Installed reactx {} into {}", version, bin.string());
+    // A new release may want another compiler version: the new reactx says what is missing
+    // (no surprise 1.5 GB download here).
+    if (run({(bin / "reactx").string(), "install", "--check"}, tmp) != 0)
+        std::println("Run reactx install to fetch what is missing.");
+    std::println("\nNext, in each project: reactx update   (what's new: {})", releaseNotesUrl(*target));
+    return 0;
+}
+
 int usage(std::FILE* out, int code) {
     std::print(out, "reactx {} - the ReactX tool\n\n"
            "  reactx new <name> [--terminal] [--local]   create a project (web by default)\n"
@@ -1256,7 +1425,8 @@ int usage(std::FILE* out, int code) {
            "  reactx build [--native]                    build (web: build/web/dist; --native: GCC, main without mountDom)\n"
            "  reactx add <name> <git-url> [--rev R] [--target T]   add a dependency\n"
            "  reactx remove <name>                       remove a dependency\n"
-           "  reactx update [--check] [--to vX.Y.Z]      move to the newest ReactX release\n"
+           "  reactx update [--check] [--to vX.Y.Z]      move the project to the newest ReactX release\n"
+           "  reactx upgrade [--check] [--to vX.Y.Z]     replace this reactx with the newest release\n"
            "  reactx install [--check]                   download the compiler and tools into ~/.reactx\n"
            "  reactx help | --version\n"
            "\n<command> --help (or reactx help <command>) explains one command.\n", kVersion);
@@ -1303,6 +1473,15 @@ std::string_view commandHelp(std::string_view command) {
                "Needs curl, git, python3 and tar. Terminal apps also need GCC 16+, which it can't download.\n\n"
                "  --check                only show what is there and what is missing\n"
                "  --emscripten VERSION   another Emscripten version (default 6.0.13)\n";
+    if (command == "upgrade")
+        return "reactx upgrade [--check] [--to vX.Y.Z]\n\n"
+               "Replaces this reactx (and the tools next to it) with the newest release from GitHub Releases,\n"
+               "checks the download's SHA-256 and says if the new version needs another compiler (reactx install).\n"
+               "Projects keep their version until you run reactx update in them. Linux x86-64.\n"
+               "Once a day the other commands check for a new release in the background and say so;\n"
+               "REACTX_NO_UPDATE_CHECK=1 turns that off (it is off when CI is set).\n\n"
+               "  --check       only say whether a newer release exists\n"
+               "  --to vX.Y.Z   a specific version (also older)\n";
     if (command == "update")
         return "reactx update [--check] [--to vX.Y.Z]\n\n"
                "Moves the project to the newest ReactX release (by SemVer, skipping -rc) and writes it to reactx.json;\n"
@@ -1327,9 +1506,11 @@ int main(int argc, char** argv) {
     userSetEmsdk = std::getenv("EMSDK") && *std::getenv("EMSDK");
     useInstalledTools();
     try {
+        if (command == "new" || command == "dev" || command == "build" || command == "update") updateNotice();
         if (command == "new") return cmdNew(args);
         if (command == "dev") return cmdDev(args);
         if (command == "build") return cmdBuild(args);
+        if (command == "upgrade") return cmdUpgrade(args);
         if (command == "add") return cmdAdd(args);
         if (command == "remove") return cmdRemove(args);
         if (command == "update") return cmdUpdate(args);

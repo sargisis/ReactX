@@ -9,6 +9,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -103,6 +104,7 @@ struct InputProps {
     InputHandler onSubmit{};
     std::string placeholder{};
     std::string label{};
+    bool labelAbove = false;  // the label on its own line above the field: forms line up
     std::string key{};
 };
 Element input(InputProps props);
@@ -201,6 +203,7 @@ struct SelectProps {
     std::string value{};
     std::vector<Option> options{};
     InputHandler onChange{};  // gets the chosen option's value
+    bool labelAbove = false;  // like ui::input
     std::string key{};
 };
 Element select(SelectProps props);
@@ -227,6 +230,40 @@ struct ConfirmProps {
     std::string key{};
 };
 Element confirm(ConfirmProps props);
+
+// ---- long lists ----
+// A list of any length that draws only the rows on screen (and a few around
+// them): 100,000 log lines cost what 40 do. Every row has the same height.
+//   auto list = ui::useVirtualList({.count = n, .follow = atEnd,
+//                                   .onScroll = [setAtEnd](const ScrollEvent& e) { setAtEnd(e.nearBottom(1)); }});
+//   std::vector<Element> rows;
+//   for (int i = list.first; i < list.last; ++i) rows.push_back(h(Line, {.line = lines[i]}));
+//   return list.view(std::move(rows));
+// It scrolls by itself: in a terminal it takes the rows left in a column (like
+// overflow="scroll"); in the browser give it .height or a flex parent with a height.
+// Rows that aren't drawn can't take the focus.
+struct VirtualListOptions {
+    int count = 0;           // rows in all
+    int rowHeight = 32;      // px, in the browser
+    int rowLines = 1;        // rows, in a terminal
+    int height = 0;          // px, in the browser; 0 = fill a flex parent (at most the window)
+    bool follow = false;     // keep the end in view while rows are added
+    bool border = false;
+    ScrollHandler onScroll{};  // the user scrolled (e.nearBottom(...) to turn follow off and on)
+};
+
+struct VirtualList {
+    int first = 0;  // draw rows first .. last-1
+    int last = 0;
+    // The scroll box around `rows` (rows[0] is row `first`), with the room of
+    // the rows that aren't drawn.
+    Element view(std::vector<Element> rows) const;
+
+    VirtualListOptions options{};
+    NodeRef box{};
+    Setter<std::pair<int, int>> setViewport{};  // top, height
+};
+VirtualList useVirtualList(VirtualListOptions options);
 
 // ---- toasts ----
 // A short message in a corner that goes away by itself, sent from anywhere on

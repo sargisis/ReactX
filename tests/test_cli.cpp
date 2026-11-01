@@ -58,6 +58,7 @@ Result reactx(const std::vector<std::string>& args, const fs::path& cwd) {
         ::close(pipefd[0]);
         ::close(pipefd[1]);
         if (::chdir(cwd.c_str()) != 0) ::_exit(127);
+        if (!std::getenv("REACTX_TEST_UPDATE_NOTICE")) ::setenv("REACTX_NO_UPDATE_CHECK", "1", 1);  // no network in tests
         std::vector<char*> argv{const_cast<char*>(REACTX_CLI)};
         for (const auto& a : args) argv.push_back(const_cast<char*>(a.c_str()));
         argv.push_back(nullptr);
@@ -195,6 +196,27 @@ void quick(const fs::path& tmp) {
     CHECK(contains(reactx({"build", "-h"}, tmp).out, "--native"));
     CHECK(reactx({"frobnicate", "--help"}, tmp).code == 2);
     CHECK(contains(reactx({"--version"}, tmp).out, std::string("reactx ") + REACTX_VERSION));
+
+    std::cout << "a newer release found by the daily check is announced, with how to get it\n";
+    {
+        fs::path home = tmp / "notice-home";
+        fs::create_directories(home);
+        std::ofstream(home / "update-check") << "";  // checked just now: no new check starts
+        std::ofstream(home / "update-check.tags") << "abc\trefs/tags/v0.1.0\ndef\trefs/tags/v99.0.0\nfed\trefs/tags/v100.0.0-rc.1\n";
+        ::setenv("REACTX_HOME", home.c_str(), 1);
+        ::setenv("REACTX_TEST_UPDATE_NOTICE", "1", 1);
+        auto told = reactx({"build"}, tmp);  // no project here: fails, but says it first
+        ::unsetenv("REACTX_TEST_UPDATE_NOTICE");
+        CHECK(contains(told.out, "ReactX v99.0.0 is out") && contains(told.out, "reactx upgrade") &&
+              contains(told.out, "releases/tag/v99.0.0"));
+        CHECK(!contains(reactx({"build"}, tmp).out, "is out"));  // REACTX_NO_UPDATE_CHECK=1
+        CHECK(!contains(reactx({"--version"}, tmp).out, "is out"));
+        ::unsetenv("REACTX_HOME");
+        auto upgradeHelp = reactx({"upgrade", "--help"}, tmp);
+        CHECK(upgradeHelp.code == 0 && contains(upgradeHelp.out, "REACTX_NO_UPDATE_CHECK"));
+        auto badUpgrade = reactx({"upgrade", "--to", "nope"}, tmp);
+        CHECK(badUpgrade.code != 0 && contains(badUpgrade.out, "--to needs a version"));
+    }
 
     std::cout << "install: --check lists the tools without downloading anything\n";
     {

@@ -28,6 +28,13 @@ public:
     // Place child at position `index` of parent. If it is already a child of
     // parent, move it there.
     virtual void insertChild(NodeHandle parent, NodeHandle child, std::size_t index) = 0;
+    // The same move, when the core also knows the node that will follow
+    // `child` (`before`; 0 = the end). Backends that can insert next to a node
+    // (the DOM) skip finding the position by index.
+    virtual void insertBefore(NodeHandle parent, NodeHandle child, NodeHandle before, std::size_t index) {
+        (void)before;
+        insertChild(parent, child, index);
+    }
     virtual void removeChild(NodeHandle parent, NodeHandle child) = 0;
 
     // Called for every node of an unmounted subtree, after it was detached.

@@ -433,9 +433,22 @@ Element randomTree(std::mt19937& rng, int depth) {
     return h(pick(2) ? "a" : "b", {{"v", static_cast<std::int64_t>(pick(3))}}, std::move(children));
 }
 
+// Checks that the node the core says will follow an inserted child (`before`,
+// used by the DOM) is the one at `index` (used by everything else).
+class BeforeChecking : public TextRenderer {
+public:
+    int wrong = 0;
+    void insertBefore(NodeHandle parent, NodeHandle child, NodeHandle before, std::size_t index) override {
+        auto kids = node(parent).children;
+        std::erase(kids, child);
+        if ((index < kids.size() ? kids[index] : NodeHandle{0}) != before) ++wrong;
+        TextRenderer::insertBefore(parent, child, before, index);
+    }
+};
+
 TEST(random_trees_render_over_each_other_like_from_scratch) {
     std::mt19937 rng(2026);
-    TextRenderer r;
+    BeforeChecking r;
     Root root(r);
     for (int round = 0; round < 1500; ++round) {
         Element tree = randomTree(rng, 0);
@@ -444,6 +457,7 @@ TEST(random_trees_render_over_each_other_like_from_scratch) {
         Root freshRoot(fresh);
         freshRoot.render(tree);
         CHECK(r.toString() == fresh.toString());
+        CHECK(r.wrong == 0);
         if (failures) {
             std::cerr << "  round " << round << "\n";
             return;

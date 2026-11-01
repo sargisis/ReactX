@@ -517,7 +517,8 @@ void Reconciler::sync(Fiber& host) {
             anchor = oldPos[i];
             continue;
         }
-        renderer_.insertChild(host.node, wanted[i], inFront.before(anchor));
+        // Everything after i is in place already: wanted[i + 1] follows it.
+        renderer_.insertBefore(host.node, wanted[i], i + 1 < wanted.size() ? wanted[i + 1] : 0, inFront.before(anchor));
     }
     attached = std::move(wanted);
 }

@@ -140,12 +140,18 @@ EM_JS(void, rx_js_init_focus, (), {
     };
 });
 
-EM_JS(void, rx_js_insert, (double parentId, double childId, int index), {
+// beforeId: the node that will follow the child (0 = the end); -1: use index.
+EM_JS(void, rx_js_insert, (double parentId, double childId, int index, double beforeId), {
     const parent = Module.rxNodes.get(parentId);
     const child = Module.rxNodes.get(childId);
     const fresh = !child.parentNode;
-    if (child.parentNode === parent) parent.removeChild(child);
-    parent.insertBefore(child, parent.childNodes[index] || null);
+    if (beforeId >= 0) {
+        // insertBefore moves a node that is already there: no removeChild, no index lookup.
+        parent.insertBefore(child, beforeId ? Module.rxNodes.get(beforeId) : null);
+    } else {
+        if (child.parentNode === parent) parent.removeChild(child);
+        parent.insertBefore(child, parent.childNodes[index] || null);
+    }
     Module.rxSyncSelect(parent);
     // data-rx-trap (dialogs): move focus inside when it appears, remember where it was.
     if (fresh && child.getAttribute && child.getAttribute("data-rx-trap") !== null) {
@@ -487,7 +493,11 @@ void DomRenderer::removeProp(NodeHandle node, std::string_view name) {
 }
 
 void DomRenderer::insertChild(NodeHandle parent, NodeHandle child, std::size_t index) {
-    rx_js_insert(js(parent), js(child), static_cast<int>(index));
+    rx_js_insert(js(parent), js(child), static_cast<int>(index), -1);
+}
+
+void DomRenderer::insertBefore(NodeHandle parent, NodeHandle child, NodeHandle before, std::size_t index) {
+    rx_js_insert(js(parent), js(child), static_cast<int>(index), js(before));
 }
 
 void DomRenderer::removeChild(NodeHandle parent, NodeHandle child) { rx_js_remove(js(parent), js(child)); }

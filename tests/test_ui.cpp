@@ -189,6 +189,98 @@ TEST(checkbox_on_change_gets_the_new_state) {
     CHECK(contains(s.text(), "[ ] off"));
 }
 
+TEST(label_above_lines_fields_up) {
+    Screen s(ui::stack({.children = {
+        ui::input({.value = "Bolt", .label = "Name", .labelAbove = true}),
+        ui::input({.value = "42", .label = "Quantity", .labelAbove = true}),
+    }}), 30, 8);
+    auto lines = s.renderer.frameLines();
+    CHECK(lines.size() > 4 && lines[0].starts_with("Name") && lines[1].starts_with("Bolt") &&
+          lines[3].starts_with("Quantity") && lines[4].starts_with("42"));
+}
+
+struct BigLogProps {
+    int count = 0;
+    bool follow = false;
+};
+
+Element BigLog(const BigLogProps& p) {
+    auto list = ui::useVirtualList({.count = p.count, .follow = p.follow, .border = true});
+    std::vector<Element> rows;
+    for (int i = list.first; i < list.last; ++i) rows.push_back(h("text", {}, {"line " + std::to_string(i)}));
+    return h("box", {{"flexGrow", 1}}, {h("text", {}, {"head"}), list.view(std::move(rows))});
+}
+
+TEST(virtual_list_draws_only_the_rows_on_screen) {
+    Screen s(h(BigLog, {.count = 100000}), 30, 12);
+    CHECK(contains(s.text(), "line 0"));
+    CHECK(!contains(s.text(), "line 99999"));
+    CHECK(s.renderer.nodeCount() < 200);  // not 100,000 rows
+    s.press("PageDown");
+    s.root.flush();
+    auto lines = s.renderer.frameLines();
+    CHECK(lines.size() > 2 && !contains(lines[2], "line 0") && contains(s.text(), "line 12"));  // a page further
+}
+
+TEST(virtual_list_follow_keeps_the_end_in_view) {
+    Screen s(h(BigLog, {.count = 5000, .follow = true}), 30, 12);
+    s.root.flush();
+    CHECK(contains(s.text(), "line 4999"));
+    s.root.render(h(BigLog, {.count = 5100, .follow = true}));
+    s.root.flush();
+    CHECK(contains(s.text(), "line 5099"));
+    CHECK(s.renderer.nodeCount() < 200);
+}
+
+struct LogLineProps {
+    int n = 0;
+};
+
+Element LogLine(const LogLineProps& p) {
+    std::string level = p.n % 3 == 0 ? "ERROR" : "INFO";
+    return h("box", {{"direction", "row"}, {"gap", 1}}, {
+        h("text", {{"color", "gray"}, {"wrap", false}}, {std::to_string(p.n)}),
+        h("text", {{"color", level == "ERROR" ? "red" : "white"}, {"bold", level == "ERROR"}, {"wrap", false}}, {level}),
+        h("text", {{"wrap", false}}, {"line " + std::to_string(p.n)}),
+    });
+}
+
+struct GrowingLogProps {
+    int* count = nullptr;
+};
+
+Element GrowingLog(const GrowingLogProps& p) {
+    auto [n, setN] = useState(0);
+    auto [follow, setFollow] = useState(true);
+    *p.count = n;
+    useInterval([setN] { setN([](int v) { return v + 20; }); }, std::optional(std::chrono::milliseconds(1)));
+    auto list = ui::useVirtualList({.count = n, .follow = follow, .border = true,
+                                    .onScroll = [setFollow](const ScrollEvent& e) { setFollow(e.nearBottom(1)); }});
+    std::vector<Element> rows;
+    for (int i = list.first; i < list.last; ++i) rows.push_back(h(LogLine, {.n = i}));
+    return h("box", {{"flexGrow", 1}}, {h("text", {}, {follow ? "following" : "stopped"}), h("text", {}, {std::to_string(n)}), list.view(std::move(rows))});
+}
+
+TEST(virtual_list_follows_rows_that_keep_coming) {
+    int count = 0;
+    Screen s(h(GrowingLog, {.count = &count}), 80, 14);
+    int blanks = 0;
+    for (int tick = 0; tick < 60; ++tick) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        s.root.flush();
+        s.renderer.sendScrollEvents(s.root);
+        auto lines = s.renderer.frameLines();
+        if (lines.size() > 4 && lines[4].find("line") == std::string::npos) {
+            ++blanks;
+            if (blanks == 1) std::cerr << "blank at tick " << tick << "\n" << s.text() << "\n";
+        }
+    }
+    CHECK(blanks == 0);
+    CHECK(contains(s.text(), "following"));
+    CHECK(contains(s.text(), "line " + std::to_string(count - 1)));
+    if (!contains(s.text(), "line " + std::to_string(count - 1))) std::cerr << s.text() << "\ncount " << count << "\n";
+}
+
 TEST(checkbox_toggles_with_enter_and_space) {
     Screen s(h(Form));
     CHECK(contains(s.text(), "[ ] I agree"));

@@ -6,6 +6,23 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+## [0.19.0] — 2026-11-02
+
+The router grows up: nested routes (`"/settings/*"` with its own `routes()` inside, the layout stays mounted), guards (`.allow` / `.redirect`), `router::redirect`, and links that stay active under their path. A MINOR release for the new API; apps update without changes.
+
+**Update:** `reactx upgrade`, then `reactx update` in each project.
+
+### Added
+
+- Nested routes: a route ending in `/*` matches its path and everything under it, and the `router::routes()` inside its element match the rest; the outer element stays mounted (a layout) and its route's parameters are seen inside.
+- Route guards: `Route` has `.allow` and `.redirect` — a route that isn't allowed is skipped, or sends to `.redirect` (replacing the history entry).
+- `router::redirect(to)`: goes on as soon as it is shown, like React Router's `<Navigate>`.
+- `router::link`: `.exact = false` (active on the paths under `to` too) and `.replace = true`.
+
+### Fixed
+
+- Website: the "docs" link in the header stays active on every docs page.
+
 ## [0.18.0] — 2026-11-02
 
 Tests for your app with one command: `reactx test` builds `tests/*.cpp` and runs them. `reactx/testing.hpp` draws the app on an in-memory terminal and acts like a user — `click("Save")`, `type("Ann")`, `press("Ctrl+s")`, then `CHECK(s.shows("Saved"))`. New projects keep their components in `src/app.cpp` and come with a test. A MINOR release: new API, and new projects are laid out differently; existing apps update without changes (to test one, move its components out of `main.cpp`).
@@ -423,7 +440,8 @@ The first release.
 - **A documentation site** built with ReactX: https://sargisis.github.io/ReactX/, published by GitHub Actions through the `gh-pages` branch.
 - The version in one place (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; new projects from `reactx new` use ReactX by release tag.
 
-[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/sargisis/ReactX/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/sargisis/ReactX/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/sargisis/ReactX/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/sargisis/ReactX/compare/v0.15.0...v0.16.0

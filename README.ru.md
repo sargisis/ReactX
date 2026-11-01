@@ -381,6 +381,8 @@ router::link({.to = "/todos/7", .label = "Открыть"});   // <a href>, Ctrl
 router::navigate("/todos");  router::back();  router::useQuery("show");
 ```
 
+Вложенные маршруты, guards и редиректы (v0.19): `{"/settings/*", h(Settings)}` совпадает со всем под `/settings`, а `router::routes()` внутри `Settings` разбирают остаток (`{"/profile", h(Profile)}`), пока `Settings` остаётся смонтированным; `{.path = "/admin/*", .element = h(Admin), .allow = isAdmin, .redirect = "/login"}` закрывает маршрут; `router::redirect("/inbox")` сразу уводит дальше; `link({..., .exact = false})` активна и на путях под ней.
+
 Базовый путь (например `/ReactX/` на GitHub Pages) берётся из `<base href>`; маршруты и ссылки в коде пишутся без него.
 
 **Данные** ([`reactx/fetch.hpp`](include/reactx/fetch.hpp)):

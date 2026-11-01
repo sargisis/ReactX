@@ -393,6 +393,8 @@ router::link({.to = "/todos/7", .label = "Open"});   // <a href>, Ctrl+click ope
 router::navigate("/todos");  router::back();  router::useQuery("show");
 ```
 
+Nested routes, guards and redirects (v0.19): `{"/settings/*", h(Settings)}` matches everything under `/settings`, and the `router::routes()` inside `Settings` match the rest (`{"/profile", h(Profile)}`) while `Settings` stays mounted; `{.path = "/admin/*", .element = h(Admin), .allow = isAdmin, .redirect = "/login"}` guards a route; `router::redirect("/inbox")` goes on at once; `link({..., .exact = false})` is active on the paths under it.
+
 The base path (e.g. `/ReactX/` on GitHub Pages) comes from `<base href>`; routes and links in code are written without it.
 
 **Data** ([`reactx/fetch.hpp`](include/reactx/fetch.hpp)):

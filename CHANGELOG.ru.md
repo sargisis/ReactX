@@ -6,6 +6,23 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ## [Не выпущено]
 
+## [0.19.0] — 2026-11-02
+
+Роутер повзрослел: вложенные маршруты (`"/settings/*"` со своими `routes()` внутри, разметка раздела не перемонтируется), guards (`.allow` / `.redirect`), `router::redirect` и ссылки, активные на путях под собой. MINOR-релиз из-за нового API; приложения обновляются без правок.
+
+**Обновиться:** `reactx upgrade`, затем `reactx update` в каждом проекте.
+
+### Добавлено
+
+- Вложенные маршруты: маршрут, который кончается на `/*`, совпадает со своим путём и всем под ним, а `router::routes()` внутри его элемента разбирают остаток; внешний элемент остаётся смонтированным (разметка раздела) и видит параметры своего маршрута.
+- Guards маршрутов: у `Route` есть `.allow` и `.redirect` — неразрешённый маршрут пропускается или уводит на `.redirect` (заменяя запись в истории).
+- `router::redirect(to)`: уводит дальше, как только показан, как `<Navigate>` в React Router.
+- `router::link`: `.exact = false` (активна и на путях под `to`) и `.replace = true`.
+
+### Исправлено
+
+- Сайт: ссылка «docs» в шапке подсвечена на всех страницах документации.
+
 ## [0.18.0] — 2026-11-02
 
 Тесты приложения одной командой: `reactx test` собирает `tests/*.cpp` и запускает их. `reactx/testing.hpp` рисует приложение на терминале в памяти и действует как пользователь — `click("Save")`, `type("Аня")`, `press("Ctrl+s")`, а потом `CHECK(s.shows("Saved"))`. Новые проекты держат компоненты в `src/app.cpp` и сразу содержат тест. MINOR-релиз: новый API, и новые проекты устроены иначе; существующие приложения обновляются без правок (чтобы тестировать, вынесите компоненты из `main.cpp`).
@@ -423,7 +440,8 @@ ReactX без установки компиляторов: готовый `react
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.18.0...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/sargisis/ReactX/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/sargisis/ReactX/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/sargisis/ReactX/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/sargisis/ReactX/compare/v0.15.0...v0.16.0

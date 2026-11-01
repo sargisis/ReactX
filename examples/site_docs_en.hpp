@@ -165,14 +165,14 @@ inline const std::vector<Page>& pagesEn() {
                               "and --target links it to your app.",
                  "reactx add fmt https://github.com/fmtlib/fmt.git --rev 11.0.2 --target fmt::fmt\nreactx remove fmt"},
                 {"reactx update", "Moves your project to the newest ReactX release. --check only tells you whether there is one.",
-                 "reactx update --check   # ReactX v0.17.0 -> v0.18.0 is available\n"
+                 "reactx update --check   # ReactX v0.18.0 -> v0.19.0 is available\n"
                  "reactx update\n"
                  "reactx build"},
                 {"reactx.json", "Everything about the project in one file.",
                  "{\n"
                  "  \"name\": \"my-app\",\n"
                  "  \"template\": \"web\",\n"
-                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.18.0\" },\n"
+                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.19.0\" },\n"
                  "  \"dependencies\": { \"fmt\": { \"git\": \"...\", \"rev\": \"11.0.2\", \"target\": \"fmt::fmt\" } },\n"
                  "  \"web\": { \"base\": \"/\", \"proxy\": { \"/api\": \"http://127.0.0.1:5000\" } }\n"
                  "}"},
@@ -192,9 +192,9 @@ inline const std::vector<Page>& pagesEn() {
                  "cd my-app && reactx update && reactx build"},
                 {"Upgrading a project", "reactx update finds the newest release and writes it into reactx.json; the next build downloads it. "
                               "By hand: change rev to the new tag.",
-                 "reactx update\n# or in reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.18.0\" }"},
+                 "reactx update\n# or in reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.19.0\" }"},
                 {"The version in code", "",
-                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"0.18.0\"\n"
+                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"0.19.0\"\n"
                  "static_assert(REACTX_VERSION_MAJOR == 0);"},
             },
         },
@@ -501,6 +501,24 @@ inline const std::vector<Page>& pagesEn() {
                  "    {\"/\",          h(Home)},\n"
                  "    {\"/todos/:id\", h(TodoPage)},   // router::useParam(\"id\")\n"
                  "    {\"*\",          h(NotFound)},\n"
+                 "})"},
+                {"Nested routes", "A route ending in /* matches its path and everything under it; the routes() inside its "
+                                  "element match the rest. The outer element is a layout: it stays mounted while its pages "
+                                  "change, and the parameters of the outer route are seen inside.",
+                 "router::routes({{\"/teams/:team/*\", h(Team)}, {\"*\", h(NotFound)}});\n\n"
+                 "Element Team(const Props&) {   // /teams/a, /teams/a/members/7\n"
+                 "    return h(\"div\", {}, {\n"
+                 "        router::link({.to = \"/teams/\" + router::useParam(\"team\"), .label = \"Team\", .exact = false}),\n"
+                 "        router::routes({{\"/\", h(Overview)}, {\"/members/:id\", h(Member)}}),\n"
+                 "    });\n"
+                 "}"},
+                {"Guards and redirects", "A route with .allow = false is skipped, or with .redirect goes there instead "
+                                         "(replacing the history entry). router::redirect sends on at once. .allow is a "
+                                         "bool computed where routes() is called, so the routes follow your state.",
+                 "router::routes({\n"
+                 "    {\"/\", router::redirect(\"/inbox\")},\n"
+                 "    {.path = \"/admin/*\", .element = h(Admin), .allow = user.isAdmin, .redirect = \"/login\"},\n"
+                 "    {\"*\", h(NotFound)},\n"
                  "})"},
                 {"Links", "link changes the page without reloading (Ctrl+click still opens a new tab); navigate and back "
                           "do it from code.",

@@ -6,6 +6,12 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-11-01
+
+Long lists and live logs without the CPU bill: `ui::useVirtualList` draws only the rows on screen in the browser and in the terminal (a 10,000-row log viewer went from 66% CPU to 2.6%), and the terminal keeps its layout between repaints. Code that didn't compile now does: `useState` of a `std::vector` of your structs, `useCallback` with any signature. Forms line up with `.labelAbove`, `ui::input` fills a row. And `reactx upgrade` gets the newest reactx; from now on reactx tells you once a day when a new release is out. Found by writing a live poll, a 2,000-row inventory table and a log viewer on ReactX. A MINOR release because `Renderer` got a virtual (`insertBefore`, with a default) and `ui::Checkbox`/`InputProps`/`SelectProps` got fields; apps update without changes.
+
+**Update:** `curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh` (this once; from now on `reactx upgrade`), then `reactx update` in each project.
+
 ### Added
 
 - `useCallback` takes any handler: `PointerHandler`, and lambdas of their own signature, e.g. `std::function<void(int)> onOpen = useCallback([setOpen](int id) { setOpen(id); }, deps());` for the `onOpen(id)` of a memo row. Before, only `void()`, key, text and scroll handlers compiled.
@@ -349,7 +355,8 @@ The first release.
 - **A documentation site** built with ReactX: https://sargisis.github.io/ReactX/, published by GitHub Actions through the `gh-pages` branch.
 - The version in one place (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; new projects from `reactx new` use ReactX by release tag.
 
-[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/sargisis/ReactX/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/sargisis/ReactX/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/sargisis/ReactX/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/sargisis/ReactX/compare/v0.10.0...v0.11.0

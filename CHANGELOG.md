@@ -6,6 +6,18 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+## [0.16.0] — 2026-11-01
+
+Forms: `ui::useForm` keeps a form's values in your own struct, checks them with your function and shows each error under its field once that field changed or a submit was tried. New fields: `ui::textarea`, `ui::radioGroup`, `ui::slider`, `ui::progress`, and `.error` on every field. All of them work in the browser and in a terminal (a terminal textarea is one line until v0.17). Try them on the website's home page. A MINOR release for the new API; apps update without changes.
+
+**Update:** `reactx upgrade`, then `reactx update` in each project.
+
+### Added
+
+- `ui::useForm<T>`: a form's values in your own struct, checked by your `validate` (returns `ui::FormErrors`, field name -> message); `form.set("name", &T::name)` is a field's onChange, `form.error("name")` its message (shown once the field changed or after a submit was tried), `submit` calls `onSubmit` only when valid, plus `reset`, `setValues`, `valid()`.
+- `.error` on `ui::input`, `select`, `checkbox` and the new fields: the message under the field, which is marked invalid (`aria-invalid`, red).
+- `ui::textarea` (several lines; one line in a terminal for now), `ui::radioGroup` (every option visible; Up / Down in a terminal), `ui::slider` (an `int` in a range; Left / Right / Home / End in a terminal), `ui::progress` (a bar with the percentage).
+
 ## [0.15.0] — 2026-11-01
 
 Tables: `ui::table` lines up columns in the browser and in a terminal, with sortable headers, selectable rows and `useVirtualList` for long tables. `useTitle` names the browser tab. `reactx build` says which parts make the `.wasm` big. A second `mountDom` into the same container now stops the old app, and a native build of a web project builds your tests without tripping over `mountDom`. The first release of the road to 1.0. A MINOR release for the new API; apps update without changes.
@@ -373,7 +385,8 @@ The first release.
 - **A documentation site** built with ReactX: https://sargisis.github.io/ReactX/, published by GitHub Actions through the `gh-pages` branch.
 - The version in one place (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; new projects from `reactx new` use ReactX by release tag.
 
-[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/sargisis/ReactX/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/sargisis/ReactX/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/sargisis/ReactX/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/sargisis/ReactX/compare/v0.12.0...v0.13.0

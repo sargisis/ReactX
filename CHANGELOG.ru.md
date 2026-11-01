@@ -6,6 +6,18 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ## [Не выпущено]
 
+## [0.16.0] — 2026-11-01
+
+Формы: `ui::useForm` хранит значения формы в вашей структуре, проверяет их вашей функцией и показывает каждую ошибку под её полем — после изменения поля или попытки отправить. Новые поля: `ui::textarea`, `ui::radioGroup`, `ui::slider`, `ui::progress` и `.error` у каждого поля. Всё работает и в браузере, и в терминале (textarea в терминале — одна строка до v0.17). Попробуйте их на главной странице сайта. MINOR-релиз из-за нового API; приложения обновляются без правок.
+
+**Обновиться:** `reactx upgrade`, затем `reactx update` в каждом проекте.
+
+### Добавлено
+
+- `ui::useForm<T>`: значения формы в вашей структуре, проверка вашей функцией `validate` (возвращает `ui::FormErrors`: имя поля -> сообщение); `form.set("name", &T::name)` — onChange поля, `form.error("name")` — его сообщение (видно после изменения поля или попытки отправить), `submit` вызывает `onSubmit` только без ошибок, а ещё `reset`, `setValues`, `valid()`.
+- `.error` у `ui::input`, `select`, `checkbox` и новых полей: сообщение под полем, само поле помечается как ошибочное (`aria-invalid`, красным).
+- `ui::textarea` (несколько строк; в терминале пока одна), `ui::radioGroup` (все варианты на виду; ↑ ↓ в терминале), `ui::slider` (`int` в диапазоне; ← → / Home / End в терминале), `ui::progress` (полоса с процентами).
+
 ## [0.15.0] — 2026-11-01
 
 Таблицы: `ui::table` выравнивает колонки в браузере и в терминале, с сортировкой по заголовкам, выбором строк и `useVirtualList` для длинных таблиц. `useTitle` задаёт заголовок вкладки. `reactx build` говорит, что раздувает `.wasm`. Повторный `mountDom` в тот же контейнер теперь останавливает старое приложение, а нативная сборка web-проекта собирает ваши тесты, не спотыкаясь о `mountDom`. Первый релиз на пути к 1.0. MINOR-релиз из-за нового API; приложения обновляются без правок.
@@ -373,7 +385,8 @@ ReactX без установки компиляторов: готовый `react
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.15.0...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/sargisis/ReactX/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/sargisis/ReactX/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/sargisis/ReactX/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/sargisis/ReactX/compare/v0.12.0...v0.13.0

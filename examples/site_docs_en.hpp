@@ -150,14 +150,14 @@ inline const std::vector<Page>& pagesEn() {
                               "and --target links it to your app.",
                  "reactx add fmt https://github.com/fmtlib/fmt.git --rev 11.0.2 --target fmt::fmt\nreactx remove fmt"},
                 {"reactx update", "Moves your project to the newest ReactX release. --check only tells you whether there is one.",
-                 "reactx update --check   # ReactX v0.14.0 -> v0.15.0 is available\n"
+                 "reactx update --check   # ReactX v0.15.0 -> v0.16.0 is available\n"
                  "reactx update\n"
                  "reactx build"},
                 {"reactx.json", "Everything about the project in one file.",
                  "{\n"
                  "  \"name\": \"my-app\",\n"
                  "  \"template\": \"web\",\n"
-                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.15.0\" },\n"
+                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.16.0\" },\n"
                  "  \"dependencies\": { \"fmt\": { \"git\": \"...\", \"rev\": \"11.0.2\", \"target\": \"fmt::fmt\" } },\n"
                  "  \"web\": { \"base\": \"/\", \"proxy\": { \"/api\": \"http://127.0.0.1:5000\" } }\n"
                  "}"},
@@ -177,9 +177,9 @@ inline const std::vector<Page>& pagesEn() {
                  "cd my-app && reactx update && reactx build"},
                 {"Upgrading a project", "reactx update finds the newest release and writes it into reactx.json; the next build downloads it. "
                               "By hand: change rev to the new tag.",
-                 "reactx update\n# or in reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.15.0\" }"},
+                 "reactx update\n# or in reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.16.0\" }"},
                 {"The version in code", "",
-                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"0.15.0\"\n"
+                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"0.16.0\"\n"
                  "static_assert(REACTX_VERSION_MAJOR == 0);"},
             },
         },
@@ -424,6 +424,27 @@ inline const std::vector<Page>& pagesEn() {
                  "std::vector<Element> rows;\n"
                  "for (int i = list.first; i < list.last; ++i) rows.push_back(h(Line, {.n = i}));\n"
                  "return list.view(std::move(rows));"},
+                {"Forms: useForm", "ui::useForm keeps a form's values in your own struct and checks them with your function. "
+                                   "form.set(\"name\", &T::name) is an onChange for a field; form.error(\"name\") is its message, "
+                                   "shown once the field changed or after a submit was tried. submit() calls onSubmit only "
+                                   "when there are no errors. Every field takes .error.",
+                 "struct Signup { std::string name; bool agree = false; };\n"
+                 "auto form = ui::useForm<Signup>({.validate = [](const Signup& s) {\n"
+                 "                                     ui::FormErrors e;\n"
+                 "                                     if (s.name.empty()) e[\"name\"] = \"Required\";\n"
+                 "                                     return e;\n"
+                 "                                 },\n"
+                 "                                 .onSubmit = [](const Signup& s) { save(s); }});\n"
+                 "ui::input({.value = form.values.name, .onChange = form.set(\"name\", &Signup::name),\n"
+                 "           .label = \"Name\", .error = form.error(\"name\")})\n"
+                 "ui::button({.label = \"Sign up\", .onClick = form.submit})"},
+                {"More fields", "textarea for several lines (one line in a terminal for now), radioGroup when every option "
+                                "should be visible, slider for a number in a range, progress for how far something got.",
+                 "ui::textarea({.value = note, .onChange = setNoteFn, .label = \"Note\", .rows = 3})\n"
+                 "ui::radioGroup({.label = \"Plan\", .value = plan, .options = {{\"free\", \"Free\"}, {\"pro\", \"Pro\"}},\n"
+                 "                .onChange = setPlanFn, .row = true})\n"
+                 "ui::slider({.label = \"Seats\", .value = seats, .min = 1, .max = 10, .onChange = setSeatsFn})\n"
+                 "ui::progress({.value = done, .max = total, .label = \"Uploading\"})"},
                 {"Tables", "ui::table lines up columns in the browser and in a terminal. The rows are yours: sort them in onSort, "
                            "the header shows the arrow. Rows with onSelect react to a click and Enter. For long tables pass a "
                            "useVirtualList as .list and build only the rows on screen.",

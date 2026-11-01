@@ -6,7 +6,7 @@ Native (terminal) builds need GCC 16+ (the C++26 standard library); browser buil
 
 ## Which version has what
 
-`reactx new` pins the project to the CLI's release (`"rev"` in `reactx.json`). Everything in this file is in v0.15.0: `ui::table`, `useTitle` and `mountDom` replacing the app in its container came in v0.15.0; `ui::useVirtualList`, `labelAbove`, `reactx upgrade`, `useCallback` with any signature, `ui::checkbox` `.onChange(bool)`, `FetchResponse::errorText()` and `useState` of types without `==` came in v0.14.0; `useWebSocket` and `HttpServer::webSocket` came in v0.13.0; prerendering from `reactx.json`, `ref.scrollTo` / `scrollBy` / `scrollMetrics`, the `scrollIntoView` prop and `HttpServer::onFile` came in v0.12.0; scrolling in the terminal (`overflow: "scroll"`, `ui::list({.scroll = true})`, `position: "fixed"`, `onScroll`) and `ref.scrollIntoView()` came in v0.11.0; the rx::ui components (`select`, `confirm`, `toast`/`toaster`, `tooltip`, `card`, `stack`, `text`) came in v0.10.0; `useNodeRef` / the `ref` prop / `ref.focus()`, `reactx/js.hpp`, pointer and hover events and the mouse in the terminal in v0.9.0; `renderToString` in v0.8.3. If a name from this file doesn't exist ("'useNodeRef' was not declared in this scope", "'confirm' is not a member of 'rx::ui'"), the project is on an older release: `reactx update` moves it to the newest one (`reactx --version` shows the CLI's).
+`reactx new` pins the project to the CLI's release (`"rev"` in `reactx.json`). Everything in this file is in v0.16.0: `ui::useForm`, `.error` on fields, `ui::textarea`, `radioGroup`, `slider` and `progress` came in v0.16.0; `ui::table`, `useTitle` and `mountDom` replacing the app in its container came in v0.15.0; `ui::useVirtualList`, `labelAbove`, `reactx upgrade`, `useCallback` with any signature, `ui::checkbox` `.onChange(bool)`, `FetchResponse::errorText()` and `useState` of types without `==` came in v0.14.0; `useWebSocket` and `HttpServer::webSocket` came in v0.13.0; prerendering from `reactx.json`, `ref.scrollTo` / `scrollBy` / `scrollMetrics`, the `scrollIntoView` prop and `HttpServer::onFile` came in v0.12.0; scrolling in the terminal (`overflow: "scroll"`, `ui::list({.scroll = true})`, `position: "fixed"`, `onScroll`) and `ref.scrollIntoView()` came in v0.11.0; the rx::ui components (`select`, `confirm`, `toast`/`toaster`, `tooltip`, `card`, `stack`, `text`) came in v0.10.0; `useNodeRef` / the `ref` prop / `ref.focus()`, `reactx/js.hpp`, pointer and hover events and the mouse in the terminal in v0.9.0; `renderToString` in v0.8.3. If a name from this file doesn't exist ("'useNodeRef' was not declared in this scope", "'confirm' is not a member of 'rx::ui'"), the project is on an older release: `reactx update` moves it to the newest one (`reactx --version` shows the CLI's).
 
 ## A complete program
 
@@ -154,6 +154,29 @@ return ui::table({.columns = {{.title = "Name", .sortable = true},
                   .rows = std::move(rows), .sortColumn = sortBy, .sortDescending = desc,
                   .onSort = [setSortBy](int column) { setSortBy(column); }, .emptyText = "No items"});
 ```
+
+Forms (v0.16.0+): `ui::useForm<T>` keeps a form's values in your struct and checks them with your function; a field's error shows once that field changed, or after a submit was tried. Every field takes `.error` (shown under it, marked invalid):
+
+```cpp
+struct Signup { std::string name, plan = "free"; int seats = 1; std::string note; bool agree = false; };
+auto form = ui::useForm<Signup>({.validate = [](const Signup& s) {
+                                     ui::FormErrors e;              // std::map<std::string, std::string>
+                                     if (s.name.empty()) e["name"] = "Required";
+                                     if (!s.agree) e["agree"] = "Please agree";
+                                     return e;
+                                 },
+                                 .onSubmit = [](const Signup& s) { save(s); }});   // only when valid
+const Signup& v = form.values;
+ui::input({.value = v.name, .onChange = form.set("name", &Signup::name), .label = "Name", .error = form.error("name")})
+ui::radioGroup({.label = "Plan", .value = v.plan, .options = {{"free", "Free"}, {"pro", "Pro"}}, .onChange = form.set("plan", &Signup::plan), .row = true})
+ui::slider({.label = "Seats", .value = v.seats, .min = 1, .max = 10, .onChange = form.set("seats", &Signup::seats)})
+ui::textarea({.value = v.note, .onChange = form.set("note", &Signup::note), .label = "Note", .rows = 3})
+ui::checkbox({.label = "I agree", .checked = v.agree, .onChange = form.set("agree", &Signup::agree), .error = form.error("agree")})
+ui::progress({.value = v.seats, .max = 10, .label = "Seats used"})
+ui::button({.label = "Sign up", .onClick = form.submit})   // also form.reset, form.valid(), form.setValues(loaded)
+```
+
+`set("name", &T::field)` returns an onChange that writes the field and marks it changed; the name is the key of `FormErrors`. `textarea` is one line in a terminal for now. `slider` gives an `int`; a `ui::input` for a number gives text — parse it with `rx::parseNumber<int>`.
 
 `TableColumn{.title, .width (characters; 0 = share the room left), .align, .sortable}`, `TableRow{.cells (text or any element), .key, .onSelect (click / Enter), .selected}`. Long tables: `auto list = ui::useVirtualList({.count = n, .rowHeight = 36, .height = 480});`, build only rows `list.first`..`list.last-1` and pass `.list = list` (a copy; the header stays on top).
 

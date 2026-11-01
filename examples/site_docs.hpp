@@ -136,7 +136,7 @@ inline const std::vector<Page>& pages() {
                  "code --install-extension llvm-vs-code-extensions.vscode-clangd\nreactx build   # пишет compile_commands.json для clangd"},
                 {"Новый проект", "reactx new создаёт папку с reactx.json (манифест, как package.json), CMakeLists.txt, "
                                  "CMakePresets.json и src/main.cpp. ReactX подключается с GitHub по тегу релиза "
-                                 "(например, v0.15.0), а не по ветке, поэтому проект не сломается от новых изменений; --local — из исходников, "
+                                 "(например, v0.16.0), а не по ветке, поэтому проект не сломается от новых изменений; --local — из исходников, "
                                  "из которых собран сам CLI. --terminal — терминальное приложение вместо веба.",
                  "reactx new my-app\ncd my-app"},
                 {"reactx dev", "Собирает веб-версию, запускает встроенный сервер на C++ (тот же, что reactx_serve) и следит за "
@@ -168,15 +168,15 @@ inline const std::vector<Page>& pages() {
                 {"reactx update", "Переводит проект на новейший релиз ReactX: находит теги в репозитории из reactx.json, "
                                   "выбирает самый новый по SemVer (без -rc) и записывает его в rev. --check только проверяет, "
                                   "--to — конкретная версия. Следующий reactx build скачает её сам.",
-                 "reactx update --check   # ReactX v0.14.0 → v0.15.0 is available\n"
-                 "reactx update           # записывает v0.15.0 в reactx.json\n"
+                 "reactx update --check   # ReactX v0.15.0 → v0.16.0 is available\n"
+                 "reactx update           # записывает v0.16.0 в reactx.json\n"
                  "reactx update --to v0.3.0\n"
                  "reactx build"},
                 {"reactx.json", "Всё, что нужно проекту, в одном файле.",
                  "{\n"
                  "  \"name\": \"my-app\",\n"
                  "  \"template\": \"web\",\n"
-                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.15.0\" },\n"
+                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.16.0\" },\n"
                  "  \"dependencies\": { \"fmt\": { \"git\": \"...\", \"rev\": \"11.0.2\", \"target\": \"fmt::fmt\" } },\n"
                  "  \"web\": { \"base\": \"/\", \"proxy\": { \"/api\": \"http://127.0.0.1:5000\" } }\n"
                  "}"},
@@ -191,7 +191,7 @@ inline const std::vector<Page>& pages() {
                            "Что изменилось в каждой версии — в CHANGELOG.ru.md.", ""},
                 {"Версия в коде", "Номер версии записан в одном месте — project(ReactX VERSION ...) в CMakeLists.txt; "
                                   "из него генерируется reactx/version.hpp.",
-                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"0.15.0\"\n"
+                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"0.16.0\"\n"
                  "static_assert(REACTX_VERSION_MAJOR == 0);"},
                 {"Обновить reactx", "Два шага: сам инструмент, потом каждый проект. reactx upgrade заменяет reactx новейшим релизом "
                                     "(проверяя SHA-256); до v0.14.0 — запустите установщик ещё раз. Раз в день reactx сам проверяет "
@@ -201,7 +201,7 @@ inline const std::vector<Page>& pages() {
                  "cd my-app && reactx update && reactx build"},
                 {"Обновить проект", "reactx update находит новейший релиз и записывает его в reactx.json; reactx build скачивает его. "
                                "Вручную — поменяйте rev на новый тег.",
-                 "reactx update\n# или в reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.15.0\" }"},
+                 "reactx update\n# или в reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.16.0\" }"},
             },
         },
         {
@@ -475,6 +475,27 @@ inline const std::vector<Page>& pages() {
                  "std::vector<Element> rows;\n"
                  "for (int i = list.first; i < list.last; ++i) rows.push_back(h(Line, {.n = i}));\n"
                  "return list.view(std::move(rows));"},
+                {"Формы: useForm", "ui::useForm хранит значения формы в вашей структуре и проверяет их вашей функцией. "
+                                   "form.set(\"name\", &T::name) — onChange для поля; form.error(\"name\") — его сообщение, "
+                                   "оно видно после изменения поля или попытки отправить. submit() вызывает onSubmit, только "
+                                   "когда ошибок нет. У каждого поля есть .error.",
+                 "struct Signup { std::string name; bool agree = false; };\n"
+                 "auto form = ui::useForm<Signup>({.validate = [](const Signup& s) {\n"
+                 "                                     ui::FormErrors e;\n"
+                 "                                     if (s.name.empty()) e[\"name\"] = \"Обязательно\";\n"
+                 "                                     return e;\n"
+                 "                                 },\n"
+                 "                                 .onSubmit = [](const Signup& s) { save(s); }});\n"
+                 "ui::input({.value = form.values.name, .onChange = form.set(\"name\", &Signup::name),\n"
+                 "           .label = \"Имя\", .error = form.error(\"name\")})\n"
+                 "ui::button({.label = \"Зарегистрироваться\", .onClick = form.submit})"},
+                {"Ещё поля", "textarea — несколько строк (в терминале пока одна), radioGroup — когда все варианты должны быть "
+                             "на виду, slider — число в диапазоне, progress — сколько уже сделано.",
+                 "ui::textarea({.value = note, .onChange = setNoteFn, .label = \"Комментарий\", .rows = 3})\n"
+                 "ui::radioGroup({.label = \"Тариф\", .value = plan, .options = {{\"free\", \"Free\"}, {\"pro\", \"Pro\"}},\n"
+                 "                .onChange = setPlanFn, .row = true})\n"
+                 "ui::slider({.label = \"Места\", .value = seats, .min = 1, .max = 10, .onChange = setSeatsFn})\n"
+                 "ui::progress({.value = done, .max = total, .label = \"Загрузка\"})"},
                 {"Таблицы", "ui::table выравнивает колонки в браузере и в терминале. Строки ваши: сортируйте их в onSort, "
                             "заголовок покажет стрелку. Строки с onSelect откликаются на клик и Enter. Для длинных таблиц "
                             "передайте useVirtualList в .list и стройте только строки на экране.",

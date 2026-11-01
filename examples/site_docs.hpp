@@ -489,6 +489,15 @@ inline const std::vector<Page>& pages() {
                  "if (todos.loading) return h(\"p\", {}, {\"Загрузка...\"});\n"
                  "if (!todos.ok()) return h(\"p\", {}, {todos.errorText()});\n"
                  "for (const auto& t : todos.json().asArray()) ..."},
+                {"Живые данные: useWebSocket", "Сообщения от сервера сразу, без опроса (reactx/websocket.hpp). Обработчики "
+                                               "работают в UI-потоке; после обрыва подключается снова. В браузере относительный "
+                                               "URL идёт на хост страницы (reactx dev --proxy его пропускает); терминальным "
+                                               "приложениям нужен ws://host:port/path.",
+                 "auto live = useWebSocket(\"/api/ws\", {\n"
+                 "    .onMessage = [dispatch](const std::string& text) { dispatch(parse(text)); },\n"
+                 "});\n"
+                 "if (!live.open()) return h(\"p\", {}, {\"подключаемся... \" + live.error});\n"
+                 "live.send(R\"({\"text\":\"привет\"})\");"},
                 {"В терминале", "Терминальные приложения тоже ходят в сеть: нужен полный URL с http:// (HTTPS нет). Запрос идёт "
                                 "в своём потоке, ответ приходит в потоке интерфейса — TerminalApp перерисует экран сам.",
                  "auto weather = useFetch(\"http://127.0.0.1:8091/api/todos\");"},
@@ -537,7 +546,12 @@ inline const std::vector<Page>& pages() {
                  "./build/debug/reactx_serve build/web --port 8090\n"
                  "./build/debug/reactx_serve build/pages/site --base /ReactX/ --not-found 404.html\n"
                  "./build/debug/api_server build/web/app --port 8091 --data todos.json"},
-                {"Прокси", "server.proxy пересылает запросы под префиксом на другой сервер; rx::net::forward отправляет один "
+                {"WebSocket", "server.webSocket(path, обработчики): обработчики работают в потоке соединения (общие данные — "
+                              "под мьютексом); server.webSockets(path) — открытые соединения для рассылки.",
+                 "server.webSocket(\"/api/ws\", {.onMessage = [&server](const rx::net::WebSocketPtr&, const std::string& text) {\n"
+                 "    for (const auto& peer : server.webSockets(\"/api/ws\")) peer->send(text);\n"
+                 "}});"},
+                {"Прокси", "server.proxy пересылает запросы под префиксом на другой сервер (и WebSocket тоже); rx::net::forward отправляет один "
                            "запрос и возвращает std::expected<Response, HttpError> (502 — не дозвонились, 504 — не ответил).",
                  "server.proxy(\"/api\", *rx::net::parseUpstream(\"http://127.0.0.1:5000\"));\n\n"
                  "auto reply = rx::net::forward(req, {.host = \"127.0.0.1\", .port = 5000});\n"

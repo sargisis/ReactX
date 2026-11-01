@@ -164,7 +164,7 @@ int main() { mountDom(h(App)); }
 | **Терминал** | ANSI-отрисовка только изменённых строк, Flexbox на Yoga, рамки, цвета, фокус, Unicode/ASCII по локали |
 | **Браузер** | WebAssembly + DOM, управляемые поля, SVG, делегирование событий |
 | **Компоненты** | `rx::ui`: кнопки, поля, флажки, вкладки, модальные окна, списки — с темой |
-| **Приложения** | роутер (History API), `useFetch`, JSON с рефлексией, HTTP-сервер на C++, REST API |
+| **Приложения** | роутер (History API), `useFetch`, `useWebSocket`, JSON с рефлексией, HTTP-сервер на C++ (с WebSocket), REST API |
 | **Инструменты** | CLI `reactx` (`new`, `dev`, `build`, `add`, `remove`, `update`), модуль `import reactx;`, `TextRenderer` для тестов |
 
 ## Справочник
@@ -393,6 +393,18 @@ req.cancel();                                    // колбэк не вызов
 
 `setLocalFetch` — «сервер внутри приложения»: запросы сначала идут в обработчик на C++, сеть не нужна (так работают статические сайты без бэкенда и тесты API).
 
+**Живые данные** ([`reactx/websocket.hpp`](include/reactx/websocket.hpp)): WebSocket вместо опроса — сообщения приходят сразу.
+
+```cpp
+auto live = useWebSocket("/ws/chat", {
+    .onMessage = [dispatch](const std::string& text) { dispatch(parse(text)); },  // в UI-потоке
+});
+if (!live.open()) ...live.error;                 // Connecting / Open / Closed
+live.send(R"({"text":"привет"})");               // false, если не открыто
+```
+
+Подключается при монтировании, закрывается при размонтировании и переподключается после обрыва (с растущей задержкой). В браузере относительный URL становится `ws://`/`wss://` на хосте страницы, а `reactx dev --proxy` пропускает WebSocket; в терминальной сборке нужен `ws://host:port/path`. Только текстовые сообщения.
+
 **Хранилище**: `rx::storageRead(key)` (`std::expected<std::optional<std::string>, std::string>`: нет ключа — `std::nullopt`, ошибка — ошибка), `storageWrite`, `storageRemove` — localStorage в браузере, где запись может не пройти (`QuotaExceededError`, приватный режим). `useLocalStorage("draft", std::string(), onError)` вызывает `onError(причина)`, если сохранить не удалось.
 
 Работа со сторонними бэкендами (например, Python / Flask, Node.js, Go) поддерживается из коробки через `reactx dev --proxy http://127.0.0.1:5000` (проксирует `/api/*` на ваш сервер). Подробнее о связке и текущих ограничениях — в [разделе документации «Бэкенд и Flask»](https://sargisis.github.io/ReactX/#backend?lang=ru).
@@ -437,7 +449,15 @@ server.run();   // до Ctrl+C
 
 Отдаёт файлы с правильными типами (`.wasm` → `application/wasm`), не выпускает за пределы папки (`/../секрет` → 403), `--spa` отдаёт `index.html` для путей роутера, `--base` и `--not-found` повторяют GitHub Pages. Это сервер для разработки (`127.0.0.1`), не для открытого интернета: нет HTTPS, keep-alive и защиты от перегрузки.
 
-**Прокси на другой бэкенд** (как `server.proxy` в Vite): запросы под префиксом уходят на другой сервер, ответ возвращается как есть — статус, заголовки (в том числе несколько `Set-Cookie`), тело; путь не раскодируется по дороге.
+**WebSocket**: `server.webSocket(path, {.onOpen, .onMessage, .onClose})`; `server.webSockets(path)` — открытые соединения для рассылки. Обработчики работают в потоке соединения (общие данные — под мьютексом); `ws->send(text)` и `ws->close()` можно вызывать из любого потока.
+
+```cpp
+server.webSocket("/ws/chat", {.onMessage = [&server](const rx::net::WebSocketPtr&, const std::string& text) {
+    for (const auto& peer : server.webSockets("/ws/chat")) peer->send(text);
+}});
+```
+
+**Прокси на другой бэкенд** (как `server.proxy` в Vite; WebSocket под префиксом тоже): запросы под префиксом уходят на другой сервер, ответ возвращается как есть — статус, заголовки (в том числе несколько `Set-Cookie`), тело; путь не раскодируется по дороге.
 
 ```cpp
 server.proxy("/api", *rx::net::parseUpstream("http://127.0.0.1:5000"));   // /api и /api/...

@@ -22,6 +22,7 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 
+#include "../src/ws_frame.hpp"
 #include "reactx/http.hpp"
 #include "reactx/json.hpp"
 #include "reactx/version.hpp"
@@ -283,6 +284,39 @@ std::string httpGet(int port, const std::string& path) {
     return end == std::string::npos ? std::string{} : raw.substr(end + 4);
 }
 
+// A WebSocket through `port`: the echo of "hi", or "" if anything fails.
+std::string webSocketEcho(int port, const std::string& path) {
+    int fd = ::socket(AF_INET, SOCK_STREAM, 0);
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(static_cast<std::uint16_t>(port));
+    ::inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
+    timeval timeout{.tv_sec = 5, .tv_usec = 0};
+    ::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout);
+    std::string got;
+    if (::connect(fd, reinterpret_cast<sockaddr*>(&addr), sizeof addr) == 0) {
+        std::string req = "GET " + path + " HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                          "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n" +
+                          rx::detail::ws::encode(rx::detail::ws::Text, "hi", true);
+        ::send(fd, req.data(), req.size(), MSG_NOSIGNAL);
+        std::string raw;
+        char buf[8192];
+        for (ssize_t n; (n = ::recv(fd, buf, sizeof buf, 0)) > 0;) {
+            raw.append(buf, static_cast<std::size_t>(n));
+            auto end = raw.find("\r\n\r\n");
+            if (end == std::string::npos) continue;
+            std::string frames = raw.substr(end + 4);
+            int error = 0;
+            if (auto f = rx::detail::ws::take(frames, false, error)) {
+                got = raw.starts_with("HTTP/1.1 101") ? f->payload : "";
+                break;
+            }
+        }
+    }
+    ::close(fd);
+    return got;
+}
+
 template <class F>
 bool waitFor(F ready, std::chrono::seconds limit) {
     auto until = std::chrono::steady_clock::now() + limit;
@@ -350,6 +384,7 @@ void endToEnd(const fs::path& tmp) {
     std::cout << "e2e: dev serves, proxies /api, rebuilds after an edit, survives a broken edit\n";
     rx::net::HttpServer backend("127.0.0.1", 0);  // the app's own API server (Flask, ...)
     backend.get("/api/ping", [](const rx::net::Request& q) { return rx::net::Response::text("pong " + q.query); });
+    backend.webSocket("/api/ws", {.onMessage = [](const rx::net::WebSocketPtr& w, const std::string& m) { w->send("echo " + m); }});
     backend.start();
     std::jthread backendThread([&] { backend.run(); });
     int port = 18000 + ::getpid() % 2000;
@@ -368,6 +403,7 @@ void endToEnd(const fs::path& tmp) {
     CHECK(contains(httpGet(port, "/"), "__reactx/version"));        // the reload script, added by dev
     CHECK(contains(httpGet(port, "/some/route"), "__reactx/version"));  // also on SPA routes
     CHECK(httpGet(port, "/api/ping?x=1") == "pong x=1");               // --proxy
+    CHECK(webSocketEcho(port, "/api/ws") == "echo hi");                // --proxy passes WebSockets through
     CHECK(contains(httpGet(port, "/some/route"), "<div id=app>") ||  // SPA fallback (minified HTML)
           contains(httpGet(port, "/some/route"), "<div id=\"app\">"));
 

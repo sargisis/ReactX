@@ -1,9 +1,11 @@
 // HTTP/1.1 server on POSIX sockets. One thread per connection,
-// "Connection: close" after each response. Also a small client for proxying.
+// "Connection: close" after each response; a WebSocket keeps its thread
+// until it closes. Also a small client for proxying.
 #include "reactx/http.hpp"
 
 #include "reactx/contract.hpp"
 #include "reactx/parse.hpp"
+#include "ws_frame.hpp"
 
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -449,6 +451,7 @@ void HttpServer::proxy(std::string prefix, Upstream upstream) {
     REACTX_PRE(prefix.starts_with('/'));
     REACTX_PRE(!upstream.host.empty());
     while (prefix.size() > 1 && prefix.back() == '/') prefix.pop_back();
+    proxies_.emplace_back(prefix, upstream);
     Handler handler = [upstream = std::move(upstream)](const Request& req) {
         auto reply = forward(req, upstream);
         return reply ? std::move(*reply) : Response::text("proxy: " + reply.error().message + "\n", reply.error().status);
@@ -457,6 +460,20 @@ void HttpServer::proxy(std::string prefix, Upstream upstream) {
         route(method, prefix, handler);
         route(method, prefix == "/" ? "/*" : prefix + "/*", handler);
     }
+}
+
+void HttpServer::webSocket(std::string path, WebSocketHandlers handlers) {
+    REACTX_PRE(path.starts_with('/'));
+    wsRoutes_[std::move(path)] = std::move(handlers);
+}
+
+std::vector<WebSocketPtr> HttpServer::webSockets(const std::string& path) const {
+    std::scoped_lock lock(wsMutex_);
+    std::vector<WebSocketPtr> out;
+    if (auto it = wsOpen_.find(path); it != wsOpen_.end())
+        for (const auto& weak : it->second)
+            if (auto ws = weak.lock(); ws && ws->isOpen()) out.push_back(std::move(ws));
+    return out;
 }
 
 void HttpServer::serveDirectory(std::filesystem::path root, bool spaFallback) {
@@ -549,6 +566,17 @@ void HttpServer::serveConnection(int fd) {
         method = req->method;
         path = req->path;
         headOnly = req->method == "HEAD";
+        if (lower(req->header("upgrade")) == "websocket") {  // the connection becomes a WebSocket
+            if (auto route = wsRoutes_.find(req->path); route != wsRoutes_.end()) {
+                serveWebSocket(fd, std::move(*req), data.substr(headEnd + 4), route->second);
+                return;
+            }
+            for (const auto& [prefix, upstream] : proxies_)
+                if (prefix == "/" || req->path == prefix || req->path.starts_with(prefix + "/")) {
+                    tunnel(fd, upstream, data);
+                    return;
+                }
+        }
         if (auto length = bodyLength(*req, kMaxBody); !length) {
             response = Response::text(length.error().message + "\n", length.error().status);
         } else {
@@ -576,6 +604,158 @@ void HttpServer::serveConnection(int fd) {
         std::println("{} {} {} {}", method, path, response.status, response.body.size());
         std::fflush(stdout);
     }
+}
+
+// ---- WebSocket ----
+
+bool WebSocket::sendFrame(std::uint8_t opcode, std::string_view payload) {
+    std::scoped_lock lock(mutex_);
+    return fd_ >= 0 && sendAll(fd_, detail::ws::encode(static_cast<detail::ws::Opcode>(opcode), payload, false));
+}
+
+bool WebSocket::send(std::string_view text) { return open_.load() && sendFrame(detail::ws::Text, text); }
+
+void WebSocket::close(int code, std::string_view reason) {
+    if (open_.exchange(false)) sendFrame(detail::ws::Close, detail::ws::closePayload(code, reason));
+}
+
+void WebSocket::shut() {
+    std::scoped_lock lock(mutex_);
+    open_ = false;
+    if (fd_ < 0) return;
+    ::shutdown(fd_, SHUT_RDWR);
+    ::close(fd_);
+    fd_ = -1;
+}
+
+void HttpServer::serveWebSocket(int fd, Request req, std::string rest, const WebSocketHandlers& handlers) {
+    std::string path = req.path;
+    std::string key = req.header("sec-websocket-key");
+    if (key.empty() || req.header("sec-websocket-version") != "13") {
+        sendAll(fd, serializeResponse(Response::text("bad WebSocket handshake\n", 400), false));
+        ::close(fd);
+        return;
+    }
+    sendAll(fd, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                "Sec-WebSocket-Accept: " + detail::ws::acceptKey(key) + "\r\n\r\n");
+    timeval blocking{};  // no read timeout: poll() below wakes up to check stop()
+    ::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &blocking, sizeof blocking);
+
+    auto ws = std::make_shared<WebSocket>(fd, ++wsIds_, std::move(req));
+    {
+        std::scoped_lock lock(wsMutex_);
+        auto& list = wsOpen_[path];
+        std::erase_if(list, [](const std::weak_ptr<WebSocket>& w) { return w.expired(); });
+        list.push_back(ws);
+    }
+    auto log = [&](std::string_view what) {
+        if (!logging_) return;
+        std::scoped_lock lock(logMutex);
+        std::println("WS {} {} #{}", path, what, ws->id());
+        std::fflush(stdout);
+    };
+    // A handler that throws closes its connection (1011), not the server.
+    auto guarded = [&](auto&& fn) {
+        try {
+            fn();
+        } catch (const std::exception& e) {
+            log(std::string("handler threw: ") + e.what());
+            ws->close(1011, "server error");
+        }
+    };
+    log("open");
+    if (handlers.onOpen) guarded([&] { handlers.onOpen(ws); });
+
+    detail::ws::Reader reader;
+    std::string buffer = std::move(rest);
+    char buf[16384];
+    int code = 1006;  // dropped without a close frame
+    for (bool done = false; !done;) {
+        int error = 0;
+        while (!done) {
+            auto frame = detail::ws::take(buffer, /*expectMasked=*/true, error);
+            if (!frame) break;
+            auto event = reader.feed(std::move(*frame));
+            using Kind = detail::ws::Reader::Event::Kind;
+            if (event.kind == Kind::Message && handlers.onMessage && ws->isOpen())
+                guarded([&] { handlers.onMessage(ws, event.data); });
+            else if (event.kind == Kind::Ping)
+                ws->sendFrame(detail::ws::Pong, event.data);
+            else if (event.kind == Kind::Close) {
+                code = event.code == 1005 ? 1000 : event.code;
+                if (ws->open_.exchange(false)) ws->sendFrame(detail::ws::Close, detail::ws::closePayload(code));
+                done = true;
+            } else if (event.kind == Kind::Error) {
+                error = event.code;
+            }
+            if (error) break;
+        }
+        if (done) break;
+        if (error) {
+            code = error;
+            ws->close(error);
+            break;
+        }
+        if (!running_) {
+            code = 1001;
+            ws->close(1001, "server stopping");
+            break;
+        }
+        pollfd p{.fd = fd, .events = POLLIN, .revents = 0};
+        int ready = ::poll(&p, 1, 200);
+        if (ready == 0 || (ready < 0 && errno == EINTR)) continue;
+        ssize_t n = ::recv(fd, buf, sizeof buf, 0);
+        if (n <= 0) break;
+        buffer.append(buf, static_cast<std::size_t>(n));
+    }
+    ws->shut();
+    {
+        std::scoped_lock lock(wsMutex_);
+        std::erase_if(wsOpen_[path], [&](const std::weak_ptr<WebSocket>& w) { return w.expired() || w.lock() == ws; });
+    }
+    log("closed " + std::to_string(code));
+    if (handlers.onClose) guarded([&] { handlers.onClose(ws, code); });
+}
+
+// A WebSocket for a proxied path: the upgrade goes to the upstream as it
+// came, then bytes flow both ways until one side closes.
+void HttpServer::tunnel(int fd, const Upstream& up, std::string_view raw) {
+    auto fail = [fd](int status, const std::string& message) {
+        sendAll(fd, serializeResponse(Response::text("proxy: " + message + "\n", status), false));
+        ::close(fd);
+    };
+    auto addr = resolve(up.host);
+    if (!addr) return fail(502, addr.error());
+    Socket upstream(::socket(AF_INET, SOCK_STREAM, 0));
+    sockaddr_in to{};
+    to.sin_family = AF_INET;
+    to.sin_port = htons(static_cast<std::uint16_t>(up.port));
+    to.sin_addr = *addr;
+    if (upstream.fd < 0 || ::connect(upstream.fd, reinterpret_cast<sockaddr*>(&to), sizeof to) != 0)
+        return fail(502, std::format("can't connect to {}:{} ({})", up.host, up.port, std::strerror(errno)));
+    std::string head(raw);
+    if (!up.path.empty())  // "GET /ws" -> "GET /v1/ws"
+        if (auto space = head.find(' '); space != std::string::npos) head.insert(space + 1, up.path);
+    if (!sendAll(upstream.fd, head)) return fail(502, "can't send the upgrade upstream");
+    timeval blocking{};
+    ::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &blocking, sizeof blocking);
+
+    char buf[16384];
+    while (running_) {
+        pollfd p[2] = {{.fd = fd, .events = POLLIN, .revents = 0}, {.fd = upstream.fd, .events = POLLIN, .revents = 0}};
+        int ready = ::poll(p, 2, 200);
+        if (ready == 0 || (ready < 0 && errno == EINTR)) continue;
+        if (ready < 0) break;
+        bool open = true;
+        for (int i = 0; i < 2 && open; ++i) {
+            if (!(p[i].revents & (POLLIN | POLLHUP | POLLERR))) continue;
+            ssize_t n = ::recv(p[i].fd, buf, sizeof buf, 0);
+            open = n > 0 && sendAll(p[1 - i].fd, std::string_view(buf, static_cast<std::size_t>(n)));
+        }
+        if (!open) break;
+    }
+    ::shutdown(fd, SHUT_RDWR);
+    ::close(fd);
 }
 
 Response HttpServer::handle(const Request& req) const {

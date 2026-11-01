@@ -440,6 +440,15 @@ inline const std::vector<Page>& pagesEn() {
                  "if (todos.loading) return h(\"p\", {}, {\"Loading...\"});\n"
                  "if (!todos.ok()) return h(\"p\", {}, {todos.errorText()});\n"
                  "for (const auto& t : todos.json().asArray()) ..."},
+                {"Live data: useWebSocket", "Messages from the server as they happen, without polling (reactx/websocket.hpp). "
+                                            "The handlers run on the UI thread; it reconnects after a drop. In the browser a "
+                                            "relative URL goes to the page's host (reactx dev --proxy passes it through); "
+                                            "terminal apps give ws://host:port/path.",
+                 "auto live = useWebSocket(\"/api/ws\", {\n"
+                 "    .onMessage = [dispatch](const std::string& text) { dispatch(parse(text)); },\n"
+                 "});\n"
+                 "if (!live.open()) return h(\"p\", {}, {\"connecting... \" + live.error});\n"
+                 "live.send(R\"({\"text\":\"hi\"})\");"},
                 {"fetch", "Any method and body; the answer comes to a callback. rx::urlEncode builds query strings.",
                  "fetch({.method = \"POST\", .url = \"/api/todos\", .body = json::object({{\"title\", \"Milk\"}}).dump()},\n"
                  "      [](const FetchResponse& r) { if (r.ok()) ... });\n\n"
@@ -480,7 +489,12 @@ inline const std::vector<Page>& pagesEn() {
                  "});\n"
                  "server.serveDirectory(\"build/web/dist\", /*spaFallback=*/true);\n"
                  "server.start();\nserver.run();"},
-                {"Proxy", "server.proxy forwards a prefix to another server (this is what reactx dev --proxy uses).",
+                {"WebSocket", "server.webSocket(path, handlers): the handlers run on the connection's thread (guard shared "
+                              "data with a mutex); server.webSockets(path) lists open connections to broadcast to.",
+                 "server.webSocket(\"/api/ws\", {.onMessage = [&server](const rx::net::WebSocketPtr&, const std::string& text) {\n"
+                 "    for (const auto& peer : server.webSockets(\"/api/ws\")) peer->send(text);\n"
+                 "}});"},
+                {"Proxy", "server.proxy forwards a prefix to another server, WebSockets too (this is what reactx dev --proxy uses).",
                  "server.proxy(\"/api\", *rx::net::parseUpstream(\"http://127.0.0.1:5000\"));"},
                 {"Important", "It is a server for development on your machine: no HTTPS, no protection against heavy load. "
                               "Don't put it on the open internet.", ""},

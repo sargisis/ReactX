@@ -7,6 +7,7 @@
 #include <string>
 
 #include "reactx/dom.hpp"
+#include "reactx/websocket.hpp"
 #include "reactx/reactx.hpp"
 
 using namespace rx;
@@ -65,6 +66,23 @@ Element App(const Props&) {
     });
 }
 
+// useWebSocket in the browser: the page's WebSocket (faked in fake_dom.js).
+Element Live(const Props&) {
+    auto [messages, setMessages] = useState(std::string{});
+    auto socket = useWebSocket("/ws/chat", {
+        .onMessage = [setMessages](const std::string& m) { setMessages([m](const std::string& all) { return all + "[" + m + "]"; }); },
+        .reconnect = false,
+    });
+    auto send = socket.send;
+    auto again = socket.reconnect;
+    return h("div", {}, {
+        h("p", {{"id", "status"}}, {socket.open() ? "open" : socket.status == WebSocketStatus::Connecting ? "connecting" : "closed:" + socket.error}),
+        h("p", {{"id", "messages"}}, {messages}),
+        h("button", {{"id", "wsend"}, {"onClick", [send] { send("ping"); }}}, {"send"}),
+        h("button", {{"id", "again"}, {"onClick", [again] { again(); }}}, {"again"}),
+    });
+}
+
 }  // namespace
 
 int main() {
@@ -112,6 +130,28 @@ int main() {
     CHECK(js("rxTest.ns('label')") == svg);  // "svg:text" -> <text> in SVG
     CHECK(js("rxTest.tag('label')") == "TEXT");
     CHECK(js("rxTest.ns('field')") == "http://www.w3.org/1999/xhtml");
+
+    std::cout << "useWebSocket: the page's WebSocket\n";
+    Root& live = mountDom(h(Live));  // replaces the app above
+    auto text = [](const char* id) { return js(std::string("document.getElementById('") + id + "').textContent"); };
+    CHECK(js("rxTest.ws.count()") == "1");
+    CHECK(js("rxTest.ws.url(0)") == "ws://localhost/ws/chat");  // relative: on the page's host, ws://
+    CHECK(text("status") == "connecting");
+    js("rxTest.ws.open(0)");
+    CHECK(text("status") == "open");
+    js("rxTest.ws.message(0, 'hi')");
+    js("rxTest.ws.message(0, 'there')");
+    CHECK(text("messages") == "[hi][there]");
+    js("rxTest.click('wsend')");
+    CHECK(js("rxTest.ws.sent(0)") == "ping");
+    js("rxTest.ws.drop(0, 1006)");
+    CHECK(text("status") == "closed:closed (1006)");
+    js("rxTest.click('wsend')");
+    CHECK(js("rxTest.ws.sent(0)") == "ping");  // not sent while closed
+    js("rxTest.click('again')");               // reconnect by hand
+    CHECK(js("rxTest.ws.count()") == "2" && text("status") == "connecting");
+    live.render(h("p", {}, {"gone"}));         // unmount: the socket is closed
+    CHECK(js("rxTest.ws.closedWith(1)") == "1000");
 
     std::cout << (failures ? "FAILED: " + std::to_string(failures) : std::string("OK, all tests passed")) << '\n';
     return failures ? 1 : 0;

@@ -176,7 +176,7 @@ For a terminal: `#include "reactx/terminal.hpp"` and `TerminalApp().run(h(App))`
 | **Terminal** | ANSI drawing of changed lines only, Flexbox on Yoga, borders, colors, focus, Unicode/ASCII by locale |
 | **Browser** | WebAssembly + DOM, controlled inputs, SVG, event delegation |
 | **Components** | `rx::ui`: buttons, inputs, checkboxes, tabs, modals, lists — themed |
-| **Apps** | a router (History API), `useFetch`, JSON with reflection, an HTTP server in C++, a REST API |
+| **Apps** | a router (History API), `useFetch`, `useWebSocket`, JSON with reflection, an HTTP server in C++ (with WebSockets), a REST API |
 | **Tools** | the `reactx` CLI (`new`, `dev`, `build`, `add`, `remove`, `update`), the `import reactx;` module, `TextRenderer` for tests |
 
 ## Reference
@@ -405,6 +405,18 @@ In the terminal build `fetch` and `useFetch` use the network too (since v0.7): g
 
 `setLocalFetch` is a "server inside the app": requests go to a C++ handler first, no network needed (static sites without a backend, API tests).
 
+**Live data** ([`reactx/websocket.hpp`](include/reactx/websocket.hpp)): a WebSocket instead of polling — messages arrive as they happen.
+
+```cpp
+auto live = useWebSocket("/ws/chat", {
+    .onMessage = [dispatch](const std::string& text) { dispatch(parse(text)); },  // on the UI thread
+});
+if (!live.open()) ...live.error;                 // Connecting / Open / Closed
+live.send(R"({"text":"hi"})");                   // false unless open
+```
+
+It connects on mount, closes on unmount and reconnects after a drop (with a growing delay). In the browser a relative URL becomes `ws://`/`wss://` on the page's host and `reactx dev --proxy` passes WebSockets through; in the terminal build give `ws://host:port/path`. Text messages only.
+
 **Storage**: `rx::storageRead(key)` (`std::expected<std::optional<std::string>, std::string>`: no key is `std::nullopt`, an error is an error), `storageWrite`, `storageRemove` — localStorage in the browser, where writes can fail (`QuotaExceededError`, private mode). `useLocalStorage("draft", std::string(), onError)` calls `onError(reason)` when saving fails.
 
 Working with an external backend (e.g. Python / Flask, Node.js, Go) is supported out of the box via `reactx dev --proxy http://127.0.0.1:5000` (forwarding `/api/*` to your API server). See the [Backend and Flask documentation](https://sargisis.github.io/ReactX/#backend) for integration guides and current limitations.
@@ -449,7 +461,15 @@ server.run();   // until Ctrl+C
 
 It serves files with the right types (`.wasm` → `application/wasm`), never outside the folder (`/../secret` → 403); `--spa` answers router paths with `index.html`, `--base` and `--not-found` mimic GitHub Pages. It is a development server (`127.0.0.1`), not for the open internet: no HTTPS, keep-alive or overload protection.
 
-**A proxy to another backend** (like Vite's `server.proxy`): requests under a prefix go to another server and its answer comes back as is — status, headers (several `Set-Cookie` too), body; the path isn't decoded on the way.
+**WebSockets**: `server.webSocket(path, {.onOpen, .onMessage, .onClose})`; `server.webSockets(path)` lists the open connections to broadcast to. The handlers run on the connection's thread (guard shared data with a mutex); `ws->send(text)` and `ws->close()` work from any thread.
+
+```cpp
+server.webSocket("/ws/chat", {.onMessage = [&server](const rx::net::WebSocketPtr&, const std::string& text) {
+    for (const auto& peer : server.webSockets("/ws/chat")) peer->send(text);
+}});
+```
+
+**A proxy to another backend** (like Vite's `server.proxy`; WebSockets under the prefix too): requests under a prefix go to another server and its answer comes back as is — status, headers (several `Set-Cookie` too), body; the path isn't decoded on the way.
 
 ```cpp
 server.proxy("/api", *rx::net::parseUpstream("http://127.0.0.1:5000"));   // /api and /api/...

@@ -17,11 +17,15 @@
 
 #include <atomic>
 #include <cstddef>
+#include <atomic>
+#include <cstdint>
 #include <expected>
 #include <filesystem>
 #include <flat_map>
 #include <functional>
 #include <map>
+#include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -71,6 +75,43 @@ struct HttpError {
 
 using Handler = std::function<Response(const Request&)>;
 
+// One open WebSocket connection on the server (HttpServer::webSocket).
+// send() and close() may be called from any thread: keep the pointer to
+// talk to the client later (a chat room's set of members).
+class WebSocket {
+public:
+    WebSocket(int fd, int id, Request request) : fd_(fd), id_(id), request_(std::move(request)) {}
+    WebSocket(const WebSocket&) = delete("one connection");
+
+    // A text message. False if the connection is closed.
+    bool send(std::string_view text);
+    // Starts closing (1000 = normal); onClose follows when the client answers.
+    void close(int code = 1000, std::string_view reason = {});
+    bool isOpen() const { return open_.load(); }
+    // Unique on this server; the request is the HTTP upgrade (path, query, headers).
+    int id() const { return id_; }
+    const Request& request() const { return request_; }
+
+private:
+    friend class HttpServer;
+    bool sendFrame(std::uint8_t opcode, std::string_view payload);
+    void shut();  // the socket is done (the server's thread calls it)
+    int fd_;
+    int id_;
+    Request request_;
+    std::mutex mutex_;  // one writer at a time; guards fd_
+    std::atomic<bool> open_{true};
+};
+using WebSocketPtr = std::shared_ptr<WebSocket>;
+
+// What a WebSocket route does. The handlers run on the connection's own
+// thread (the server's, not a UI thread): guard shared data with a mutex.
+struct WebSocketHandlers {
+    std::function<void(const WebSocketPtr&)> onOpen{};
+    std::function<void(const WebSocketPtr&, const std::string& message)> onMessage{};
+    std::function<void(const WebSocketPtr&, int code)> onClose{};  // 1000 normal, 1001 going away, 1006 dropped, ...
+};
+
 // Another HTTP server to forward requests to: "http://127.0.0.1:5000" or
 // "http://api:8000/v1" (the path is put in front of the forwarded one).
 struct Upstream {
@@ -110,7 +151,19 @@ public:
     // Forward every request under `prefix` ("/api": "/api" and "/api/...")
     // to another server, like Vite's server.proxy:
     //   server.proxy("/api", *parseUpstream("http://127.0.0.1:5000"));
+    // WebSocket upgrades under the prefix are passed through too.
     void proxy(std::string prefix, Upstream upstream);
+
+    // WebSocket at `path` (exact; browsers connect with new WebSocket(url),
+    // ReactX apps with useWebSocket):
+    //   server.webSocket("/ws/chat", {
+    //       .onMessage = [&](const WebSocketPtr&, const std::string& text) {
+    //           for (const auto& peer : server.webSockets("/ws/chat")) peer->send(text);
+    //       }});
+    // Text frames in and out; pings are answered; messages over 1 MB close it.
+    void webSocket(std::string path, WebSocketHandlers handlers);
+    // The connections open on `path` now (to broadcast).
+    std::vector<WebSocketPtr> webSockets(const std::string& path) const;
 
     // Serve files from `root` for GET and HEAD ("/" -> index.html, "/docs/faq"
     // -> docs/faq.html if there is one, like GitHub Pages).
@@ -165,6 +218,13 @@ private:
     std::string prefix_;
     std::filesystem::path notFound_;
     FileHook onFile_;
+    std::vector<std::pair<std::string, Upstream>> proxies_;  // also for WebSocket upgrades
+    std::map<std::string, WebSocketHandlers> wsRoutes_;
+    mutable std::mutex wsMutex_;
+    std::map<std::string, std::vector<std::weak_ptr<WebSocket>>> wsOpen_;
+    std::atomic<int> wsIds_{0};
+    void serveWebSocket(int fd, Request request, std::string rest, const WebSocketHandlers& handlers);
+    void tunnel(int fd, const Upstream& upstream, std::string_view head);
 };
 
 // Content type for a file extension (".wasm" -> "application/wasm").

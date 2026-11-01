@@ -115,6 +115,10 @@
       if (sel === "base[href]") return head.find(e => e.tagName === "BASE" && e.getAttribute("href") !== null);
       return sel === "#app" ? app : app.find(e => "#" + e.getAttribute("id") === sel);
     },
+    get baseURI() {
+      const b = head.find(e => e.tagName === "BASE" && e.getAttribute("href") !== null);
+      return "http://localhost" + (b ? b.getAttribute("href") : location.pathname);
+    },
     createElement(tag) { return new Element(tag); },
     createElementNS(ns, tag) { return new Element(tag, ns); },
     createTextNode(text) { return new Text(text); },
@@ -127,6 +131,14 @@
     scrollTo() {},
   };
   globalThis.location = { pathname: "/", search: "" };
+
+  // WebSocket: the test opens, feeds and drops each socket (rxTest.ws).
+  const sockets = [];
+  globalThis.WebSocket = class {
+    constructor(url) { this.url = url; this.readyState = 0; this.sent = []; sockets.push(this); }
+    send(text) { this.sent.push(text); }
+    close(code) { this.readyState = 3; this.closedWith = code; }
+  };
   const entries = [{ pathname: "/", search: "" }];
   let current = 0;
   const setLocation = (url) => {
@@ -194,6 +206,15 @@
   const nth = (list, i, what) => { const el = list[i || 0]; if (!el) throw new Error("not found: " + what); return el; };
   const byText = (text) => nth(all(e => e.textContent === text).reverse(), 0, "text " + text);  // deepest match
   globalThis.rxTest = {
+    ws: {
+      count: () => String(sockets.length),
+      url: (i) => sockets[i].url,
+      open: (i) => { sockets[i].readyState = 1; sockets[i].onopen(); },
+      message: (i, text) => sockets[i].onmessage({ data: text }),
+      drop: (i, code) => { sockets[i].readyState = 3; sockets[i].onclose({ code, reason: "" }); },
+      sent: (i) => sockets[i].sent.join("|"),
+      closedWith: (i) => String(sockets[i].closedWith),
+    },
     // Like GitHub Pages: <base href="/ReactX/"> and the page opened at `path`.
     setBase: (href, path) => {
       const b = new Element("base");

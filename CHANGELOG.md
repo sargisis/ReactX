@@ -6,6 +6,11 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Added
+
+- **`useWebSocket`** (`reactx/websocket.hpp`): live data without polling, in the browser (the page's WebSocket; relative URLs go to the page's host) and in the terminal (`ws://`, its own thread, events on the UI thread). Status, `send`, reconnect after a drop with a growing delay, handlers that may set state.
+- **WebSockets in `HttpServer`**: `server.webSocket(path, {.onOpen, .onMessage, .onClose})`, `server.webSockets(path)` to broadcast, `WebSocketPtr` with `send` / `close` from any thread. Text messages, pings answered, 1 MB limit. `server.proxy` (and so `reactx dev --proxy`) passes WebSockets through.
+
 ## [0.12.0] — 2026-11-01
 
 Pages that show before the `.wasm` arrives with one line in `reactx.json` (`"web": {"prerender": ["/", "/docs/faq"]}`), a scroll position API for chats and feeds (`ref.scrollMetrics()` / `scrollTo()` / `scrollBy()`, both backends), and a fix for built sites that kept polling the dev server — forever on hosts with an SPA fallback. Found by writing a chat, a process monitor and a documentation site on ReactX. A MINOR release because `Renderer` got virtuals and `serveDirectory`'s SPA fallback prefers `200.html`; apps update without changes (rebuild to drop the reload script from published pages).

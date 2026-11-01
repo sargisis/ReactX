@@ -13,6 +13,7 @@ module;
 #include "reactx/text_renderer.hpp"
 #include "reactx/ui.hpp"
 #include "reactx/version.hpp"
+#include "reactx/websocket.hpp"
 
 export module reactx;
 
@@ -108,6 +109,12 @@ using rx::matchPath;
 using rx::urlDecode;
 using rx::urlEncode;
 using rx::queryParam;
+
+// websocket.hpp
+using rx::WebSocketStatus;
+using rx::WebSocketOptions;
+using rx::WebSocketState;
+using rx::useWebSocket;
 
 // terminal.hpp
 using rx::decodeKeys;

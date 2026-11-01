@@ -131,6 +131,7 @@ if(EMSCRIPTEN)
     src/json.cpp
     src/router.cpp
     src/fetch.cpp
+    src/websocket.cpp
     src/dom.cpp
     src/ui_web.cpp
     src/ui_helpers.cpp
@@ -333,6 +334,7 @@ add_library(reactx
   src/json.cpp
   src/router.cpp
   src/fetch.cpp
+  src/websocket.cpp
   src/terminal_renderer.cpp
   src/terminal.cpp
   src/ui_terminal.cpp
@@ -461,6 +463,10 @@ set_tests_properties(reactx_fuzz_tests PROPERTIES LABELS fuzz TIMEOUT 120)
 add_executable(reactx_http_tests tests/test_http.cpp)
 target_link_libraries(reactx_http_tests PRIVATE reactx_net)
 add_test(NAME reactx_http_tests COMMAND reactx_http_tests)
+
+add_executable(reactx_websocket_tests tests/test_websocket.cpp)
+target_link_libraries(reactx_websocket_tests PRIVATE reactx reactx_net)
+add_test(NAME reactx_websocket_tests COMMAND reactx_websocket_tests)
 
 if(REACTX_BUILD_TOOLS)
   # The reactx CLI as a real program. The end-to-end run (new -> build -> dev)

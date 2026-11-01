@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20...3.31)
 # The ReactX version — the only place it is written (Semantic Versioning:
 # MAJOR.MINOR.PATCH; release tags are vMAJOR.MINOR.PATCH, see CHANGELOG.md).
-project(ReactX VERSION 0.17.0 LANGUAGES CXX)
+project(ReactX VERSION 0.18.0 LANGUAGES CXX)
 
 # C++26: GCC 16+ natively, Emscripten 6+ for the web. We use the parts of
 # C++23/C++26 each standard library ships, and nothing it doesn't
@@ -344,9 +344,15 @@ add_library(reactx
 target_include_directories(reactx PUBLIC include ${PROJECT_BINARY_DIR}/generated)
 target_link_libraries(reactx PUBLIC reactx_std PRIVATE ${REACTX_YOGA_TARGET} reactx_net)  # reactx_net: fetch() over HTTP
 add_library(reactx::reactx ALIAS reactx)
+# Tests of an app (reactx/testing.hpp, `reactx test`): Screen, RX_TEST and a
+# main() that the linker takes only when the tests have none.
+add_library(reactx_testing STATIC src/testing.cpp src/testing_main.cpp)
+target_link_libraries(reactx_testing PUBLIC reactx)
+add_library(reactx::testing ALIAS reactx_testing)
 include(${PROJECT_SOURCE_DIR}/cmake/ReactXApp.cmake)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   target_compile_options(reactx PRIVATE -Wall -Wextra -Wpedantic)
+  target_compile_options(reactx_testing PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 if(REACTX_MODULES)
@@ -482,6 +488,10 @@ if(REACTX_BUILD_TOOLS)
   add_test(NAME reactx_cli_e2e_tests COMMAND reactx_cli_tests --e2e)
   set_tests_properties(reactx_cli_e2e_tests PROPERTIES LABELS slow TIMEOUT 1500)
 endif()
+
+add_executable(reactx_testing_tests tests/test_testing.cpp)
+target_link_libraries(reactx_testing_tests PRIVATE reactx_testing)
+add_test(NAME reactx_testing_tests COMMAND reactx_testing_tests)
 
 add_executable(reactx_ui_tests tests/test_ui.cpp)
 target_link_libraries(reactx_ui_tests PRIVATE reactx)

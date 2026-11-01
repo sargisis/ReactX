@@ -1,5 +1,8 @@
 # reactx_add_app(<target> SOURCES <files...> [PUBLIC <dir>] [BASE <path>] [SHELL <file>])
 #
+# Natively, tests/*.cpp next to CMakeLists.txt become <target>_tests (with the
+# SOURCES except main.cpp, and reactx::testing): `reactx test` builds and runs it.
+#
 # A ReactX program in one line. Native build: a normal executable (terminal
 # apps). Web build (emcmake / the "web" preset): <build>/dist/index.html with
 # .js and .wasm next to it, the PUBLIC folder (CSS, images) copied in, and
@@ -20,6 +23,20 @@ function(reactx_add_app target)
   add_executable(${target} ${APP_SOURCES})
   target_link_libraries(${target} PRIVATE reactx::reactx)
   if(NOT EMSCRIPTEN)
+    # Tests (`reactx test`): tests/*.cpp with the app's sources except main.cpp,
+    # linked with reactx::testing (Screen, RX_TEST and a main). What the app
+    # links later (libraries, include folders, defines) follows it.
+    file(GLOB app_tests CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp)
+    if(app_tests AND TARGET reactx::testing)
+      set(tested ${APP_SOURCES})
+      list(FILTER tested EXCLUDE REGEX "(^|/)main\\.cpp$")
+      add_executable(${target}_tests EXCLUDE_FROM_ALL ${app_tests} ${tested})
+      target_link_libraries(${target}_tests PRIVATE reactx::testing $<TARGET_PROPERTY:${target},LINK_LIBRARIES>)
+      target_include_directories(${target}_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
+                                 $<TARGET_PROPERTY:${target},INCLUDE_DIRECTORIES>)
+      target_compile_definitions(${target}_tests PRIVATE $<TARGET_PROPERTY:${target},COMPILE_DEFINITIONS>)
+      target_compile_options(${target}_tests PRIVATE $<TARGET_PROPERTY:${target},COMPILE_OPTIONS>)
+    endif()
     # A web project's main() calls mountDom, which exists only in the browser
     # build: natively the app is built only when asked for (--target, or
     # `reactx build --native`), so tests and helper programs build on their own.

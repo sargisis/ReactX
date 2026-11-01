@@ -4,6 +4,7 @@
 //   reactx dev [--port N] [--host H] [--proxy [PREFIX=]URL] [--native]
 //                                              build, serve, rebuild on changes
 //   reactx build [--native]                    build (web: build/web/dist)
+//   reactx test [name]                         build and run tests/*.cpp
 //   reactx add <name> <git-url> [--rev R] [--target T]
 //   reactx remove <name>
 //   reactx update [--check] [--to vX.Y.Z]
@@ -370,7 +371,7 @@ if(no_base)
   set(web_base "/")
 endif()
 
-reactx_add_app({{target}} SOURCES src/main.cpp PUBLIC public BASE ${web_base})
+reactx_add_app({{target}} SOURCES src/main.cpp src/app.cpp PUBLIC public BASE ${web_base})
 target_link_libraries({{target}} PRIVATE ${deps})
 )cmake";
 
@@ -400,15 +401,27 @@ constexpr std::string_view kPresets = R"json({
 }
 )json";
 
-constexpr std::string_view kWebMain = R"cpp(// {{name}}: a ReactX web app. `reactx dev` rebuilds and reloads on every save.
+constexpr std::string_view kWebAppHpp = R"cpp(// {{name}}: the app's components. main.cpp mounts App; tests/ test it (`reactx test`).
+#pragma once
+
+#include "reactx/reactx.hpp"
+
+struct AppProps {};
+
+rx::Element App(const AppProps& props);
+)cpp";
+
+constexpr std::string_view kWebApp = R"cpp(// {{name}}: a ReactX web app. `reactx dev` rebuilds and reloads on every save.
+#include "app.hpp"
+
 #include <string>
 
-#include "reactx/dom.hpp"
-#include "reactx/reactx.hpp"
 #include "reactx/router.hpp"
 #include "reactx/ui.hpp"
 
 using namespace rx;
+
+namespace {
 
 struct HomeProps {};
 
@@ -416,7 +429,7 @@ Element Home(const HomeProps&) {
     auto [count, setCount] = useState(0);
     return h("section", {{"className", "page"}}, {
         h("h1", {}, {"Hello, {{name}}!"}),
-        h("p", {}, {"Edit src/main.cpp and save: the page reloads by itself."}),
+        h("p", {}, {"Edit src/app.cpp and save: the page reloads by itself."}),
         ui::button({.label = "Clicked " + std::to_string(count) + " times",
                     .onClick = [setCount] { setCount([](int c) { return c + 1; }); },
                     .variant = ui::Variant::Primary}),
@@ -438,7 +451,7 @@ Element NotFound(const NotFoundProps&) {
     return h("section", {{"className", "page"}}, {h("h1", {}, {"404"}), h("p", {}, {"No page at " + router::useLocation()})});
 }
 
-struct AppProps {};
+}  // namespace
 
 Element App(const AppProps&) {
     return h("div", {}, {
@@ -449,22 +462,55 @@ Element App(const AppProps&) {
         router::routes({{"/", h(Home)}, {"/about", h(About)}, {"*", h(NotFound)}}),
     });
 }
-
-int main() { mountDom(h(App)); }
 )cpp";
 
-constexpr std::string_view kTerminalMain = R"cpp(// {{name}}: a ReactX terminal app. Run it with `reactx dev`; Ctrl+C quits.
-#include <string>
+constexpr std::string_view kWebMain = R"cpp(// {{name}}: puts the app into the page (<div id="app">). The components are in app.cpp.
+#include "app.hpp"
+#include "reactx/dom.hpp"
 
-#include "reactx/reactx.hpp"
-#include "reactx/terminal.hpp"
-#include "reactx/ui.hpp"
+int main() { rx::mountDom(rx::h(App)); }
+)cpp";
+
+constexpr std::string_view kWebTests = R"cpp(// Tests of the app: `reactx test` builds and runs every tests/*.cpp natively.
+// A Screen draws the app on an in-memory terminal (ui:: components in their
+// terminal form); press, type and click like a user, then check what it shows.
+#include "app.hpp"
+#include "reactx/testing.hpp"
 
 using namespace rx;
 
+RX_TEST(home_says_hello) {
+    testing::Screen s(h(App));
+    CHECK(s.shows("Hello, {{name}}!"));
+}
+
+RX_TEST(the_button_counts_clicks) {
+    testing::Screen s(h(App));
+    CHECK(s.click("Clicked 0 times"));
+    CHECK(s.shows("Clicked 1 times"));
+}
+)cpp";
+
+constexpr std::string_view kTerminalAppHpp = R"cpp(// {{name}}: the app's components. main.cpp runs App; tests/ test it (`reactx test`).
+#pragma once
+
+#include "reactx/reactx.hpp"
+
 struct AppProps {
-    Callback onQuit{};
+    rx::Callback onQuit{};
 };
+
+rx::Element App(const AppProps& props);
+)cpp";
+
+constexpr std::string_view kTerminalApp = R"cpp(// {{name}}: a ReactX terminal app. Run it with `reactx dev`; Ctrl+C quits.
+#include "app.hpp"
+
+#include <string>
+
+#include "reactx/ui.hpp"
+
+using namespace rx;
 
 Element App(const AppProps& props) {
     auto [count, setCount] = useState(0);
@@ -479,11 +525,40 @@ Element App(const AppProps& props) {
         }),
     });
 }
+)cpp";
+
+constexpr std::string_view kTerminalMain = R"cpp(// {{name}}: runs the app in the terminal. The components are in app.cpp.
+#include "app.hpp"
+#include "reactx/terminal.hpp"
 
 int main() {
-    if (!Terminal::isInteractive()) return 1;
-    TerminalApp app;
-    app.run(h(App, {.onQuit = Callback([&app] { app.quit(); })}));
+    if (!rx::Terminal::isInteractive()) return 1;
+    rx::TerminalApp app;
+    app.run(rx::h(App, {.onQuit = rx::Callback([&app] { app.quit(); })}));
+}
+)cpp";
+
+constexpr std::string_view kTerminalTests = R"cpp(// Tests of the app: `reactx test` builds and runs every tests/*.cpp.
+// A Screen draws the app on an in-memory terminal; press, type and click
+// like a user, then check what it shows.
+#include "app.hpp"
+#include "reactx/testing.hpp"
+
+using namespace rx;
+
+RX_TEST(plus_one_counts) {
+    testing::Screen s(h(App));
+    CHECK(s.shows("Clicked 0 times"));
+    CHECK(s.click("+1"));
+    s.press("Enter");  // the focus is on +1 now
+    CHECK(s.shows("Clicked 2 times"));
+}
+
+RX_TEST(quit_calls_on_quit) {
+    bool quit = false;
+    testing::Screen s(h(App, {.onQuit = [&quit] { quit = true; }}));
+    s.click("quit");
+    CHECK(quit);
 }
 )cpp";
 
@@ -547,6 +622,7 @@ A [ReactX](https://sargisis.github.io/ReactX/) app.
 ```sh
 reactx dev      # build, serve at http://127.0.0.1:8090/, rebuild on changes
 reactx build    # {{output}}
+reactx test     # build and run tests/*.cpp
 ```
 
 No GCC 16 or Emscripten here? Open the folder in VS Code and "Reopen in Container"
@@ -565,6 +641,7 @@ https://sargisis.github.io/ReactX/llms.txt — read it before writing code.
 ```sh
 reactx dev      # build, serve at http://127.0.0.1:8090/, rebuild and reload on save
 reactx build    # {{output}}
+reactx test     # build and run tests/*.cpp (reactx test <part of a name>: some of them)
 reactx add <name> <git-url> --rev <tag> --target <cmake-target>   # a library
 reactx update   # move to the newest ReactX release
 reactx upgrade  # get the newest reactx tool itself
@@ -574,8 +651,10 @@ Native builds need GCC 16+; web builds need Emscripten: `reactx install` downloa
 
 ## Files
 
-- `src/main.cpp` — the app. Every source file includes `reactx/reactx.hpp`
-  ({{backend}}), says `using namespace rx;` and the app has a `main`.
+- `src/app.cpp` / `app.hpp` — the components. Every source file includes `reactx/reactx.hpp`
+  ({{backend}}) and says `using namespace rx;`. New source files go into `SOURCES` in CMakeLists.txt.
+- `src/main.cpp` — only `main`: it {{starts}} `App`. Keep components out of it: tests can't include it.
+- `tests/*.cpp` — tests (`reactx/testing.hpp`), run by `reactx test`.
 - `reactx.json` — name, the ReactX version (`"rev"`), dependencies. Change it with
   `reactx add` / `remove` / `update`, not by editing CMakeLists.txt.
 - `CMakeLists.txt` reads `reactx.json`; it rarely needs changes.
@@ -591,8 +670,8 @@ Native builds need GCC 16+; web builds need Emscripten: `reactx install` downloa
 - Prefer the C++ standard library to extra dependencies.
 - Ready components that work in the browser and the terminal: `reactx/ui.hpp` (`ui::button`, `input`,
   `select`, `checkbox`, `list`, `modal`, `confirm`, `toast` + `toaster`, `card`, `stack`, `text`, ...).{{web_rules}}
-- Test components without a browser or terminal: `rx::TextRenderer` + `rx::Root`, then
-  `root.dispatch(node, "onClick")` and check `renderer.toString()`.
+- Test with `reactx test`: in tests/*.cpp, `RX_TEST(name) { rx::testing::Screen s(h(App)); s.click("Save");
+  s.type("Ann"); s.press("Enter"); CHECK(s.shows("Saved")); }` — the app on an in-memory terminal.
 )md";
 
 // `reactx dev` puts this into every page it serves (HttpServer::onFile).
@@ -653,6 +732,7 @@ int cmdNew(const std::vector<std::string>& args) {
         {"output", terminal ? "build/native/" + cmakeName(name) : "build/web/dist/ (static files for any host)"},
         {"kind", terminal ? "terminal" : "web"},
         {"backend", terminal ? "plus `reactx/terminal.hpp` for `TerminalApp`" : "plus `reactx/dom.hpp` for `mountDom`"},
+        {"starts", terminal ? "runs" : "mounts"},
         {"web_rules", terminal ? "\n- Long lists scroll: `ui::list({..., .scroll = true})` or a `box` with `overflow: \"scroll\"`"
                                  "\n  (wheel, PageUp/PageDown, the focus stays visible). Content taller than the terminal is cut off."
                                : "\n- The browser build has no threads, sockets or files, and no C++26 reflection or"
@@ -660,15 +740,15 @@ int cmdNew(const std::vector<std::string>& args) {
                                  "\n  onScroll, onPointerDown/Move/Up, onMouseEnter/Leave."
                                  "\n- Styles live in `public/style.css`. Pages that should show before the .wasm loads:"
                                  "\n  `\"web\": {\"prerender\": [\"/\", \"/about\"]}` in reactx.json (code before `mountDom` must not touch `document`)."
-                                 "\n- Tests run natively: keep components in their own file (not `main.cpp`, which calls"
-                                 "\n  `mountDom`), add `if(NOT EMSCRIPTEN) add_executable(app_tests tests/app_tests.cpp src/app.cpp)`"
-                                 "\n  + `target_link_libraries(app_tests PRIVATE reactx::reactx) endif()` to CMakeLists.txt and build"
-                                 "\n  natively: `cmake -S . -B build/test && cmake --build build/test` (the app itself is left out"
-                                 "\n  of a native build: its main calls `mountDom`)."}};
+                                 "\n- Tests run natively (`reactx test`): there `ui::` components draw their terminal form,"
+                                 "\n  and `mountDom`, `document` and `window` don't exist."}};
     writeManifest(dir, manifest);
     writeOrFail(dir / "CMakeLists.txt", fill(std::string(kCMakeLists), vars));
     writeOrFail(dir / "CMakePresets.json", kPresets);
     writeOrFail(dir / "src/main.cpp", fill(std::string(terminal ? kTerminalMain : kWebMain), vars));
+    writeOrFail(dir / "src/app.hpp", fill(std::string(terminal ? kTerminalAppHpp : kWebAppHpp), vars));
+    writeOrFail(dir / "src/app.cpp", fill(std::string(terminal ? kTerminalApp : kWebApp), vars));
+    writeOrFail(dir / "tests/app_tests.cpp", fill(std::string(terminal ? kTerminalTests : kWebTests), vars));
     if (!terminal) writeOrFail(dir / "public/style.css", kStyle);
     else fs::create_directories(dir / "public");
     writeOrFail(dir / ".gitignore", kGitignore);
@@ -1056,6 +1136,33 @@ int cmdBuild(const std::vector<std::string>& args) {
     std::println("Built: {}", (root / (native ? "build/native" : "build/web/dist")).string());
     if (!native) reportWebSize(root);
     return 0;
+}
+
+// reactx test [name]: builds tests/*.cpp natively (reactx_add_app makes
+// <name>_tests of them, with the app's sources except main.cpp) and runs them;
+// a name runs only the tests whose name contains it.
+int cmdTest(const std::vector<std::string>& args) {
+    fs::path root = projectRoot();
+    Manifest manifest = readManifest(root).manifest;
+    std::string filter;
+    for (const auto& a : args) {
+        if (a.starts_with("-")) fail("test: unknown option " + a);
+        if (!filter.empty()) fail("test: give at most one name (a part of the tests' names)");
+        filter = a;
+    }
+    std::error_code ec;
+    bool any = false;
+    for (const auto& entry : fs::directory_iterator(root / "tests", ec)) any = any || entry.path().extension() == ".cpp";
+    if (!any)
+        fail("test: no tests/*.cpp here. A test file looks like this:\n\n"
+             "  #include \"app.hpp\"\n  #include \"reactx/testing.hpp\"\n\n"
+             "  RX_TEST(it_says_hello) {\n      rx::testing::Screen s(rx::h(App));\n      CHECK(s.shows(\"Hello\"));\n  }");
+    std::string target = cmakeName(manifest.name) + "_tests";
+    if (!build(root, "native", target))
+        fail("test: the tests don't build (a project made before ReactX v0.18.0 needs `reactx update` first)");
+    std::vector<std::string> command{(root / "build/native" / target).string()};
+    if (!filter.empty()) command.push_back(filter);
+    return run(command, root);
 }
 
 // Every file `reactx dev` watches: the manifest, the CMake files, src/ and public/.
@@ -1485,6 +1592,7 @@ int usage(std::FILE* out, int code) {
            "      [--host 0.0.0.0]                       listen on all interfaces (Docker, phone on Wi-Fi)\n"
            "      [--proxy [PREFIX=]URL]                 forward PREFIX (default /api) to a backend\n"
            "  reactx build [--native]                    build (web: build/web/dist; --native: GCC, main without mountDom)\n"
+           "  reactx test [name]                         build and run the tests in tests/*.cpp\n"
            "  reactx add <name> <git-url> [--rev R] [--target T]   add a dependency\n"
            "  reactx remove <name>                       remove a dependency\n"
            "  reactx update [--check] [--to vX.Y.Z]      move the project to the newest ReactX release\n"
@@ -1502,7 +1610,8 @@ int usage(std::FILE* out, int code) {
 std::string_view commandHelp(std::string_view command) {
     if (command == "new")
         return "reactx new <name> [--terminal] [--local]\n\n"
-               "Creates the folder <name> with reactx.json, CMakeLists.txt, CMakePresets.json, src/main.cpp,\n"
+               "Creates the folder <name> with reactx.json, CMakeLists.txt, CMakePresets.json, src/ (main.cpp, app.cpp),\n"
+               "tests/app_tests.cpp (reactx test), "
                "editor settings (.clangd, .vscode/) and AGENTS.md. ReactX comes from GitHub at this CLI's release tag.\n\n"
                "  --terminal   a terminal app (TerminalApp) instead of a web app\n"
                "  --local      use the ReactX sources this CLI was built from (for working on ReactX)\n";
@@ -1520,6 +1629,20 @@ std::string_view commandHelp(std::string_view command) {
                "terminal apps into build/native/<name>.\n\n"
                "  --native   build a web project's sources with GCC; its main() must not call mountDom\n"
                "             (use #ifdef __EMSCRIPTEN__ ... #else TerminalApp ... #endif)\n";
+    if (command == "test")
+        return "reactx test [name]\n\n"
+               "Builds the project's tests/*.cpp natively (with the app's sources except main.cpp) and runs\n"
+               "them; the exit code says if they passed. A test draws the app on an in-memory terminal:\n\n"
+               "  #include \"app.hpp\"\n"
+               "  #include \"reactx/testing.hpp\"\n\n"
+               "  RX_TEST(saving_works) {\n"
+               "      rx::testing::Screen s(rx::h(App));\n"
+               "      s.type(\"Ann\");       // into the focused field\n"
+               "      s.press(\"Enter\");    // also \"Tab\", \"Ctrl+s\", \"Up\", ...\n"
+               "      s.click(\"Save\");     // the first place showing this text\n"
+               "      CHECK(s.shows(\"Saved\"));\n"
+               "  }\n\n"
+               "  name   run only the tests whose name contains it: reactx test saving\n";
     if (command == "add")
         return "reactx add <name> <git-url> [--rev R] [--target T]\n\n"
                "Adds (or updates) a dependency in reactx.json; CMake fetches it on the next build.\n\n"
@@ -1572,6 +1695,7 @@ int main(int argc, char** argv) {
         if (command == "new") return cmdNew(args);
         if (command == "dev") return cmdDev(args);
         if (command == "build") return cmdBuild(args);
+        if (command == "test") return cmdTest(args);
         if (command == "upgrade") return cmdUpgrade(args);
         if (command == "add") return cmdAdd(args);
         if (command == "remove") return cmdRemove(args);

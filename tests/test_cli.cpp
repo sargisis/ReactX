@@ -105,7 +105,8 @@ void quick(const fs::path& tmp) {
     CHECK(made.code == 0);
     CHECK(contains(made.out, "Created my-app (web app)"));
     fs::path app = tmp / "my-app";
-    for (const char* f : {"reactx.json", "CMakeLists.txt", "CMakePresets.json", "src/main.cpp", "public/style.css", ".gitignore",
+    for (const char* f : {"reactx.json", "CMakeLists.txt", "CMakePresets.json", "src/main.cpp", "src/app.cpp", "src/app.hpp",
+                          "tests/app_tests.cpp", "public/style.css", ".gitignore",
                           "README.md", "AGENTS.md", ".clangd", ".vscode/settings.json", ".vscode/extensions.json"})
         CHECK(fs::exists(app / f));
     // The editor reads the web build's flags through clangd, not IntelliSense.
@@ -115,14 +116,22 @@ void quick(const fs::path& tmp) {
     auto agents = read(app / "AGENTS.md");  // notes for AI agents: filled in, web rules, the API link
     CHECK(contains(agents, "# my-app — notes for coding agents") && contains(agents, "reactx/dom.hpp"));
     CHECK(contains(agents, "llms.txt") && contains(agents, "onPointerDown") && !contains(agents, "{{"));
-    CHECK(contains(agents, "reactx/ui.hpp") && contains(agents, "app_tests"));  // components, tests
+    CHECK(contains(agents, "reactx/ui.hpp") && contains(agents, "reactx test"));  // components, tests
     auto manifest = rx::json::parse(read(app / "reactx.json"));
     CHECK(manifest["name"].asString() == "my-app");
     CHECK(manifest["template"].asString() == "web");
     CHECK(manifest["reactx"]["path"].asString() == REACTX_SOURCE_DIR);
     CHECK(manifest["web"]["base"].asString() == "/");
-    CHECK(contains(read(app / "CMakeLists.txt"), "reactx_add_app(my_app SOURCES src/main.cpp"));  // '-' -> '_'
-    CHECK(contains(read(app / "src/main.cpp"), "Hello, my-app!"));
+    CHECK(contains(read(app / "CMakeLists.txt"), "reactx_add_app(my_app SOURCES src/main.cpp src/app.cpp"));  // '-' -> '_'
+    CHECK(contains(read(app / "src/app.cpp"), "Hello, my-app!") && contains(read(app / "src/main.cpp"), "mountDom(rx::h(App))"));
+    CHECK(contains(read(app / "tests/app_tests.cpp"), "RX_TEST(") && contains(read(app / "tests/app_tests.cpp"), "Hello, my-app!"));
+
+    std::cout << "test: help, and a project without tests\n";
+    auto testHelp = reactx({"test", "--help"}, tmp);
+    CHECK(testHelp.code == 0 && contains(testHelp.out, "RX_TEST(") && contains(testHelp.out, "s.click("));
+    fs::remove_all(app / "tests");
+    auto noTests = reactx({"test"}, app);
+    CHECK(noTests.code != 0 && contains(noTests.out, "no tests/*.cpp here"));
 
     std::cout << "new: terminal project, git dependency by default\n";
     CHECK(reactx({"new", "tui", "--terminal"}, tmp).code == 0);
@@ -358,6 +367,18 @@ void endToEnd(const fs::path& tmp) {
     CHECK(fs::exists(tmp / "term-app/build/native/term_app"));
     if (built.code != 0) std::cerr << built.out.substr(built.out.size() > 3000 ? built.out.size() - 3000 : 0) << '\n';
 
+    std::cout << "e2e: reactx test builds and runs the project's tests\n";
+    auto tested = reactx({"test"}, tmp / "term-app");
+    CHECK(tested.code == 0 && contains(tested.out, "OK, 2 tests passed"));
+    {
+        std::ofstream(tmp / "term-app/tests/app_tests.cpp", std::ios::app)
+            << "\nRX_TEST(fails_on_purpose) { rx::testing::Screen s(rx::h(App)); CHECK(s.shows(\"no such text\")); }\n";
+    }
+    auto failing = reactx({"test"}, tmp / "term-app");
+    CHECK(failing.code != 0 && contains(failing.out, "FAIL") && contains(failing.out, "no such text"));
+    auto filtered = reactx({"test", "plus_one"}, tmp / "term-app");
+    CHECK(filtered.code == 0 && contains(filtered.out, "OK, 1 test passed"));
+
     std::cout << "e2e: a changed reactx.json is picked up (reactx update / add)\n";
     CHECK(!contains(reactx({"build"}, tmp / "term-app").out, "Configuring done"));  // nothing changed
     std::this_thread::sleep_for(1100ms);  // a newer modification time than CMakeCache.txt
@@ -449,14 +470,14 @@ void endToEnd(const fs::path& tmp) {
           contains(httpGet(port, "/some/route"), "<div id=\"app\">"));
 
     std::string marker = "edited-" + std::to_string(::getpid());
-    std::string original = read(web / "src/main.cpp");
+    std::string original = read(web / "src/app.cpp");
     std::string edited = original;
     edited.replace(edited.find("Hello, web-app!"), std::string("Hello, web-app!").size(), marker);
-    std::ofstream(web / "src/main.cpp") << edited;
+    std::ofstream(web / "src/app.cpp") << edited;
     CHECK(waitFor([&] { return httpGet(port, "/__reactx/version") == "2"; }, 300s));
     CHECK(contains(httpGet(port, "/index.wasm"), marker));
 
-    std::ofstream(web / "src/main.cpp") << edited << "\nthis is not C++\n";
+    std::ofstream(web / "src/app.cpp") << edited << "\nthis is not C++\n";
     std::this_thread::sleep_for(20s);  // enough for the failed rebuild
     CHECK(httpGet(port, "/__reactx/version") == "2");                 // the old build stays
     CHECK(contains(httpGet(port, "/index.wasm"), marker));

@@ -1098,11 +1098,19 @@ Element Site(const Props&) {
 }  // namespace
 
 #ifndef REACTX_SITE_PRERENDER
+// The app is running: the shell's "buttons don't work" notice stays away.
+EM_JS(void, site_js_live, (), {
+    document.documentElement.dataset.rxLive = "1";
+    const d = document.getElementById("rx-fail");
+    if (d) d.remove();
+});
+
 int main() {
     char* lang = site_js_lang();
     SiteLang.set(lang);
     std::free(lang);
     mountDom(h(Site));
+    site_js_live();
 }
 #else
 // site_prerender <shell.html> <out/index.html>: every page that has a fixed

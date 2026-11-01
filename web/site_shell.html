@@ -296,6 +296,8 @@
     .page .lead.mono { font-size: 15px; white-space: pre-line; }
     .big-404 { font: 800 clamp(80px, 16vw, 160px)/1 var(--sans); color: var(--accent); letter-spacing: -0.06em; margin: 0; }
     .footer { border-top: 1px solid var(--border); padding: 28px 0; color: var(--faint); font: 13.5px var(--sans); }
+    #rx-fail { position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 2000; padding: 10px 14px; border-radius: 10px;
+               background: #7f1d1d; color: #fff; font: 13.5px/1.4 var(--sans); box-shadow: var(--shadow); }
     .footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
     .footer a { color: var(--muted); text-decoration: none; }
     .footer a:hover { color: var(--accent); }
@@ -303,6 +305,24 @@
 </head>
 <body>
   <div id="app"><div class="boot">loading ReactX</div></div>
+  <script>
+    // The page is readable without the .wasm (it is prerendered); its buttons are not.
+    // If the app doesn't start, say why instead of leaving dead buttons.
+    (function () {
+      function show(msg) {
+        if (document.documentElement.dataset.rxLive) return;
+        var d = document.getElementById("rx-fail");
+        if (!d) { d = document.createElement("div"); d.id = "rx-fail"; d.setAttribute("role", "status"); document.body.appendChild(d); }
+        var ru = document.documentElement.lang === "ru";
+        d.textContent = (ru ? "Кнопки не работают: " : "Buttons don't work: ") + msg;
+      }
+      window.Module = { onAbort: function (what) { show(String(what)); } };
+      if (typeof WebAssembly !== "object") show("WebAssembly is turned off in this browser (Lockdown Mode or a strict privacy setting). Reading works.");
+      window.addEventListener("error", function (e) { show(e.message || String(e.error)); });
+      window.addEventListener("unhandledrejection", function (e) { show(String(e.reason && (e.reason.message || e.reason))); });
+      setTimeout(function () { show("the app hasn't started after 12 s (slow connection?). Reading works."); }, 12000);
+    })();
+  </script>
   {{{ SCRIPT }}}
 </body>
 </html>

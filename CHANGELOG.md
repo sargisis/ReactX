@@ -6,6 +6,10 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Fixed
+
+- `rx::mountDom` into a container that already holds an app unmounts that app first: its effect cleanups run, so its timers and sockets stop (they used to keep running behind the new app).
+
 ## [0.14.0] — 2026-11-01
 
 Long lists and live logs without the CPU bill: `ui::useVirtualList` draws only the rows on screen in the browser and in the terminal (a 10,000-row log viewer went from 66% CPU to 2.6%), and the terminal keeps its layout between repaints. Code that didn't compile now does: `useState` of a `std::vector` of your structs, `useCallback` with any signature. Forms line up with `.labelAbove`, `ui::input` fills a row. And `reactx upgrade` gets the newest reactx; from now on reactx tells you once a day when a new release is out. Found by writing a live poll, a 2,000-row inventory table and a log viewer on ReactX. A MINOR release because `Renderer` got a virtual (`insertBefore`, with a default) and `ui::Checkbox`/`InputProps`/`SelectProps` got fields; apps update without changes.

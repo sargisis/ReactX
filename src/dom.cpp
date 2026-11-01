@@ -560,8 +560,18 @@ Root& mountDom(Element element, const std::string& container) {
         }
         std::exit(detail::prerenderer()(element, a));
     }
+    // One app per container. Mounting again unmounts the old app first, so
+    // its effect cleanups run (timers, sockets) before the new app starts.
+    static std::vector<std::pair<std::string, DomApp*>> byContainer;
+    for (auto& [name, app] : byContainer) {
+        if (name != container) continue;
+        app->root.render(Element{});
+        app->root.render(std::move(element));
+        return app->root;
+    }
     // Lives for the whole page: the runtime keeps running after main().
     auto* app = new DomApp(container);
+    byContainer.emplace_back(container, app);
     int index = static_cast<int>(apps().size());
     apps().push_back(&app->root);
     rx_js_listen(index, js(app->renderer.rootNode()));

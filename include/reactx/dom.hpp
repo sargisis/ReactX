@@ -80,7 +80,8 @@ private:
 #if defined(__EMSCRIPTEN__)
 // Mounts `element` into the page element matching `container` and keeps it
 // running after main() returns (a web page has no main loop). Returns the Root,
-// e.g. to call render() again later.
+// e.g. to call render() again later. Mounting into the same container again
+// unmounts the app there first (its effect cleanups run).
 //
 // Prerendering: list routes in reactx.json ("web": {"prerender": ["/", "/docs/faq"]})
 // and the build runs the same program under Node, where mountDom writes the

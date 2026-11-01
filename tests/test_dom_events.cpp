@@ -153,6 +153,13 @@ int main() {
     live.render(h("p", {}, {"gone"}));         // unmount: the socket is closed
     CHECK(js("rxTest.ws.closedWith(1)") == "1000");
 
+    std::cout << "mountDom again into the same container unmounts the old app\n";
+    mountDom(h(Live));
+    CHECK(js("rxTest.ws.count()") == "3" && text("status") == "connecting");
+    mountDom(h("p", {{"id", "next"}}, {"next app"}));  // the socket of the old app is closed
+    CHECK(js("rxTest.ws.closedWith(2)") == "1000");
+    CHECK(text("next") == "next app" && js("String(document.getElementById('status'))") == "null");
+
     std::cout << (failures ? "FAILED: " + std::to_string(failures) : std::string("OK, all tests passed")) << '\n';
     return failures ? 1 : 0;
 }

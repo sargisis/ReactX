@@ -355,6 +355,39 @@ TEST(form_reset_and_error_only_after_touch) {
     CHECK(captured.values.name == "x" && captured.error("name").empty());
 }
 
+Element Locked(const Props&) {
+    auto [text, setText] = useState(std::string("kept"));
+    auto [presses, setPresses] = useState(0);
+    return h("box", {}, {
+        ui::input({.value = text, .onChange = [setText](const std::string& v) { setText(v); }, .label = "Name", .disabled = true}),
+        ui::textarea({.value = "line one", .rows = 2, .disabled = true}),
+        ui::select({.value = "a", .options = {{"a", "Apple"}}, .disabled = true}),
+        ui::checkbox({.label = "Agree", .disabled = true}),
+        ui::radioGroup({.value = "x", .options = {{"x", "X"}, {"y", "Y"}}, .direction = ui::Direction::Row, .disabled = true}),
+        ui::slider({.value = 3, .disabled = true}),
+        ui::button({.label = "Go", .onClick = [setPresses] { setPresses([](int n) { return n + 1; }); }}),
+        h("text", {}, {"presses=" + std::to_string(presses) + " text=" + text}),
+    });
+}
+
+TEST(disabled_fields_show_their_values_and_take_no_focus) {
+    Screen s(h(Locked), 50, 16);
+    CHECK(contains(s.text(), "Name kept") && contains(s.text(), "line one") && contains(s.text(), "‹ Apple ›"));
+    CHECK(contains(s.text(), "(•) X  ( ) Y"));  // .direction = Row
+    s.type("zz");  // the focus is on the only enabled thing: the button
+    s.press("Enter");
+    CHECK(contains(s.text(), "presses=1 text=kept"));
+    s.press("Tab");
+    s.press("Enter");
+    CHECK(contains(s.text(), "presses=2"));  // Tab went round to the button again
+}
+
+TEST(list_takes_children_and_the_old_items) {
+    Screen s(h("box", {}, {ui::list({.title = "New", .children = {ui::listItem({.label = "one"})}}),
+                           ui::list({.title = "Old", .items = {ui::listItem({.label = "two"})}})}), 30, 10);
+    CHECK(contains(s.text(), "one") && contains(s.text(), "two"));
+}
+
 struct BigLogProps {
     int count = 0;
     bool follow = false;

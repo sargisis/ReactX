@@ -113,6 +113,7 @@ struct InputProps {
     std::string placeholder{};
     std::string label{};
     bool labelAbove = false;  // the label on its own line above the field: forms line up
+    bool disabled = false;    // shown, not editable, skipped by Tab
     std::string error{};      // shown under the field, which is marked invalid ("" = none)
     std::string key{};
 };
@@ -123,6 +124,7 @@ struct CheckboxProps {
     bool checked = false;
     Callback onToggle{};                     // the box was clicked
     std::function<void(bool)> onChange{};    // ... with the new state: [setOn](bool on) { setOn(on); }
+    bool disabled = false;
     std::string error{};                     // shown under the box ("You must agree")
     std::string key{};
 };
@@ -163,7 +165,8 @@ Element listItem(ListItemProps props);
 struct ListProps {
     std::string title{};
     std::string emptyText = "nothing here";
-    std::vector<Element> items{};
+    std::vector<Element> items{};     // the old name of `children` (deprecated in v0.20, works until 2.0)
+    std::vector<Element> children{};  // the list items (ui::listItem)
     std::string key{};
     // Scroll inside the list instead of growing: in a terminal the list takes the
     // rows that are left (the selected item stays visible); in the browser it
@@ -214,6 +217,7 @@ struct SelectProps {
     std::vector<Option> options{};
     InputHandler onChange{};  // gets the chosen option's value
     bool labelAbove = false;  // like ui::input
+    bool disabled = false;
     std::string error{};
     std::string key{};
 };
@@ -229,6 +233,7 @@ struct TextareaProps {
     std::string placeholder{};
     std::string label{};
     int rows = 4;             // the height in lines
+    bool disabled = false;
     std::string error{};
     std::string key{};
 };
@@ -244,7 +249,9 @@ struct RadioGroupProps {
     std::string value{};
     std::vector<Option> options{};
     InputHandler onChange{};
-    bool row = false;         // the options side by side
+    Direction direction = Direction::Column;  // Row: the options side by side
+    bool row = false;         // the old way to say direction = Row (deprecated in v0.20, works until 2.0)
+    bool disabled = false;
     std::string error{};
     std::string key{};
 };
@@ -259,6 +266,7 @@ struct SliderProps {
     int step = 1;
     std::function<void(int)> onChange{};
     bool showValue = true;    // the number next to it
+    bool disabled = false;
     std::string key{};
 };
 Element slider(SliderProps props);

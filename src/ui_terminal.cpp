@@ -49,17 +49,21 @@ Element Input(const Props& p) {
     auto onSubmit = p.get<InputHandler>("onSubmit");
     std::string label = p.get<std::string>("label");
 
-    Element field = h("input", {
-        {"flexGrow", 1},
-        {"value", value},
-        {"placeholder", p.get<std::string>("placeholder")},
-        {"color", p.get<std::string>("error").empty() ? t.text : t.danger},
-        {"onInput", onChange},
-        {"onKey", [onChange, onSubmit, value](const KeyEvent& e) {
-             if (e.key == "Enter" && onSubmit) onSubmit(value);
-             if (e.key == "Escape" && onChange && !value.empty()) onChange(std::string{});
-         }},
-    });
+    // Disabled: the value as dim text, which Tab skips and keys don't change.
+    Element field = p.get<bool>("disabled")
+        ? h("text", {{"flexGrow", 1}, {"color", t.muted}, {"dim", true}, {"underline", true}, {"wrap", false}},
+            {value.empty() ? p.get<std::string>("placeholder") : value})
+        : h("input", {
+              {"flexGrow", 1},
+              {"value", value},
+              {"placeholder", p.get<std::string>("placeholder")},
+              {"color", p.get<std::string>("error").empty() ? t.text : t.danger},
+              {"onInput", onChange},
+              {"onKey", [onChange, onSubmit, value](const KeyEvent& e) {
+                   if (e.key == "Enter" && onSubmit) onSubmit(value);
+                   if (e.key == "Escape" && onChange && !value.empty()) onChange(std::string{});
+               }},
+          });
     // growInRow: takes the free room in a row (a search box next to buttons), not in a column.
     if (label.empty()) return withError(h("box", {{"direction", "row"}, {"growInRow", 1}}, {std::move(field)}), p, t);
     if (p.get<bool>("labelAbove"))
@@ -73,10 +77,16 @@ Element Input(const Props& p) {
 Element Checkbox(const Props& p) {
     const Theme& t = useTheme();
     bool checked = p.get<bool>("checked");
-    return withError(h("box", {{"direction", "row"}, {"gap", 1}, {"focusable", true}, {"onClick", p.get<Callback>("onToggle")}}, {
-        h("text", {{"color", checked ? t.accent : t.muted}, {"wrap", false}}, {checked ? "[x]" : "[ ]"}),
-        h("text", {{"color", t.text}}, {p.get<std::string>("label")}),
-    }), p, t);
+    bool off = p.get<bool>("disabled");
+    Element box = h("box", {{"direction", "row"}, {"gap", 1}}, {
+        h("text", {{"color", checked && !off ? t.accent : t.muted}, {"dim", off}, {"wrap", false}}, {checked ? "[x]" : "[ ]"}),
+        h("text", {{"color", off ? t.muted : t.text}, {"dim", off}}, {p.get<std::string>("label")}),
+    });
+    if (!off) {
+        box.props.set("focusable", true);
+        box.props.set("onClick", p.get<Callback>("onToggle"));
+    }
+    return withError(std::move(box), p, t);
 }
 
 Element Tabs(const Props& p) {
@@ -202,13 +212,17 @@ Element Select(const Props& p) {
     std::string shown = current >= 0 ? labels[static_cast<std::size_t>(current)] : "—";
     std::string label = p.get<std::string>("label");
 
-    Element field = h("box", {{"direction", "row"}, {"focusable", true},
-                              {"onClick", [pick, current] { pick(current + 1); }},
-                              {"onKey", [pick, current](const KeyEvent& e) {
-                                   if (e.key == "Right" || e.key == "Enter") pick(current + 1);
-                                   else if (e.key == "Left") pick(current - 1);
-                               }}},
-                      {h("text", {{"color", t.accent}, {"wrap", false}}, {"‹ " + shown + " ›"})});
+    bool off = p.get<bool>("disabled");
+    Element field = h("box", {{"direction", "row"}},
+                      {h("text", {{"color", off ? t.muted : t.accent}, {"dim", off}, {"wrap", false}}, {"‹ " + shown + " ›"})});
+    if (!off) {
+        field.props.set("focusable", true);
+        field.props.set("onClick", Callback([pick, current] { pick(current + 1); }));
+        field.props.set("onKey", KeyHandler([pick, current](const KeyEvent& e) {
+                            if (e.key == "Right" || e.key == "Enter") pick(current + 1);
+                            else if (e.key == "Left") pick(current - 1);
+                        }));
+    }
     if (label.empty()) return withError(std::move(field), p, t);
     return withError(h("box", {{"direction", p.get<bool>("labelAbove") ? "column" : "row"}, {"gap", p.get<bool>("labelAbove") ? 0 : 1}}, {
         h("text", {{"color", t.muted}, {"wrap", false}}, {label}),
@@ -221,13 +235,17 @@ Element Select(const Props& p) {
 Element Textarea(const Props& p) {
     const Theme& t = useTheme();
     std::string label = p.get<std::string>("label");
-    Element field = h("textarea", {
-        {"value", p.get<std::string>("value")},
-        {"placeholder", p.get<std::string>("placeholder")},
-        {"rows", p.get<int>("rows", 4)},
-        {"color", p.get<std::string>("error").empty() ? t.text : t.danger},
-        {"onInput", p.get<InputHandler>("onChange")},
-    });
+    std::string value = p.get<std::string>("value");
+    Element field = p.get<bool>("disabled")
+        ? h("box", {{"height", p.get<int>("rows", 4)}, {"overflow", "hidden"}},
+            {h("text", {{"color", t.muted}, {"dim", true}}, {value.empty() ? p.get<std::string>("placeholder") : value})})
+        : h("textarea", {
+              {"value", value},
+              {"placeholder", p.get<std::string>("placeholder")},
+              {"rows", p.get<int>("rows", 4)},
+              {"color", p.get<std::string>("error").empty() ? t.text : t.danger},
+              {"onInput", p.get<InputHandler>("onChange")},
+          });
     std::vector<Element> parts;
     if (!label.empty()) parts.push_back(h("text", {{"color", t.muted}, {"wrap", false}}, {label}));
     parts.push_back(std::move(field));
@@ -246,19 +264,25 @@ Element RadioGroup(const Props& p) {
     };
     std::vector<Element> items;
     std::string label = p.get<std::string>("label");
+    bool off = p.get<bool>("disabled");
     if (!label.empty()) items.push_back(h("text", {{"color", t.muted}, {"wrap", false}}, {label}));
     std::vector<Element> options;
     for (std::size_t i = 0; i < values.size(); ++i) {
         bool on = values[i] == value;
         int index = static_cast<int>(i);
-        options.push_back(h("box", {{"key", values[i]}, {"direction", "row"}, {"gap", 1}, {"focusable", true},
-                                    {"onClick", [pick, index] { pick(index); }},
-                                    {"onKey", [pick, index](const KeyEvent& e) {
-                                         if (e.key == "Down") pick(index + 1);
-                                         else if (e.key == "Up") pick(index - 1);
-                                     }}},
-                            {h("text", {{"color", on ? t.accent : t.muted}, {"wrap", false}}, {on ? "(•)" : "( )"}),
-                             h("text", {{"color", t.text}, {"bold", on}}, {p.children()[i].props.get<std::string>("label")})}));
+        Element option = h("box", {{"key", values[i]}, {"direction", "row"}, {"gap", 1}},
+                           {h("text", {{"color", on && !off ? t.accent : t.muted}, {"dim", off}, {"wrap", false}}, {on ? "(•)" : "( )"}),
+                            h("text", {{"color", off ? t.muted : t.text}, {"dim", off}, {"bold", on}},
+                              {p.children()[i].props.get<std::string>("label")})});
+        if (!off) {
+            option.props.set("focusable", true);
+            option.props.set("onClick", Callback([pick, index] { pick(index); }));
+            option.props.set("onKey", KeyHandler([pick, index](const KeyEvent& e) {
+                                 if (e.key == "Down") pick(index + 1);
+                                 else if (e.key == "Up") pick(index - 1);
+                             }));
+        }
+        options.push_back(std::move(option));
     }
     items.push_back(h("box", {{"direction", p.get<bool>("row") ? "row" : "column"}, {"gap", p.get<bool>("row") ? 2 : 0}},
                       std::move(options)));
@@ -280,17 +304,21 @@ Element Slider(const Props& p) {
     std::vector<Element> parts;
     std::string label = p.get<std::string>("label");
     if (!label.empty()) parts.push_back(h("text", {{"color", t.muted}, {"wrap", false}}, {label}));
-    parts.push_back(h("box", {{"focusable", true},
-                              {"onKey", [to, value, step, lo, hi](const KeyEvent& e) {
-                                   if (e.key == "Right") to(value + step);
-                                   else if (e.key == "Left") to(value - step);
-                                   else if (e.key == "Home") to(lo);
-                                   else if (e.key == "End") to(hi);
-                               }},
-                              {"onPointerDown", [to, lo, hi](const PointerEvent& e) {  // a click on the bar jumps there
-                                   to(lo + static_cast<int>(e.localX) * (hi - lo) / kWidth);
-                               }}},
-                      {h("text", {{"color", t.accent}, {"wrap", false}}, {bar})}));
+    bool off = p.get<bool>("disabled");
+    Element track = h("box", {}, {h("text", {{"color", off ? t.muted : t.accent}, {"dim", off}, {"wrap", false}}, {bar})});
+    if (!off) {
+        track.props.set("focusable", true);
+        track.props.set("onKey", KeyHandler([to, value, step, lo, hi](const KeyEvent& e) {
+                            if (e.key == "Right") to(value + step);
+                            else if (e.key == "Left") to(value - step);
+                            else if (e.key == "Home") to(lo);
+                            else if (e.key == "End") to(hi);
+                        }));
+        track.props.set("onPointerDown", PointerHandler([to, lo, hi](const PointerEvent& e) {  // a click on the bar jumps there
+                            to(lo + static_cast<int>(e.localX) * (hi - lo) / kWidth);
+                        }));
+    }
+    parts.push_back(std::move(track));
     if (p.get<bool>("showValue", true)) parts.push_back(h("text", {{"color", t.text}, {"wrap", false}}, {std::to_string(value)}));
     return h("box", {{"direction", "row"}, {"gap", 1}}, std::move(parts));
 }

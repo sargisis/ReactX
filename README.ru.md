@@ -236,7 +236,7 @@ h("box", {{"flexGrow", 1}, {"justifyContent", "center"}, {"alignItems", "center"
 
 **Flex-пропсы** (как в CSS): `direction` (`row`, `column`, `row-reverse`, `column-reverse`), `justifyContent` (`start`, `center`, `end`, `space-between`, `space-around`, `space-evenly`), `alignItems` / `alignSelf` (`start`, `center`, `end`, `stretch`), `flexGrow`, `flexShrink`, `flexBasis`, `flexWrap`, `width` / `height` / `min*` / `max*` (число или `"50%"`), `padding*` и `margin*` (`X`, `Y`, `Left`, …; `margin: "auto"`), `gap` / `rowGap` / `columnGap`, `position: "absolute"` + `top` / `left` / `right` / `bottom` (`"fixed"` — на экране и поверх всего, как `ui::modal` и уведомления), `display: "none"`, `overflow: "hidden"`.
 
-**Прокрутка**: `overflow: "scroll"` делает `box` вертикальным контейнером с прокруткой. В колонке он занимает оставшиеся строки, так что список с сервера помещается под заголовком без подсчёта высоты; колёсико мыши над ним и PageUp/PageDown прокручивают его, при перемещении фокуса элемент в фокусе остаётся виден, `ref.scrollIntoView()` показывает любой элемент, рамка показывает положение (`┃`), а `onScroll` получает `ScrollEvent` в строках (`nearBottom(3)` — пора подгрузить). `ui::list({.items, .scroll = true})` — список, который прокручивается внутри своей рамки и держит выбранный пункт на виду.
+**Прокрутка**: `overflow: "scroll"` делает `box` вертикальным контейнером с прокруткой. В колонке он занимает оставшиеся строки, так что список с сервера помещается под заголовком без подсчёта высоты; колёсико мыши над ним и PageUp/PageDown прокручивают его, при перемещении фокуса элемент в фокусе остаётся виден, `ref.scrollIntoView()` показывает любой элемент, рамка показывает положение (`┃`), а `onScroll` получает `ScrollEvent` в строках (`nearBottom(3)` — пора подгрузить). `ui::list({.children = items, .scroll = true})` — список, который прокручивается внутри своей рамки и держит выбранный пункт на виду.
 
 ```cpp
 h("box", {{"flexGrow", 1}}, {
@@ -268,7 +268,7 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
     ui::tabs({.tabs = {
         {"Задачи", {
             ui::input({.value = draft, .onChange = setDraftFn, .onSubmit = addFn, .label = "Новая:"}),
-            ui::list({.title = "Список", .items = {
+            ui::list({.title = "Список", .children = {
                 ui::listItem({.label = "Купить молоко", .detail = "сегодня", .onSelect = toggleFn}),
             }}),
             ui::button({.label = "Удалить всё", .onClick = askFn, .variant = ui::Variant::Danger}),
@@ -287,12 +287,13 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 | `checkbox` | `label`, `checked`, `onToggle` (Enter / Space), `onChange(bool)` с новым состоянием |
 | `tabs` | вкладки `{label, content}`, `initial`; Enter на заголовке открывает вкладку |
 | `modal` | `title`, `open`, `onClose` (Escape), `width`; закрывает то, что под ним, держит фокус внутри и возвращает его после закрытия |
-| `list` / `listItem` | рамка с заголовком, `emptyText`, `scroll` (прокрутка внутри вместо роста); пункт: `label`, `detail` справа, `selected` (новый выбранный пункт прокручивается на виду), `onSelect`, `onKey` |
+| `list` / `listItem` | `children` (элементы; `items` — старое имя), рамка с заголовком, `emptyText`, `scroll` (прокрутка внутри вместо роста); пункт: `label`, `detail` справа, `selected` (новый выбранный пункт прокручивается на виду), `onSelect`, `onKey` |
 | `select` | `label`, `value`, `options` (`{value, label}`), `onChange(value)`; в браузере нативный `<select>`, в терминале ‹ › со стрелками ← → / Enter или кликом; `labelAbove` |
 | `textarea` | `value`, `onChange`, `placeholder`, `label`, `rows`; и в терминале: Enter, ↑ ↓ по строкам, перенос, прокрутка |
-| `radioGroup` | `label`, `value`, `options`, `onChange(value)`, `row`: все варианты на виду; в браузере нативные radio, в терминале (•) со стрелками ↑ ↓ или кликом |
+| `radioGroup` | `label`, `value`, `options`, `onChange(value)`, `direction` (`Row` — в ряд): все варианты на виду; в браузере нативные radio, в терминале (•) со стрелками ↑ ↓ или кликом |
 | `slider` | `label`, `value`, `min`, `max`, `step`, `onChange(int)`, `showValue`; в браузере ползунок, в терминале ← → / Home / End или клик |
 | `progress` | `value` из `max`, `label`, `variant`: полоса с процентами |
+| `disabled` | (v0.20) у каждого поля — `input`, `textarea`, `select`, `checkbox`, `radioGroup`, `slider`, как у `button` — есть `.disabled = true`: поле видно, но не редактируется и пропускается Tab |
 | `useForm<T>` | значения формы в вашей структуре: `{.initial, .validate (возвращает FormErrors: поле -> сообщение), .onSubmit}` даёт `values`, `set("name", &T::name)` (onChange), `error("name")` (видна после изменения поля или попытки отправить), `submit`, `reset`, `valid()`; у `input`, `select`, `textarea`, `radioGroup` и `checkbox` есть `.error` |
 | `table` | колонки, которые выравниваются в обоих бэкендах: `columns` (`title`, `width` в символах, `align`, `sortable`), `rows` (`cells`, `key`, `onSelect`, `selected`), `sortColumn` / `sortDescending` / `onSort` (строки сортируете вы), `emptyText`, `list` (`useVirtualList` для длинных таблиц) |
 | `useVirtualList` | хук для списков любой длины: `count`, `rowHeight` (px) / `rowLines` (терминал), `follow` (держать конец на виду), `border`, `onScroll`; строки `first`..`last` рисуете сами и отдаёте в `view(rows)` — существуют только строки на экране |
@@ -663,6 +664,8 @@ ReactX распространяется **на ваш выбор** на усло
 - [MIT](LICENSE-MIT)
 
 Если вы присылаете изменения в ReactX (pull request), вы соглашаетесь, что они распространяются на тех же условиях — под обеими лицензиями, без дополнительных требований.
+
+**Стабильность API.** Публичный API — то, что объявлено в `include/reactx/` вне пространств `detail`, команды и опции CLI `reactx`, `reactx.json` и CMake-функции и цели (`reactx_add_app`, `reactx::reactx`, `reactx::testing`, ...). С 1.0 он меняется только в MAJOR-релизах. Имена никогда не переименовываются на месте: добавляется лучшее имя, а старое помечается устаревшим (в комментарии в коде, в документации и в разделе CHANGELOG «Устарело») и работает до 2.0. Устарели пока: `ui::ListProps::items` (используйте `.children`) и `ui::RadioGroupProps::row` (используйте `.direction = ui::Direction::Row`). Рефлексия C++26 остаётся опциональной (`reactx::reflection`, нативные сборки) и вне этого обещания, пока компиляторы о ней не договорятся.
 
 ---
 

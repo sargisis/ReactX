@@ -77,7 +77,7 @@ Element App(const Props&) {
                    .label = "Add"}),
         ui::list({.title = std::to_string(left) + " left · click to toggle, Delete to remove",
                   .emptyText = "No tasks",
-                  .items = std::move(items)}),
+                  .children = std::move(items)}),
         ui::stack({.direction = ui::Direction::Row, .justify = ui::Justify::Between, .wrap = true, .children = {
             ui::select({.label = "Sort", .value = sort,
                         .options = {{"added", "As added"}, {"name", "By name"}, {"todo", "Todo first"}},

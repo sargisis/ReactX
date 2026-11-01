@@ -6,6 +6,22 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ## [Не выпущено]
 
+## [0.20.0] — 2026-11-02
+
+Аудит API перед 1.0: у каждого поля формы есть `.disabled`, `ui::list` принимает `.children`, как все остальные компоненты, `ui::radioGroup` раскладывается через `.direction`, как `ui::stack`, а документация говорит, что такое публичный API и как он будет меняться: никогда не переименованием на месте — старые имена работают до 2.0. MINOR-релиз из-за новых полей; приложения обновляются без правок.
+
+**Обновиться:** `reactx upgrade`, затем `reactx update` в каждом проекте.
+
+### Добавлено
+
+- `.disabled` у `ui::input`, `textarea`, `select`, `checkbox`, `radioGroup` и `slider` (как у `ui::button`): поле видно, но не редактируется и пропускается Tab — в браузере родной `disabled`, в терминале тусклое и без фокуса.
+- `ui::ListProps::children` (элементы, как у всех остальных компонентов) и `ui::RadioGroupProps::direction` (как у `ui::stack`).
+- Документация: раздел «Стабильность API» — что такое публичный API и что имена не переименовываются на месте.
+
+### Устарело
+
+- `ui::ListProps::items`: используйте `.children`. `ui::RadioGroupProps::row`: используйте `.direction = ui::Direction::Row`. Оба работают до 2.0 (без предупреждения компилятора: GCC предупреждал бы при любом использовании структуры).
+
 ## [0.19.0] — 2026-11-02
 
 Роутер повзрослел: вложенные маршруты (`"/settings/*"` со своими `routes()` внутри, разметка раздела не перемонтируется), guards (`.allow` / `.redirect`), `router::redirect` и ссылки, активные на путях под собой. MINOR-релиз из-за нового API; приложения обновляются без правок.
@@ -440,7 +456,8 @@ ReactX без установки компиляторов: готовый `react
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.19.0...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/sargisis/ReactX/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/sargisis/ReactX/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/sargisis/ReactX/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/sargisis/ReactX/compare/v0.16.0...v0.17.0

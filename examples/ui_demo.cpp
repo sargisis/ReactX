@@ -85,7 +85,7 @@ Element App(const Props& props) {
                    },
                    .placeholder = "new task, press Enter",
                    .label = "Add:"}),
-        ui::list({.title = std::to_string(left) + " left", .emptyText = "no tasks", .items = std::move(items)}),
+        ui::list({.title = std::to_string(left) + " left", .emptyText = "no tasks", .children = std::move(items)}),
         ui::stack({.direction = ui::Direction::Row, .gap = 2, .justify = ui::Justify::Between, .children = {
             ui::select({.label = "Sort:", .value = sort,
                         .options = {{"added", "as added"}, {"name", "by name"}, {"todo", "todo first"}},

@@ -6,6 +6,22 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+## [0.20.0] — 2026-11-02
+
+The API audit before 1.0: every form field takes `.disabled`, `ui::list` takes `.children` like every other component, `ui::radioGroup` lays out with `.direction` like `ui::stack`, and the docs say what the public API is and how it will change: never by renaming in place — old names keep working until 2.0. A MINOR release for the new fields; apps update without changes.
+
+**Update:** `reactx upgrade`, then `reactx update` in each project.
+
+### Added
+
+- `.disabled` on `ui::input`, `textarea`, `select`, `checkbox`, `radioGroup` and `slider` (like `ui::button`): shown, not editable, skipped by Tab — a native `disabled` in the browser, dim and unfocusable in a terminal.
+- `ui::ListProps::children` (the items, like every other component) and `ui::RadioGroupProps::direction` (like `ui::stack`).
+- Docs: an "API stability" section — what the public API is, and that nothing is renamed in place.
+
+### Deprecated
+
+- `ui::ListProps::items`: use `.children`. `ui::RadioGroupProps::row`: use `.direction = ui::Direction::Row`. Both keep working until 2.0 (no compiler warning: GCC would warn on every use of the struct).
+
 ## [0.19.0] — 2026-11-02
 
 The router grows up: nested routes (`"/settings/*"` with its own `routes()` inside, the layout stays mounted), guards (`.allow` / `.redirect`), `router::redirect`, and links that stay active under their path. A MINOR release for the new API; apps update without changes.
@@ -440,7 +456,8 @@ The first release.
 - **A documentation site** built with ReactX: https://sargisis.github.io/ReactX/, published by GitHub Actions through the `gh-pages` branch.
 - The version in one place (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; new projects from `reactx new` use ReactX by release tag.
 
-[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/sargisis/ReactX/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/sargisis/ReactX/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/sargisis/ReactX/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/sargisis/ReactX/compare/v0.16.0...v0.17.0

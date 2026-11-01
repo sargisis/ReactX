@@ -165,14 +165,14 @@ inline const std::vector<Page>& pagesEn() {
                               "and --target links it to your app.",
                  "reactx add fmt https://github.com/fmtlib/fmt.git --rev 11.0.2 --target fmt::fmt\nreactx remove fmt"},
                 {"reactx update", "Moves your project to the newest ReactX release. --check only tells you whether there is one.",
-                 "reactx update --check   # ReactX v0.18.0 -> v0.19.0 is available\n"
+                 "reactx update --check   # ReactX v0.19.0 -> v0.20.0 is available\n"
                  "reactx update\n"
                  "reactx build"},
                 {"reactx.json", "Everything about the project in one file.",
                  "{\n"
                  "  \"name\": \"my-app\",\n"
                  "  \"template\": \"web\",\n"
-                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.19.0\" },\n"
+                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.20.0\" },\n"
                  "  \"dependencies\": { \"fmt\": { \"git\": \"...\", \"rev\": \"11.0.2\", \"target\": \"fmt::fmt\" } },\n"
                  "  \"web\": { \"base\": \"/\", \"proxy\": { \"/api\": \"http://127.0.0.1:5000\" } }\n"
                  "}"},
@@ -184,6 +184,13 @@ inline const std::vector<Page>& pagesEn() {
                 {"Version numbers", "ReactX uses Semantic Versioning: MAJOR.MINOR.PATCH. PATCH fixes bugs, MINOR adds features. "
                                     "While MAJOR is 0, a MINOR release may also change the API — the CHANGELOG says what "
                                     "to adjust.", ""},
+                {"API stability", "The public API is what include/reactx/ declares outside detail namespaces, the reactx "
+                                  "commands and options, reactx.json and the CMake functions and targets. From 1.0 on it "
+                                  "changes only in MAJOR releases. Nothing is renamed in place: a better name is added, the "
+                                  "old one is marked deprecated (code comment, docs, the CHANGELOG's Deprecated section) and "
+                                  "keeps working until 2.0. Deprecated so far: ui::ListProps::items (use .children) and "
+                                  "ui::RadioGroupProps::row (use .direction = ui::Direction::Row). C++26 reflection stays "
+                                  "opt-in (reactx::reflection, native builds), outside this promise for now.", ""},
                 {"Upgrading reactx", "Two steps: the tool, then each project. reactx upgrade replaces the reactx tool with the newest "
                                      "release (checking its SHA-256); before v0.14.0 run the installer again. Once a day reactx also "
                                      "checks for a new release in the background and tells you (REACTX_NO_UPDATE_CHECK=1 turns it off).",
@@ -192,9 +199,9 @@ inline const std::vector<Page>& pagesEn() {
                  "cd my-app && reactx update && reactx build"},
                 {"Upgrading a project", "reactx update finds the newest release and writes it into reactx.json; the next build downloads it. "
                               "By hand: change rev to the new tag.",
-                 "reactx update\n# or in reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.19.0\" }"},
+                 "reactx update\n# or in reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.20.0\" }"},
                 {"The version in code", "",
-                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"0.19.0\"\n"
+                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"0.20.0\"\n"
                  "static_assert(REACTX_VERSION_MAJOR == 0);"},
             },
         },
@@ -370,7 +377,7 @@ inline const std::vector<Page>& pagesEn() {
                 {"Scrolling", "What is taller than the terminal is cut off, so long lists go in a box with overflow: \"scroll\". "
                               "In a column it takes the rows that are left; the mouse wheel and PageUp/PageDown scroll it, the "
                               "focused element stays visible, a border shows the position and onScroll reports it in rows. "
-                              "ui::list({.items, .scroll = true}) scrolls inside its border. Modals and toasts use "
+                              "ui::list({.children = items, .scroll = true}) scrolls inside its border. Modals and toasts use "
                               "position: \"fixed\", so they show on the screen however tall the page is.",
                  "h(\"box\", {{\"flexGrow\", 1}}, {\n"
                  "    h(\"text\", {}, {\"Logs\"}),\n"
@@ -465,7 +472,7 @@ inline const std::vector<Page>& pagesEn() {
                                 "should be visible, slider for a number in a range, progress for how far something got.",
                  "ui::textarea({.value = note, .onChange = setNoteFn, .label = \"Note\", .rows = 3})\n"
                  "ui::radioGroup({.label = \"Plan\", .value = plan, .options = {{\"free\", \"Free\"}, {\"pro\", \"Pro\"}},\n"
-                 "                .onChange = setPlanFn, .row = true})\n"
+                 "                .onChange = setPlanFn, .direction = ui::Direction::Row})\n"
                  "ui::slider({.label = \"Seats\", .value = seats, .min = 1, .max = 10, .onChange = setSeatsFn})\n"
                  "ui::progress({.value = done, .max = total, .label = \"Uploading\"})"},
                 {"Tables", "ui::table lines up columns in the browser and in a terminal. The rows are yours: sort them in onSort, "

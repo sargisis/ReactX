@@ -63,6 +63,7 @@ Element input(InputProps p) {
                              {"placeholder", std::move(p.placeholder)},
                              {"label", std::move(p.label)},
                              {"labelAbove", p.labelAbove},
+                             {"disabled", p.disabled},
                              {"error", std::move(p.error)}}),
                    p.key);
 }
@@ -75,7 +76,7 @@ Element checkbox(CheckboxProps p) {
             onChange(next);
         };
     return withKey(h(Checkbox, {{"label", std::move(p.label)}, {"checked", p.checked}, {"onToggle", std::move(toggle)},
-                                {"error", std::move(p.error)}}),
+                                {"disabled", p.disabled}, {"error", std::move(p.error)}}),
                    p.key);
 }
 
@@ -104,8 +105,11 @@ Element listItem(ListItemProps p) {
 }
 
 Element list(ListProps p) {
+    // .items is the old name of .children: both work, the items come first.
+    std::vector<Element> items = std::move(p.items);
+    for (auto& e : p.children) items.push_back(std::move(e));
     return withKey(h(List, {{"title", std::move(p.title)}, {"emptyText", std::move(p.emptyText)}, {"scroll", p.scroll}},
-                     std::move(p.items)),
+                     std::move(items)),
                    p.key);
 }
 
@@ -141,7 +145,7 @@ std::vector<Element> optionElements(std::vector<Option>& list) {
 Element select(SelectProps p) {
     auto options = optionElements(p.options);
     return withKey(h(Select, {{"label", std::move(p.label)}, {"value", std::move(p.value)}, {"onChange", std::move(p.onChange)},
-                              {"labelAbove", p.labelAbove}, {"error", std::move(p.error)}},
+                              {"labelAbove", p.labelAbove}, {"disabled", p.disabled}, {"error", std::move(p.error)}},
                      std::move(options)),
                    p.key);
 }
@@ -152,6 +156,7 @@ Element textarea(TextareaProps p) {
                                 {"placeholder", std::move(p.placeholder)},
                                 {"label", std::move(p.label)},
                                 {"rows", std::max(p.rows, 1)},
+                                {"disabled", p.disabled},
                                 {"error", std::move(p.error)}}),
                    p.key);
 }
@@ -159,7 +164,8 @@ Element textarea(TextareaProps p) {
 Element radioGroup(RadioGroupProps p) {
     auto options = optionElements(p.options);
     return withKey(h(RadioGroup, {{"label", std::move(p.label)}, {"value", std::move(p.value)}, {"onChange", std::move(p.onChange)},
-                                  {"row", p.row}, {"error", std::move(p.error)}},
+                                  {"row", p.row || p.direction == Direction::Row}, {"disabled", p.disabled},
+                                  {"error", std::move(p.error)}},
                      std::move(options)),
                    p.key);
 }
@@ -176,7 +182,8 @@ Element slider(SliderProps p) {
                               {"onChange", InputHandler([onChange](const std::string& text) {
                                    if (auto n = parseNumber<int>(text); n && onChange) onChange(*n);
                                })},
-                              {"showValue", p.showValue}}),
+                              {"showValue", p.showValue},
+                              {"disabled", p.disabled}}),
                    p.key);
 }
 

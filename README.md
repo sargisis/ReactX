@@ -248,7 +248,7 @@ h("box", {{"flexGrow", 1}, {"justifyContent", "center"}, {"alignItems", "center"
 
 **Flex props** (like CSS): `direction` (`row`, `column`, `row-reverse`, `column-reverse`), `justifyContent` (`start`, `center`, `end`, `space-between`, `space-around`, `space-evenly`), `alignItems` / `alignSelf` (`start`, `center`, `end`, `stretch`), `flexGrow`, `flexShrink`, `flexBasis`, `flexWrap`, `width` / `height` / `min*` / `max*` (a number or `"50%"`), `padding*` and `margin*` (`X`, `Y`, `Left`, …; `margin: "auto"`), `gap` / `rowGap` / `columnGap`, `position: "absolute"` + `top` / `left` / `right` / `bottom` (`"fixed"`: on the screen and over everything, like `ui::modal` and the toasts), `display: "none"`, `overflow: "hidden"`.
 
-**Scrolling**: `overflow: "scroll"` makes a box a vertical scroll container. In a column it takes the rows that are left, so a list from a server fits under a header with no height to compute; the mouse wheel over it and PageUp/PageDown scroll it, moving the focus keeps the focused element visible, `ref.scrollIntoView()` shows any element, a border shows where you are (`┃`), and `onScroll` gets a `ScrollEvent` in rows (`nearBottom(3)` to load more). `ui::list({.items, .scroll = true})` is a list that scrolls inside its border and keeps the selected item visible.
+**Scrolling**: `overflow: "scroll"` makes a box a vertical scroll container. In a column it takes the rows that are left, so a list from a server fits under a header with no height to compute; the mouse wheel over it and PageUp/PageDown scroll it, moving the focus keeps the focused element visible, `ref.scrollIntoView()` shows any element, a border shows where you are (`┃`), and `onScroll` gets a `ScrollEvent` in rows (`nearBottom(3)` to load more). `ui::list({.children = items, .scroll = true})` is a list that scrolls inside its border and keeps the selected item visible.
 
 ```cpp
 h("box", {{"flexGrow", 1}}, {
@@ -280,7 +280,7 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
     ui::tabs({.tabs = {
         {"Tasks", {
             ui::input({.value = draft, .onChange = setDraftFn, .onSubmit = addFn, .label = "New:"}),
-            ui::list({.title = "List", .items = {
+            ui::list({.title = "List", .children = {
                 ui::listItem({.label = "Buy milk", .detail = "today", .onSelect = toggleFn}),
             }}),
             ui::button({.label = "Delete all", .onClick = askFn, .variant = ui::Variant::Danger}),
@@ -299,12 +299,13 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 | `checkbox` | `label`, `checked`, `onToggle` (Enter / Space), `onChange(bool)` with the new state |
 | `tabs` | tabs `{label, content}`, `initial`; Enter on a title opens the tab |
 | `modal` | `title`, `open`, `onClose` (Escape), `width`; covers what is under it, keeps the focus inside and gives it back when closed |
-| `list` / `listItem` | a bordered box with a title, `emptyText`, `scroll` (scrolls inside instead of growing); an item: `label`, `detail` on the right, `selected` (a newly selected item scrolls into view), `onSelect`, `onKey` |
+| `list` / `listItem` | `children` (the items; `items` is the old name), a bordered box with a title, `emptyText`, `scroll` (scrolls inside instead of growing); an item: `label`, `detail` on the right, `selected` (a newly selected item scrolls into view), `onSelect`, `onKey` |
 | `select` | `label`, `value`, `options` (`{value, label}`), `onChange(value)`; a native `<select>` in the browser, ‹ › with Left / Right / Enter or a click in a terminal; `labelAbove` |
 | `textarea` | `value`, `onChange`, `placeholder`, `label`, `rows`; in a terminal too: Enter, Up / Down between lines, wrapping, scrolling |
-| `radioGroup` | `label`, `value`, `options`, `onChange(value)`, `row`: every option visible; native radios in the browser, (•) with Up / Down or a click in a terminal |
+| `radioGroup` | `label`, `value`, `options`, `onChange(value)`, `direction` (`Row` side by side): every option visible; native radios in the browser, (•) with Up / Down or a click in a terminal |
 | `slider` | `label`, `value`, `min`, `max`, `step`, `onChange(int)`, `showValue`; a range input in the browser, Left / Right / Home / End or a click in a terminal |
 | `progress` | `value` of `max`, `label`, `variant`: a bar with the percentage |
+| `disabled` | (v0.20) every form field — `input`, `textarea`, `select`, `checkbox`, `radioGroup`, `slider`, like `button` — takes `.disabled = true`: shown, not editable, skipped by Tab |
 | `useForm<T>` | the values of a form in your struct: `{.initial, .validate (returns FormErrors: field -> message), .onSubmit}` gives `values`, `set("name", &T::name)` (an onChange), `error("name")` (shown after the field changed or a submit), `submit`, `reset`, `valid()`; `input`, `select`, `textarea`, `radioGroup` and `checkbox` take `.error` |
 | `table` | columns that line up in both backends: `columns` (`title`, `width` in characters, `align`, `sortable`), `rows` (`cells`, `key`, `onSelect`, `selected`), `sortColumn` / `sortDescending` / `onSort` (you sort the rows), `emptyText`, `list` (a `useVirtualList` for long tables) |
 | `useVirtualList` | a hook for lists of any length: `count`, `rowHeight` (px) / `rowLines` (terminal), `follow` (keep the end in view), `border`, `onScroll`; draw rows `first`..`last` yourself and pass them to `view(rows)` — only the rows on screen exist |
@@ -674,6 +675,8 @@ ReactX is licensed under either of
 at your option.
 
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in ReactX by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
+
+**API stability.** The public API is what `include/reactx/` declares outside `detail` namespaces, the `reactx` CLI commands and options, `reactx.json`, and the CMake functions and targets (`reactx_add_app`, `reactx::reactx`, `reactx::testing`, ...). From 1.0 on it changes only in MAJOR releases. Names are never renamed in place: a better name is added and the old one is marked deprecated (in the code comment, the docs and the CHANGELOG's "Deprecated" section) and keeps working until 2.0. Deprecated so far: `ui::ListProps::items` (use `.children`) and `ui::RadioGroupProps::row` (use `.direction = ui::Direction::Row`). C++26 reflection stays opt-in (`reactx::reflection`, native builds) and outside this promise until the compilers agree on it.
 
 ---
 

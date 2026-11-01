@@ -66,6 +66,7 @@
       if (tag === "input") {
         if (this.value) attrs += ` .value="${this.value}"`;
         if (this.checked) attrs += ` .checked`;
+        if (this.disabled) attrs += ` .disabled`;
         return `<${tag}${attrs}>`;
       }
       if (this.disabled) attrs += ` .disabled`;

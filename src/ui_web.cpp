@@ -43,6 +43,7 @@ constexpr const char* kCss = R"css(
 .rx-field { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .rx-field__error { flex-basis: 100%; margin: 0; color: var(--rx-danger); font-size: .85em; }
 .rx-input[aria-invalid="true"] { border-color: var(--rx-danger); }
+.rx-input:disabled, .rx-check--disabled, .rx-radios:disabled, .rx-slider input:disabled { opacity: .5; cursor: not-allowed; }
 .rx-textarea { resize: vertical; line-height: 1.45; }
 .rx-radios { border: 0; margin: 0; padding: 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .rx-radios--row { flex-direction: row; flex-wrap: wrap; gap: 6px 18px; }
@@ -180,8 +181,10 @@ void ensureStyles() {
 }
 
 // A field with an error is marked for screen readers and drawn red; the message goes under it.
+// Also passes `disabled` on (a native attribute: not editable, not focusable).
 rx::Element invalid(rx::Element field, const rx::Props& p) {
     if (!p.get<std::string>("error").empty()) field.props.set("aria-invalid", "true");
+    if (p.get<bool>("disabled")) field.props.set("disabled", true);
     return field;
 }
 void addError(std::vector<rx::Element>& parts, const rx::Props& p) {
@@ -269,7 +272,7 @@ Element Input(const Props& p) {
 
 Element Checkbox(const Props& p) {
     ensureStyles();
-    Element box = h("label", {{"className", "rx-check"}}, {
+    Element box = h("label", {{"className", p.get<bool>("disabled") ? "rx-check rx-check--disabled" : "rx-check"}}, {
         invalid(h("input", {{"type", "checkbox"}, {"checked", p.get<bool>("checked")}, {"onChange", p.get<Callback>("onToggle")}}), p),
         h("span", {}, {p.get<std::string>("label")}),
     });
@@ -445,6 +448,7 @@ Element RadioGroup(const Props& p) {
     addError(parts, p);
     Element group = h("fieldset", {{"className", p.get<bool>("row") ? "rx-radios rx-radios--row" : "rx-radios"}}, std::move(parts));
     if (!p.get<std::string>("error").empty()) group.props.set("aria-invalid", "true");
+    if (p.get<bool>("disabled")) group.props.set("disabled", true);  // a disabled fieldset disables its radios
     return group;
 }
 
@@ -460,6 +464,7 @@ Element Slider(const Props& p) {
                                 {"step", p.get<int>("step", 1)},
                                 {"value", value},
                                 {"aria-label", label},
+                                {"disabled", p.get<bool>("disabled")},
                                 {"onInput", p.get<InputHandler>("onChange")}}));
     if (p.get<bool>("showValue", true)) parts.push_back(h("span", {{"className", "rx-slider__value"}}, {std::to_string(value)}));
     return h("label", {{"className", "rx-field rx-slider"}}, std::move(parts));

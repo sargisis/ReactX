@@ -505,7 +505,7 @@ Element FormDemo(const Props&) {
         ui::input({.value = o.name, .onChange = form.set("name", &Order::name), .onSubmit = [submit = form.submit](const std::string&) { submit(); },
                    .placeholder = "Ada Lovelace", .label = tr(en, "Name", "Имя"), .labelAbove = true, .error = form.error("name")}),
         ui::radioGroup({.label = tr(en, "Size", "Размер"), .value = o.size, .options = {{"s", "S"}, {"m", "M"}, {"l", "L"}, {"xl", "XL"}},
-                        .onChange = form.set("size", &Order::size), .row = true}),
+                        .onChange = form.set("size", &Order::size), .direction = ui::Direction::Row}),
         ui::slider({.label = tr(en, "How many", "Сколько"), .value = o.count, .min = 1, .max = 10, .onChange = form.set("count", &Order::count)}),
         ui::textarea({.value = o.note, .onChange = form.set("note", &Order::note), .placeholder = tr(en, "Anything else?", "Что-нибудь ещё?"),
                       .label = tr(en, "Note", "Комментарий"), .rows = 2, .error = form.error("note")}),

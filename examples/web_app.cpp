@@ -102,7 +102,7 @@ Element TodoList(const Props&) {
                    .label = "Новая"}),
         h("div", {{"className", "filters"}}, {filter("", "Все"), filter("active", "В работе"), filter("done", "Готово")}),
         status(todos),
-        todos.ok() ? ui::list({.title = "Нажмите на задачу, чтобы открыть", .emptyText = "Пусто", .items = std::move(items)})
+        todos.ok() ? ui::list({.title = "Нажмите на задачу, чтобы открыть", .emptyText = "Пусто", .children = std::move(items)})
                    : fragment({}),
     });
 }

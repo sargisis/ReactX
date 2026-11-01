@@ -299,6 +299,18 @@ int main() {
     js("rxTest.clickText('Send')");
     CHECK((sentFeedback == Feedback{.text = "Lovely", .mood = "bad", .stars = 3}));
 
+    std::cout << "disabled fields\n";
+    mountDom(h("div", {}, {
+        ui::input({.value = "kept", .disabled = true}),
+        ui::checkbox({.label = "Agree", .disabled = true}),
+        ui::radioGroup({.options = {{"x", "X"}}, .disabled = true}),
+        ui::slider({.value = 3, .disabled = true}),
+    }));
+    CHECK(has("<input class=\"rx-input\" placeholder type=\"text\" .value=\"kept\" .disabled>"));
+    CHECK(has("<input type=\"checkbox\" .disabled>"));
+    CHECK(has("rx-check rx-check--disabled") && has("<fieldset class=\"rx-radios\" .disabled>"));
+    CHECK(has("type=\"range\"") && has(".disabled"));
+
     std::cout << (failures ? "FAILED: " + std::to_string(failures) : std::string("OK, all tests passed")) << '\n';
     return failures ? 1 : 0;
 }

@@ -6,7 +6,7 @@ Native (terminal) builds need GCC 16+ (the C++26 standard library); browser buil
 
 ## Which version has what
 
-`reactx new` pins the project to the CLI's release (`"rev"` in `reactx.json`). Everything in this file is in v0.14.0: `ui::useVirtualList`, `labelAbove`, `reactx upgrade`, `useCallback` with any signature, `ui::checkbox` `.onChange(bool)`, `FetchResponse::errorText()` and `useState` of types without `==` came in v0.14.0; `useWebSocket` and `HttpServer::webSocket` came in v0.13.0; prerendering from `reactx.json`, `ref.scrollTo` / `scrollBy` / `scrollMetrics`, the `scrollIntoView` prop and `HttpServer::onFile` came in v0.12.0; scrolling in the terminal (`overflow: "scroll"`, `ui::list({.scroll = true})`, `position: "fixed"`, `onScroll`) and `ref.scrollIntoView()` came in v0.11.0; the rx::ui components (`select`, `confirm`, `toast`/`toaster`, `tooltip`, `card`, `stack`, `text`) came in v0.10.0; `useNodeRef` / the `ref` prop / `ref.focus()`, `reactx/js.hpp`, pointer and hover events and the mouse in the terminal in v0.9.0; `renderToString` in v0.8.3. If a name from this file doesn't exist ("'useNodeRef' was not declared in this scope", "'confirm' is not a member of 'rx::ui'"), the project is on an older release: `reactx update` moves it to the newest one (`reactx --version` shows the CLI's).
+`reactx new` pins the project to the CLI's release (`"rev"` in `reactx.json`). Everything in this file is in v0.15.0: `ui::table`, `useTitle` and `mountDom` replacing the app in its container came in v0.15.0; `ui::useVirtualList`, `labelAbove`, `reactx upgrade`, `useCallback` with any signature, `ui::checkbox` `.onChange(bool)`, `FetchResponse::errorText()` and `useState` of types without `==` came in v0.14.0; `useWebSocket` and `HttpServer::webSocket` came in v0.13.0; prerendering from `reactx.json`, `ref.scrollTo` / `scrollBy` / `scrollMetrics`, the `scrollIntoView` prop and `HttpServer::onFile` came in v0.12.0; scrolling in the terminal (`overflow: "scroll"`, `ui::list({.scroll = true})`, `position: "fixed"`, `onScroll`) and `ref.scrollIntoView()` came in v0.11.0; the rx::ui components (`select`, `confirm`, `toast`/`toaster`, `tooltip`, `card`, `stack`, `text`) came in v0.10.0; `useNodeRef` / the `ref` prop / `ref.focus()`, `reactx/js.hpp`, pointer and hover events and the mouse in the terminal in v0.9.0; `renderToString` in v0.8.3. If a name from this file doesn't exist ("'useNodeRef' was not declared in this scope", "'confirm' is not a member of 'rx::ui'"), the project is on an older release: `reactx update` moves it to the newest one (`reactx --version` shows the CLI's).
 
 ## A complete program
 
@@ -70,6 +70,7 @@ int main() {
 - `useDebounce(value, 300ms)` — the value after it stopped changing (timers run on the UI thread).
 - `auto [v, setV] = useLocalStorage("key", default);` — `std::string`, `bool` or numbers; localStorage in the browser; natively only in memory (lost when the program exits). A third argument `[](const std::string& why) { ... }` is called when saving fails (quota, private mode); without it the value silently stays in memory only. Direct access with errors as values: `rx::storageRead(key)` → `std::expected<std::optional<std::string>, std::string>` (missing key = `std::nullopt`), `rx::storageWrite(key, value)`, `rx::storageRemove(key)` → `std::expected<void, std::string>`.
 - `WindowSize s = useWindowSize();` — browser window (px) or terminal (cells); re-renders on resize.
+- `useTitle("Orders (" + std::to_string(n) + ")");` (v0.15.0+) — the browser tab's title while the component is mounted; the previous title comes back on unmount (one per route page). Natively it only keeps the text.
 - `auto [state, dispatch] = useReducer([](const State& s, Action a) { ...; return next; }, State{});` — `dispatch(action)`; the newest reducer is used.
 - `useTimeout(fn, std::optional(5s))` once, `useInterval(fn, 1s)` repeatedly; `std::nullopt` switches off; unmounting cancels.
 - Shared state outside the tree (like Zustand): `const auto Cart = createStore<std::vector<Item>>({});` at namespace scope; `Cart.set(v)` / `Cart.update([](auto items) { items.push_back(x); return items; })` on the UI thread (handlers, effects, fetch callbacks); `const auto& items = useStore(Cart);` re-renders on every change, `auto n = useStore(Cart, [](const auto& c) { return c.size(); });` only when that part changes. Outside components read it directly: `const auto& items = Cart.get();` (the current value, no re-render) — e.g. in a `setLocalFetch` handler that answers with live data.
@@ -140,7 +141,21 @@ for (int i = list.first; i < list.last; ++i) rows.push_back(h(LogLine, {.line = 
 return h("box", {{"flexGrow", 1}}, {header, list.view(std::move(rows))});
 ```
 
-`.follow = true` keeps the end in view while rows are added (a log, a chat); the user scrolling up turns it off through `onScroll`. In a terminal it takes the rows left in a column; in the browser give it `.height` (px) or a flex parent with a height. Rows that aren't drawn can't take the focus. The rows are `div`s: use CSS grid/flex for columns, not `<table>`.
+`.follow = true` keeps the end in view while rows are added (a log, a chat); the user scrolling up turns it off through `onScroll`. In a terminal it takes the rows left in a column; in the browser give it `.height` (px) or a flex parent with a height. Rows that aren't drawn can't take the focus. The rows are `div`s: use CSS grid/flex for columns, not `<table>` — or `ui::table` below.
+
+Tables (v0.15.0+): `ui::table` lines up columns in both backends (CSS grid in the browser, fixed cells in a terminal). The rows are yours — sort them yourself in `onSort`; the table shows the arrow:
+
+```cpp
+std::vector<ui::TableRow> rows;
+for (const auto& it : sorted) rows.push_back({.cells = {it.name, std::to_string(it.qty)}, .key = it.id,
+                                              .onSelect = [setPicked, id = it.id] { setPicked(id); }, .selected = picked == it.id});
+return ui::table({.columns = {{.title = "Name", .sortable = true},
+                              {.title = "Qty", .width = 6, .align = ui::Align::End, .sortable = true}},
+                  .rows = std::move(rows), .sortColumn = sortBy, .sortDescending = desc,
+                  .onSort = [setSortBy](int column) { setSortBy(column); }, .emptyText = "No items"});
+```
+
+`TableColumn{.title, .width (characters; 0 = share the room left), .align, .sortable}`, `TableRow{.cells (text or any element), .key, .onSelect (click / Enter), .selected}`. Long tables: `auto list = ui::useVirtualList({.count = n, .rowHeight = 36, .height = 480});`, build only rows `list.first`..`list.last-1` and pass `.list = list` (a copy; the header stays on top).
 
 ## Router (`reactx/router.hpp`, namespace `rx::router`)
 
@@ -193,7 +208,7 @@ server.run();
 - Numbers from text: `rx::parseNumber<int>(s)` / `rx::parsePort(s)` (`reactx/parse.hpp`), not `std::stoi`.
 - Never change state from another thread (natively a setter called off the UI thread stops the program with `precondition failed: ... onOwnThread()`). Timers: `useTimeout`, `useInterval`, `useDebounce`; the UI thread runs them.
 - Prefer the standard library (`std::format`, `std::print`, `std::ranges`, `std::flat_map`, `std::expected`) over hand-written helpers or extra libraries.
-- Code built for the browser: build strings with `+` and `std::to_string`, not `std::format` / `std::print` — any use adds ~100 KB to the `.wasm` (a whole counter app is 93 KB without it). Natively `std::format` is fine. `reactx build` prints the `.wasm` size and names the files that pull these in (`reactx: size: ...`).
+- Code built for the browser: build strings with `+` and `std::to_string`, not `std::format` / `std::print` — any use adds ~100 KB to the `.wasm` (a whole counter app is 93 KB without it). Natively `std::format` is fine. `reactx build` prints the `.wasm` size, (v0.15.0+) its biggest parts (`biggest parts: src/app.cpp 23%, ReactX reconciler.cpp 15%, ...`), and names the files that pull these in (`reactx: size: ...`).
 - Code built for the browser must not use reflection, `std::generator`, `<stacktrace>`, threads, sockets or the file system.
 
 ## JavaScript and the DOM (browser build)
@@ -216,7 +231,7 @@ root.dispatch(*r.findByProp("id", "inc"), "onClick");   // or "onInput", std::st
 assert(r.toString().find("Count: 2") != std::string::npos);
 ```
 
-In a web project (`reactx new`) keep components out of `main.cpp` (it calls `mountDom`) and build only the test target natively: in CMakeLists.txt `if(NOT EMSCRIPTEN) add_executable(app_tests tests/app_tests.cpp src/app.cpp) target_link_libraries(app_tests PRIVATE reactx::reactx) endif()`, then `cmake -S . -B build/test && cmake --build build/test --target app_tests && ./build/test/app_tests`. In a test, `ui::...` components draw their terminal version.
+In a web project (`reactx new`) keep components out of `main.cpp` (it calls `mountDom`) and build only the test target natively: in CMakeLists.txt `if(NOT EMSCRIPTEN) add_executable(app_tests tests/app_tests.cpp src/app.cpp) target_link_libraries(app_tests PRIVATE reactx::reactx) endif()`, then `cmake -S . -B build/test && cmake --build build/test --target app_tests && ./build/test/app_tests` (v0.15.0+: `--target` isn't needed, a native build leaves the web app out by itself). In a test, `ui::...` components draw their terminal version.
 
 `dispatch` and `render` re-render on their own. After a setter or `Store::set` called outside them (a captured setter, a `setLocalFetch` answer, a timer) call `root.flush()` before reading `r.toString()`, or the test checks the old tree.
 

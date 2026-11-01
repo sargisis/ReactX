@@ -162,7 +162,7 @@ int main() { mountDom(h(App)); }
 | | |
 |---|---|
 | **Ядро** | элементы `h()`, фрагменты, ключи; компоненты-функции; props-структуры; reconciler с переиспользованием узлов; пакетные обновления |
-| **Хуки** | `useState`, `useEffect`, `useRef`, `useNodeRef`, `useMemo`, `useCallback`, `useContext`, `useReducer`, `useStore`, `useId`, `useTimeout`, `useInterval`, `useKeyboard`, `useDebounce`, `useLocalStorage`, `useWindowSize`, `memo<C>`, `errorBoundary` |
+| **Хуки** | `useState`, `useEffect`, `useRef`, `useNodeRef`, `useMemo`, `useCallback`, `useContext`, `useReducer`, `useStore`, `useId`, `useTimeout`, `useInterval`, `useKeyboard`, `useDebounce`, `useLocalStorage`, `useWindowSize`, `useTitle`, `memo<C>`, `errorBoundary` |
 | **События** | `onClick`, `onInput`, `onChange`, `onKey`, `onSubmit`, `onFocus`, `onBlur`, `onScroll`, `onPointerDown/Move/Up`, `onMouseEnter/Leave` (браузер и терминал); всплытие как в React |
 | **Терминал** | ANSI-отрисовка только изменённых строк, Flexbox на Yoga, рамки, цвета, фокус, Unicode/ASCII по локали |
 | **Браузер** | WebAssembly + DOM, управляемые поля, SVG, делегирование событий |
@@ -181,7 +181,7 @@ int main() { mountDom(h(App)); }
 - `useReducer(reducer, initial)` → `[state, dispatch]`: состояние, которое меняют действия; берётся самый свежий reducer.
 - `useTimeout(fn, std::optional(5s))`, `useInterval(fn, 1s)` — таймеры в потоке интерфейса; `std::nullopt` выключает, размонтирование отменяет.
 - `useKeyboard(handler)` — сочетания клавиш для всего приложения, где бы ни был фокус: вызывается раньше `onKey` элемента, `return true` забирает клавишу; пока фокус в поле ввода, клавиши набора текста сюда не приходят.
-- `useDebounce(value, 300ms)`, `useLocalStorage("key", default)` (браузер — `localStorage`; нативно — только память, теряется при выходе; третий аргумент — обработчик неудачного сохранения), `useWindowSize()`.
+- `useDebounce(value, 300ms)`, `useLocalStorage("key", default)` (браузер — `localStorage`; нативно — только память, теряется при выходе; третий аргумент — обработчик неудачного сохранения), `useWindowSize()`, `useTitle("Заказы")` (заголовок вкладки браузера, пока компонент смонтирован).
 - **Общее состояние** (как Zustand): `const auto Cart = createStore<std::vector<Item>>({});`, `Cart.set(v)` / `Cart.update([](auto items) { ...; return items; })` где угодно в потоке интерфейса; `useStore(Cart)` перерисовывает при каждом изменении, `useStore(Cart, [](const auto& c) { return c.size(); })` — только когда меняется выбранная часть.
 - `useId()` — id, уникальный в приложении и одинаковый при каждой отрисовке: для `<label for>` и `aria-*`.
 - **Границы ошибок**: `errorBoundary([](const RenderError& e) { return h("p", {}, {e.message}); }, {children})` — если дети бросили исключение при отрисовке (в том числе позже, при обновлении состояния), вместо них показывается запасной вариант, а остальное приложение работает; `e.retry()` пробует снова. Исключения в обработчиках событий и эффектах не ловятся (как в React).
@@ -288,6 +288,7 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 | `modal` | `title`, `open`, `onClose` (Escape), `width`; закрывает то, что под ним, держит фокус внутри и возвращает его после закрытия |
 | `list` / `listItem` | рамка с заголовком, `emptyText`, `scroll` (прокрутка внутри вместо роста); пункт: `label`, `detail` справа, `selected` (новый выбранный пункт прокручивается на виду), `onSelect`, `onKey` |
 | `select` | `label`, `value`, `options` (`{value, label}`), `onChange(value)`; в браузере нативный `<select>`, в терминале ‹ › со стрелками ← → / Enter или кликом; `labelAbove` |
+| `table` | колонки, которые выравниваются в обоих бэкендах: `columns` (`title`, `width` в символах, `align`, `sortable`), `rows` (`cells`, `key`, `onSelect`, `selected`), `sortColumn` / `sortDescending` / `onSort` (строки сортируете вы), `emptyText`, `list` (`useVirtualList` для длинных таблиц) |
 | `useVirtualList` | хук для списков любой длины: `count`, `rowHeight` (px) / `rowLines` (терминал), `follow` (держать конец на виду), `border`, `onScroll`; строки `first`..`last` рисуете сами и отдаёте в `view(rows)` — существуют только строки на экране |
 | `confirm` | `title`, `message`, `open`, `confirmLabel`, `cancelLabel`, `danger`, `onConfirm`, `onCancel` (ещё Escape и клик мимо) — готовое «Удалить?» |
 | `toast` / `toaster` | `ui::toast({.text, .variant, .duration})` из любого обработчика или эффекта показывает сообщение в углу, которое исчезает само (`duration = 0` — до клика); один `ui::toaster()` в приложении |

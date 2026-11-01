@@ -136,7 +136,7 @@ inline const std::vector<Page>& pages() {
                  "code --install-extension llvm-vs-code-extensions.vscode-clangd\nreactx build   # пишет compile_commands.json для clangd"},
                 {"Новый проект", "reactx new создаёт папку с reactx.json (манифест, как package.json), CMakeLists.txt, "
                                  "CMakePresets.json и src/main.cpp. ReactX подключается с GitHub по тегу релиза "
-                                 "(например, v0.14.0), а не по ветке, поэтому проект не сломается от новых изменений; --local — из исходников, "
+                                 "(например, v0.15.0), а не по ветке, поэтому проект не сломается от новых изменений; --local — из исходников, "
                                  "из которых собран сам CLI. --terminal — терминальное приложение вместо веба.",
                  "reactx new my-app\ncd my-app"},
                 {"reactx dev", "Собирает веб-версию, запускает встроенный сервер на C++ (тот же, что reactx_serve) и следит за "
@@ -165,15 +165,15 @@ inline const std::vector<Page>& pages() {
                 {"reactx update", "Переводит проект на новейший релиз ReactX: находит теги в репозитории из reactx.json, "
                                   "выбирает самый новый по SemVer (без -rc) и записывает его в rev. --check только проверяет, "
                                   "--to — конкретная версия. Следующий reactx build скачает её сам.",
-                 "reactx update --check   # ReactX v0.13.0 → v0.14.0 is available\n"
-                 "reactx update           # записывает v0.14.0 в reactx.json\n"
+                 "reactx update --check   # ReactX v0.14.0 → v0.15.0 is available\n"
+                 "reactx update           # записывает v0.15.0 в reactx.json\n"
                  "reactx update --to v0.3.0\n"
                  "reactx build"},
                 {"reactx.json", "Всё, что нужно проекту, в одном файле.",
                  "{\n"
                  "  \"name\": \"my-app\",\n"
                  "  \"template\": \"web\",\n"
-                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.14.0\" },\n"
+                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.15.0\" },\n"
                  "  \"dependencies\": { \"fmt\": { \"git\": \"...\", \"rev\": \"11.0.2\", \"target\": \"fmt::fmt\" } },\n"
                  "  \"web\": { \"base\": \"/\", \"proxy\": { \"/api\": \"http://127.0.0.1:5000\" } }\n"
                  "}"},
@@ -188,7 +188,7 @@ inline const std::vector<Page>& pages() {
                            "Что изменилось в каждой версии — в CHANGELOG.ru.md.", ""},
                 {"Версия в коде", "Номер версии записан в одном месте — project(ReactX VERSION ...) в CMakeLists.txt; "
                                   "из него генерируется reactx/version.hpp.",
-                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"0.14.0\"\n"
+                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"0.15.0\"\n"
                  "static_assert(REACTX_VERSION_MAJOR == 0);"},
                 {"Обновить reactx", "Два шага: сам инструмент, потом каждый проект. reactx upgrade заменяет reactx новейшим релизом "
                                     "(проверяя SHA-256); до v0.14.0 — запустите установщик ещё раз. Раз в день reactx сам проверяет "
@@ -198,7 +198,7 @@ inline const std::vector<Page>& pages() {
                  "cd my-app && reactx update && reactx build"},
                 {"Обновить проект", "reactx update находит новейший релиз и записывает его в reactx.json; reactx build скачивает его. "
                                "Вручную — поменяйте rev на новый тег.",
-                 "reactx update\n# или в reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.14.0\" }"},
+                 "reactx update\n# или в reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.15.0\" }"},
             },
         },
         {
@@ -298,6 +298,9 @@ inline const std::vector<Page>& pages() {
                                     "узнаёт о неудачном сохранении (квота, приватный режим); rx::storageRead / storageWrite "
                                     "возвращают ошибки как std::expected.",
                  "auto [theme, setTheme] = useLocalStorage(\"rx-theme\", std::string(\"dark\"));"},
+                {"useTitle", "Заголовок вкладки браузера, пока компонент смонтирован; при размонтировании возвращается прежний, "
+                             "так что каждая страница роутера называет себя сама. Нативно только хранит текст.",
+                 "useTitle(\"Заказы (\" + std::to_string(count) + \")\");"},
                 {"useWindowSize", "Размер окна браузера (в пикселях) или терминала (в ячейках); компонент перерисовывается при изменении.",
                  "WindowSize size = useWindowSize();"},
                 {"useReducer", "Состояние, которое меняют действия: функция (состояние, действие) → новое состояние. "
@@ -464,6 +467,13 @@ inline const std::vector<Page>& pages() {
                  "std::vector<Element> rows;\n"
                  "for (int i = list.first; i < list.last; ++i) rows.push_back(h(Line, {.n = i}));\n"
                  "return list.view(std::move(rows));"},
+                {"Таблицы", "ui::table выравнивает колонки в браузере и в терминале. Строки ваши: сортируйте их в onSort, "
+                            "заголовок покажет стрелку. Строки с onSelect откликаются на клик и Enter. Для длинных таблиц "
+                            "передайте useVirtualList в .list и стройте только строки на экране.",
+                 "ui::table({.columns = {{.title = \"Имя\", .sortable = true},\n"
+                 "                       {.title = \"Кол-во\", .width = 6, .align = ui::Align::End, .sortable = true}},\n"
+                 "           .rows = rows,  // {.cells = {name, qty}, .key = id, .onSelect = pick}\n"
+                 "           .sortColumn = sortBy, .sortDescending = desc, .onSort = sortFn})"},
                 {"Подтверждение и уведомления", "ui::confirm — готовое окно «Удалить?». ui::toast показывает короткое сообщение в углу "
                                                 "из любого обработчика, эффекта или ответа fetch; оно исчезает само. Один ui::toaster() "
                                                 "в приложении.",

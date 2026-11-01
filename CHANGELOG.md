@@ -6,8 +6,22 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+## [0.15.0] — 2026-11-01
+
+Tables: `ui::table` lines up columns in the browser and in a terminal, with sortable headers, selectable rows and `useVirtualList` for long tables. `useTitle` names the browser tab. `reactx build` says which parts make the `.wasm` big. A second `mountDom` into the same container now stops the old app, and a native build of a web project builds your tests without tripping over `mountDom`. The first release of the road to 1.0. A MINOR release for the new API; apps update without changes.
+
+**Update:** `reactx upgrade`, then `reactx update` in each project (v0.13 and older: `curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh` once).
+
+### Added
+
+- `ui::table`: columns that line up in the browser (CSS grid, `role="table"`, `aria-sort`) and in a terminal (fixed cells), sortable headers (`onSort`; you sort the rows), rows with `onSelect` (click, Enter) and `selected`, `emptyText`, and `.list` for long tables with `ui::useVirtualList`.
+- `rx::useTitle(text)`: the browser tab's title while the component is mounted; the previous one comes back on unmount.
+- `reactx build` names the biggest parts of the `.wasm` (`biggest parts: src/app.cpp 23%, ReactX reconciler.cpp 15%, ...`), from the linker map.
+
 ### Fixed
 
+- A native build of a web project (`cmake -S . -B build/test`, for tests or a helper server) no longer stops on the app's `main()`, which calls `mountDom`: `reactx_add_app` leaves a web app out of a native build unless it is named (`--target`, `reactx build --native`).
+- New web projects: `.page` in `style.css` no longer shrinks rows, tables and form fields to their content; only buttons keep their own width.
 - `rx::mountDom` into a container that already holds an app unmounts that app first: its effect cleanups run, so its timers and sockets stop (they used to keep running behind the new app).
 
 ## [0.14.0] — 2026-11-01
@@ -359,7 +373,8 @@ The first release.
 - **A documentation site** built with ReactX: https://sargisis.github.io/ReactX/, published by GitHub Actions through the `gh-pages` branch.
 - The version in one place (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; new projects from `reactx new` use ReactX by release tag.
 
-[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/sargisis/ReactX/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/sargisis/ReactX/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/sargisis/ReactX/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/sargisis/ReactX/compare/v0.11.0...v0.12.0

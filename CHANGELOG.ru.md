@@ -6,8 +6,22 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ## [Не выпущено]
 
+## [0.15.0] — 2026-11-01
+
+Таблицы: `ui::table` выравнивает колонки в браузере и в терминале, с сортировкой по заголовкам, выбором строк и `useVirtualList` для длинных таблиц. `useTitle` задаёт заголовок вкладки. `reactx build` говорит, что раздувает `.wasm`. Повторный `mountDom` в тот же контейнер теперь останавливает старое приложение, а нативная сборка web-проекта собирает ваши тесты, не спотыкаясь о `mountDom`. Первый релиз на пути к 1.0. MINOR-релиз из-за нового API; приложения обновляются без правок.
+
+**Обновиться:** `reactx upgrade`, затем `reactx update` в каждом проекте (v0.13 и старше: один раз `curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh`).
+
+### Добавлено
+
+- `ui::table`: колонки, которые выравниваются в браузере (CSS grid, `role="table"`, `aria-sort`) и в терминале (ячейки фиксированной ширины), сортируемые заголовки (`onSort`; строки сортируете вы), строки с `onSelect` (клик, Enter) и `selected`, `emptyText` и `.list` для длинных таблиц с `ui::useVirtualList`.
+- `rx::useTitle(text)`: заголовок вкладки браузера, пока компонент смонтирован; при размонтировании возвращается прежний.
+- `reactx build` называет самые большие части `.wasm` (`biggest parts: src/app.cpp 23%, ReactX reconciler.cpp 15%, ...`) по карте линковки.
+
 ### Исправлено
 
+- Нативная сборка web-проекта (`cmake -S . -B build/test` — для тестов или своего сервера) больше не падает на `main()` приложения, который вызывает `mountDom`: `reactx_add_app` не включает web-приложение в нативную сборку, если его не назвать (`--target`, `reactx build --native`).
+- Новые web-проекты: `.page` в `style.css` больше не сжимает строки, таблицы и поля форм до их содержимого; свою ширину сохраняют только кнопки.
 - `rx::mountDom` в контейнер, где уже есть приложение, сначала размонтирует его: срабатывают cleanup-функции эффектов, и его таймеры и сокеты останавливаются (раньше продолжали работать за новым приложением).
 
 ## [0.14.0] — 2026-11-01
@@ -359,7 +373,8 @@ ReactX без установки компиляторов: готовый `react
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.14.0...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/sargisis/ReactX/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/sargisis/ReactX/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/sargisis/ReactX/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/sargisis/ReactX/compare/v0.11.0...v0.12.0

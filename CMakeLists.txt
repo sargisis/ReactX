@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20...3.31)
 # The ReactX version — the only place it is written (Semantic Versioning:
 # MAJOR.MINOR.PATCH; release tags are vMAJOR.MINOR.PATCH, see CHANGELOG.md).
-project(ReactX VERSION 0.14.0 LANGUAGES CXX)
+project(ReactX VERSION 0.15.0 LANGUAGES CXX)
 
 # C++26: GCC 16+ natively, Emscripten 6+ for the web. We use the parts of
 # C++23/C++26 each standard library ships, and nothing it doesn't
@@ -474,7 +474,8 @@ if(REACTX_BUILD_TOOLS)
   add_executable(reactx_cli_tests tests/test_cli.cpp)
   target_link_libraries(reactx_cli_tests PRIVATE reactx reactx_net)  # a backend for the --proxy test
   target_compile_definitions(reactx_cli_tests PRIVATE REACTX_CLI="$<TARGET_FILE:reactx_cli>"
-                                                      REACTX_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+                                                      REACTX_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
+                                                      REACTX_TEST_CXX="${CMAKE_CXX_COMPILER}")
   add_dependencies(reactx_cli_tests reactx_cli)
   add_test(NAME reactx_cli_tests COMMAND reactx_cli_tests)
   add_test(NAME reactx_cli_e2e_tests COMMAND reactx_cli_tests --e2e)

@@ -147,14 +147,14 @@ inline const std::vector<Page>& pagesEn() {
                               "and --target links it to your app.",
                  "reactx add fmt https://github.com/fmtlib/fmt.git --rev 11.0.2 --target fmt::fmt\nreactx remove fmt"},
                 {"reactx update", "Moves your project to the newest ReactX release. --check only tells you whether there is one.",
-                 "reactx update --check   # ReactX v0.13.0 -> v0.14.0 is available\n"
+                 "reactx update --check   # ReactX v0.14.0 -> v0.15.0 is available\n"
                  "reactx update\n"
                  "reactx build"},
                 {"reactx.json", "Everything about the project in one file.",
                  "{\n"
                  "  \"name\": \"my-app\",\n"
                  "  \"template\": \"web\",\n"
-                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.14.0\" },\n"
+                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.15.0\" },\n"
                  "  \"dependencies\": { \"fmt\": { \"git\": \"...\", \"rev\": \"11.0.2\", \"target\": \"fmt::fmt\" } },\n"
                  "  \"web\": { \"base\": \"/\", \"proxy\": { \"/api\": \"http://127.0.0.1:5000\" } }\n"
                  "}"},
@@ -174,9 +174,9 @@ inline const std::vector<Page>& pagesEn() {
                  "cd my-app && reactx update && reactx build"},
                 {"Upgrading a project", "reactx update finds the newest release and writes it into reactx.json; the next build downloads it. "
                               "By hand: change rev to the new tag.",
-                 "reactx update\n# or in reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.14.0\" }"},
+                 "reactx update\n# or in reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.15.0\" }"},
                 {"The version in code", "",
-                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"0.14.0\"\n"
+                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"0.15.0\"\n"
                  "static_assert(REACTX_VERSION_MAJOR == 0);"},
             },
         },
@@ -275,6 +275,9 @@ inline const std::vector<Page>& pagesEn() {
                  "    if (k.ctrl && k.key == \"z\") { undo(); return true; }\n"
                  "    return false;\n"
                  "});"},
+                {"useTitle", "The browser tab's title while the component is mounted; the previous title comes back when it unmounts, "
+                             "so each route page can name itself. Natively it only keeps the text.",
+                 "useTitle(\"Orders (\" + std::to_string(count) + \")\");"},
                 {"useDebounce, useLocalStorage, useWindowSize, useId",
                  "useDebounce gives a value only after it stopped changing (search boxes). useLocalStorage remembers state across "
                  "page reloads (natively it lives in memory only, until the program exits); a third argument hears about failed saves "
@@ -413,6 +416,13 @@ inline const std::vector<Page>& pagesEn() {
                  "std::vector<Element> rows;\n"
                  "for (int i = list.first; i < list.last; ++i) rows.push_back(h(Line, {.n = i}));\n"
                  "return list.view(std::move(rows));"},
+                {"Tables", "ui::table lines up columns in the browser and in a terminal. The rows are yours: sort them in onSort, "
+                           "the header shows the arrow. Rows with onSelect react to a click and Enter. For long tables pass a "
+                           "useVirtualList as .list and build only the rows on screen.",
+                 "ui::table({.columns = {{.title = \"Name\", .sortable = true},\n"
+                 "                       {.title = \"Qty\", .width = 6, .align = ui::Align::End, .sortable = true}},\n"
+                 "           .rows = rows,  // {.cells = {name, qty}, .key = id, .onSelect = pick}\n"
+                 "           .sortColumn = sortBy, .sortDescending = desc, .onSort = sortFn})"},
                 {"Confirm and toasts", "ui::confirm is a ready \"Delete it?\" dialog. ui::toast shows a short message in a corner "
                                        "from any handler, effect or fetch callback; it goes away by itself. Put one ui::toaster() "
                                        "in the app.",

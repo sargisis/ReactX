@@ -174,7 +174,7 @@ For a terminal: `#include "reactx/terminal.hpp"` and `TerminalApp().run(h(App))`
 | | |
 |---|---|
 | **Core** | `h()` elements, fragments, keys; function components; props structs; a reconciler that reuses nodes; batched updates |
-| **Hooks** | `useState`, `useEffect`, `useRef`, `useNodeRef`, `useMemo`, `useCallback`, `useContext`, `useReducer`, `useStore`, `useId`, `useTimeout`, `useInterval`, `useKeyboard`, `useDebounce`, `useLocalStorage`, `useWindowSize`, `memo<C>`, `errorBoundary` |
+| **Hooks** | `useState`, `useEffect`, `useRef`, `useNodeRef`, `useMemo`, `useCallback`, `useContext`, `useReducer`, `useStore`, `useId`, `useTimeout`, `useInterval`, `useKeyboard`, `useDebounce`, `useLocalStorage`, `useWindowSize`, `useTitle`, `memo<C>`, `errorBoundary` |
 | **Events** | `onClick`, `onInput`, `onChange`, `onKey`, `onSubmit`, `onFocus`, `onBlur`, `onScroll`, `onPointerDown/Move/Up`, `onMouseEnter/Leave` (browser and terminal); bubbling like in React |
 | **Terminal** | ANSI drawing of changed lines only, Flexbox on Yoga, borders, colors, focus, Unicode/ASCII by locale |
 | **Browser** | WebAssembly + DOM, controlled inputs, SVG, event delegation |
@@ -193,7 +193,7 @@ For a terminal: `#include "reactx/terminal.hpp"` and `TerminalApp().run(h(App))`
 - `useReducer(reducer, initial)` → `[state, dispatch]`: state changed by actions; the newest reducer is used.
 - `useTimeout(fn, std::optional(5s))`, `useInterval(fn, 1s)` — timers on the UI thread; `std::nullopt` switches them off, unmounting cancels them.
 - `useKeyboard(handler)` — keyboard shortcuts for the whole app, wherever the focus is: runs before the element's `onKey`, `return true` consumes the key; while a text field has focus, keys that type text don't reach it.
-- `useDebounce(value, 300ms)`, `useLocalStorage("key", default)` (`localStorage` in the browser; natively only in memory, lost on exit; an optional third argument hears about failed saves), `useWindowSize()`.
+- `useDebounce(value, 300ms)`, `useLocalStorage("key", default)` (`localStorage` in the browser; natively only in memory, lost on exit; an optional third argument hears about failed saves), `useWindowSize()`, `useTitle("Orders")` (the browser tab's title while the component is mounted).
 - **Shared state** (like Zustand): `const auto Cart = createStore<std::vector<Item>>({});`, `Cart.set(v)` / `Cart.update([](auto items) { ...; return items; })` anywhere on the UI thread; `useStore(Cart)` re-renders on every change, `useStore(Cart, [](const auto& c) { return c.size(); })` only when the selected part changes.
 - `useId()` — an id unique in the app and the same on every render: for `<label for>` and `aria-*`.
 - **Error boundaries**: `errorBoundary([](const RenderError& e) { return h("p", {}, {e.message}); }, {children})` — when the children throw while rendering (also later, on a state update), the fallback shows instead and the rest of the app keeps working; `e.retry()` tries again. Exceptions in event handlers and effects aren't caught (as in React).
@@ -300,6 +300,7 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 | `modal` | `title`, `open`, `onClose` (Escape), `width`; covers what is under it, keeps the focus inside and gives it back when closed |
 | `list` / `listItem` | a bordered box with a title, `emptyText`, `scroll` (scrolls inside instead of growing); an item: `label`, `detail` on the right, `selected` (a newly selected item scrolls into view), `onSelect`, `onKey` |
 | `select` | `label`, `value`, `options` (`{value, label}`), `onChange(value)`; a native `<select>` in the browser, ‹ › with Left / Right / Enter or a click in a terminal; `labelAbove` |
+| `table` | columns that line up in both backends: `columns` (`title`, `width` in characters, `align`, `sortable`), `rows` (`cells`, `key`, `onSelect`, `selected`), `sortColumn` / `sortDescending` / `onSort` (you sort the rows), `emptyText`, `list` (a `useVirtualList` for long tables) |
 | `useVirtualList` | a hook for lists of any length: `count`, `rowHeight` (px) / `rowLines` (terminal), `follow` (keep the end in view), `border`, `onScroll`; draw rows `first`..`last` yourself and pass them to `view(rows)` — only the rows on screen exist |
 | `confirm` | `title`, `message`, `open`, `confirmLabel`, `cancelLabel`, `danger`, `onConfirm`, `onCancel` (also Escape and a click outside) — a ready "Delete it?" |
 | `toast` / `toaster` | `ui::toast({.text, .variant, .duration})` from any handler or effect shows a message in a corner that goes away by itself (`duration = 0`: until clicked); put one `ui::toaster()` in the app |

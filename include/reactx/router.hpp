@@ -16,6 +16,18 @@
 // index.html for unknown paths (reactx_serve --spa, or a 404.html copy on
 // GitHub Pages). In the terminal the history lives in memory.
 //
+// Nested routes (v0.19): a route ending in "/*" matches its path and
+// everything under it, and the routes() inside its element match the rest:
+//
+//   router::routes({{"/settings/*", h(Settings)}, ...})
+//   Element Settings(const Props&) {          // stays mounted between its pages
+//       return h("div", {}, {menu, router::routes({{"/", h(General)}, {"/profile", h(Profile)}})});
+//   }
+//
+// Guards: {.path = "/admin/*", .element = h(Admin), .allow = user.isAdmin, .redirect = "/login"}
+// (C++ wants every field named once one is) — without .redirect a route that
+// isn't allowed is skipped (the next one, e.g. "*", is shown).
+//
 // Base path: when the page has <base href="/ReactX/">, the app lives under
 // /ReactX/ (GitHub Pages). Routes, links and navigate() still use paths
 // without it ("/todos/7"); the router adds and removes the base itself.
@@ -31,12 +43,20 @@ namespace rx::router {
 using Params = std::map<std::string, std::string>;
 
 struct Route {
-    std::string path;  // "/todos/:id", "*" = anything
+    std::string path;        // "/todos/:id"; "*" = anything; "/settings/*" = it and all under it
     Element element;
+    bool allow = true;       // false: not this route (a guard)
+    std::string redirect{};  // ...then go here instead ("/login"); "" = try the next routes
 };
 
-// Renders the element of the first route that matches the current path.
+// Renders the element of the first route that matches the current path (inside
+// a "/*" route: the rest of the path). Parameters of the routes around it are
+// seen inside too.
 Element routes(std::vector<Route> table);
+
+// Goes to `to` as soon as it is shown, replacing the current history entry
+// (like React Router's <Navigate>): {"/", router::redirect("/inbox")}.
+Element redirect(std::string to);
 
 struct LinkProps {
     std::string to{};
@@ -44,6 +64,8 @@ struct LinkProps {
     std::vector<Element> children{};
     std::string className{};
     std::string activeClassName = "active";  // added when `to` is the current path
+    bool exact = true;                       // false: active on the paths under `to` too ("/settings/profile")
+    bool replace = false;                    // don't add a history entry
     std::string key{};
 };
 // Browser: <a href> that navigates without reloading (Ctrl+click still opens a

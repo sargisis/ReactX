@@ -155,6 +155,103 @@ TEST(listeners_are_removed_on_unmount) {
 
 }  // namespace
 
+// ---- nested routes, guards, redirects ----
+
+int layoutMounts = 0;
+
+Element General(const Props&) { return h("page", {}, {"general"}); }
+Element Profile(const Props&) { return h("page", {}, {"profile of " + router::useParam("team")}); }
+Element Member(const Props&) {
+    return h("page", {}, {"member " + router::useParam("user") + " of " + router::useParam("team")});
+}
+
+// A layout: stays mounted while its own routes change.
+Element Settings(const Props&) {
+    useEffect([] { ++layoutMounts; }, deps());
+    return h("layout", {}, {
+        router::link({.to = "/teams/a/settings", .label = "Settings", .exact = false}),
+        router::routes({
+            {"/", h(General)},
+            {"/profile", h(Profile)},
+            {"/members/:user", h(Member)},
+            {"*", h("page", {}, {"no such setting"})},
+        }),
+    });
+}
+
+bool loggedIn = false;
+
+Element Guarded(const Props&) {
+    return h("app", {}, {
+        router::routes({
+            {"/", router::redirect("/inbox")},
+            {"/inbox", h("page", {}, {"inbox"})},
+            {"/login", h("page", {}, {"login"})},
+            {.path = "/teams/:team/settings/*", .element = h(Settings), .allow = loggedIn, .redirect = "/login"},
+            {.path = "/beta", .element = h("page", {}, {"beta"}), .allow = false},  // hidden: the next route
+            {"*", h(NotFound)},
+        }),
+    });
+}
+
+TEST(nested_routes_match_the_rest_and_keep_the_layout) {
+    loggedIn = true;
+    router::reset("/teams/a/settings");
+    TextRenderer r;
+    Root root(r);
+    layoutMounts = 0;
+    root.render(h(Guarded));
+    CHECK(has(r, "\"general\""));
+    router::navigate("/teams/a/settings/profile");
+    root.flush();
+    CHECK(has(r, "\"profile of a\""));  // the outer :team is seen inside
+    router::navigate("/teams/a/settings/members/ann");
+    root.flush();
+    CHECK(has(r, "\"member ann of a\""));
+    router::navigate("/teams/a/settings/nope");
+    root.flush();
+    CHECK(has(r, "\"no such setting\""));  // the inner "*"
+    CHECK(layoutMounts == 1);              // the layout stayed
+}
+
+TEST(a_guard_redirects_or_skips_the_route) {
+    loggedIn = false;
+    router::reset("/teams/a/settings/profile");
+    TextRenderer r;
+    Root root(r);
+    root.render(h(Guarded));
+    root.flush();
+    CHECK(router::currentPath() == "/login" && has(r, "\"login\""));
+    router::back();  // the redirect replaced the entry: nothing to go back to
+    root.flush();
+    CHECK(router::currentPath() == "/login");
+
+    router::navigate("/beta");
+    root.flush();
+    CHECK(has(r, "\"404 /beta\""));  // not allowed, no redirect: the next route
+}
+
+TEST(redirect_goes_on_and_replaces_the_entry) {
+    router::reset("/");
+    TextRenderer r;
+    Root root(r);
+    root.render(h(Guarded));
+    root.flush();
+    CHECK(router::currentPath() == "/inbox" && has(r, "\"inbox\""));
+}
+
+TEST(a_link_can_be_active_under_its_path) {
+    loggedIn = true;
+    router::reset("/teams/a/settings/profile");
+    TextRenderer r;
+    Root root(r);
+    root.render(h(Guarded));
+    CHECK(has(r, "bold=\"true\""));  // the Settings link is active on a page under it
+    router::navigate("/teams/a/settingsX");
+    root.flush();
+    CHECK(!has(r, "bold=\"true\""));
+}
+
 int main() {
     for (auto& [name, fn] : tests) {
         std::cout << name << '\n';

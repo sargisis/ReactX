@@ -1143,7 +1143,7 @@ Element Site(const Props&) {
                                              {"ReactX", h("span", {{"className", "brand-cursor"}}, {"_"})})},
                               .className = "brand", .activeClassName = ""}),
                 h("nav", {{"className", "topnav"}, {"aria-label", tr(en, "Main menu", "Основное меню")}}, {
-                    router::link({.to = "/docs", .label = "docs", .key = "docs"}),
+                    router::link({.to = "/docs", .label = "docs", .exact = false, .key = "docs"}),  // active on every docs page
                     router::link({.to = "/demos", .label = "demos", .key = "demos"}),
                     h("a", {{"href", "https://github.com/sargisis/ReactX"}, {"className", "gh"}, {"key", "gh"}}, {"github"}),
                 }),

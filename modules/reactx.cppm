@@ -146,6 +146,7 @@ using rx::router::Route;
 using rx::router::LinkProps;
 using rx::router::routes;
 using rx::router::link;
+using rx::router::redirect;
 using rx::router::navigate;
 using rx::router::back;
 using rx::router::currentPath;

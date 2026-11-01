@@ -28,6 +28,13 @@ bool has(const std::string& part) { return js("rxTest.html()").find(part) != std
 
 Element Page(const Props& p) { return h("p", {{"id", "page"}}, {p.get<std::string>("name") + " " + router::useParam("id")}); }
 
+Element Team(const Props&) {
+    return h("section", {{"id", "team"}}, {
+        router::link({.to = "/teams/" + router::useParam("team"), .label = "Team", .exact = false, .key = "team"}),
+        router::routes({{"/members/:id", h(Page, {{"name", "member of " + router::useParam("team")}})}}),
+    });
+}
+
 Element App(const Props&) {
     return h("div", {}, {
         router::link({.to = "/", .label = "Home", .key = "h"}),
@@ -35,6 +42,8 @@ Element App(const Props&) {
         router::routes({
             {"/", h(Page, {{"name", "home"}})},
             {"/todos/:id", h(Page, {{"name", "todo"}})},
+            {"/old", router::redirect("/teams/b/members/7")},
+            {"/teams/:team/*", h(Team)},
             {"*", h(Page, {{"name", "404"}})},
         }),
     });
@@ -79,6 +88,13 @@ int main() {
     CHECK(js("rxTest.path()") == "/ReactX/x?y=1");
     CHECK(has("<p id=\"page\">404 </p>"));
 
-    js("history.back(); history.back(); history.back()");  // to the first page
+    std::cout << "a redirect replaces the entry; nested routes keep the outer params\n";
+    router::navigate("/old");
+    CHECK(js("rxTest.path()") == "/ReactX/teams/b/members/7");
+    CHECK(has("<p id=\"page\">member of b 7</p>"));
+    CHECK(has("<a class=\"active\" data-rx-link href=\"/ReactX/teams/b\">Team</a>"));  // active under its path
+    router::back();  // past the redirected entry: back to /x?y=1
+
+    js("history.back(); history.back(); history.back(); history.back()");  // to the first page
     next(1);
 }

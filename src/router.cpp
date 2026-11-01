@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <optional>
 #include <utility>
 
 #include "reactx/context.hpp"
@@ -140,6 +141,9 @@ void unsubscribe(int id) {
 }
 
 const Context<Params> ParamsContext{Params{}};
+// What a "/*" route leaves for the routes() inside it ("/profile" of
+// "/settings/profile"); none outside such a route: the whole path.
+const Context<std::optional<std::string>> RestContext{std::nullopt};
 
 // Re-renders the calling component when the path changes.
 void useLocationUpdates() {
@@ -153,15 +157,36 @@ void useLocationUpdates() {
 
 // ---- components ----
 
+Element Redirect(const Props& p) {
+    std::string to = p.get<std::string>("to");
+    // After the commit: navigating re-renders, which can't happen while rendering.
+    useEffect([to] { navigate(to, true); }, deps(to));
+    return fragment({});
+}
+
 Element Routes(const Props& p) {
     useLocationUpdates();
-    std::string path = withoutQuery(store().path);
+    const auto& rest = useContext(RestContext);
+    const Params& outer = useContext(ParamsContext);
+    std::string path = rest ? *rest : withoutQuery(store().path);
     for (const Element& route : p.children()) {
         std::string pattern = route.props.get<std::string>("path");
         Params params;
         if (!matchPath(pattern, path, params)) continue;
+        if (!route.props.get<bool>("allow", true)) {
+            std::string to = route.props.get<std::string>("redirect");
+            if (to.empty()) continue;  // a guard without a redirect: the next route
+            return h(Redirect, {{"to", to}});
+        }
+        // Inside a "/*" route the nested routes() see the part under it.
+        bool star = pattern == "*" || pattern.ends_with("/*");
+        std::string inner = star ? "/" + params["*"] : std::string("/");
+        if (star) params.erase("*");
+        Params all = outer;
+        for (auto& [name, value] : params) all[name] = std::move(value);
         // Keyed by the pattern: going to another route mounts a fresh page.
-        return ParamsContext.provide(std::move(params), {fragment(route.props.children(), pattern)});
+        return ParamsContext.provide(std::move(all), {RestContext.provide(std::optional(inner), {
+            fragment(route.props.children(), pattern)})});
     }
     return fragment({});
 }
@@ -169,11 +194,14 @@ Element Routes(const Props& p) {
 Element Link(const Props& p) {
     useLocationUpdates();
     std::string to = p.get<std::string>("to");
-    bool active = withoutQuery(store().path) == withoutQuery(to);
+    std::string here = withoutQuery(store().path), target = withoutQuery(to);
+    bool active = here == target ||
+                  (!p.get<bool>("exact", true) && here.starts_with(target) &&
+                   (target.ends_with('/') || here.size() == target.size() || here[target.size()] == '/'));
     std::string className = p.get<std::string>("className");
     if (active && !p.get<std::string>("activeClassName").empty())
         className += (className.empty() ? "" : " ") + p.get<std::string>("activeClassName");
-    Callback go = [to] { navigate(to); };
+    Callback go = [to, replace = p.get<bool>("replace")] { navigate(to, replace); };
 
     std::vector<Element> content = p.children();
     if (content.empty()) content.push_back(p.get<std::string>("label"));
@@ -192,15 +220,23 @@ Element Link(const Props& p) {
 
 Element routes(std::vector<Route> table) {
     std::vector<Element> children;
-    for (auto& r : table) children.push_back(h("rx-route", {{"path", r.path}}, {std::move(r.element)}));
+    for (auto& r : table)
+        children.push_back(h("rx-route", {{"path", r.path}, {"allow", r.allow}, {"redirect", r.redirect}}, {std::move(r.element)}));
     return h(Routes, {}, std::move(children));
+}
+
+Element redirect(std::string to) {
+    REACTX_PRE(to.starts_with('/'));  // app paths are absolute
+    return h(Redirect, {{"to", std::move(to)}});
 }
 
 Element link(LinkProps p) {
     Element e = h(Link, {{"to", std::move(p.to)},
                          {"label", std::move(p.label)},
                          {"className", std::move(p.className)},
-                         {"activeClassName", std::move(p.activeClassName)}},
+                         {"activeClassName", std::move(p.activeClassName)},
+                         {"exact", p.exact},
+                         {"replace", p.replace}},
                   std::move(p.children));
     e.key = std::move(p.key);
     return e;

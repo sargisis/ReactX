@@ -59,6 +59,7 @@ Result reactx(const std::vector<std::string>& args, const fs::path& cwd) {
         ::close(pipefd[1]);
         if (::chdir(cwd.c_str()) != 0) ::_exit(127);
         if (!std::getenv("REACTX_TEST_UPDATE_NOTICE")) ::setenv("REACTX_NO_UPDATE_CHECK", "1", 1);  // no network in tests
+        else ::unsetenv("CI");  // CI turns the notice off; this test wants it (the stamp keeps the network out)
         std::vector<char*> argv{const_cast<char*>(REACTX_CLI)};
         for (const auto& a : args) argv.push_back(const_cast<char*>(a.c_str()));
         argv.push_back(nullptr);

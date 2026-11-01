@@ -19,7 +19,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <format>
+#include <numeric>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <string>
@@ -30,6 +31,7 @@
 #include "reactx/html.hpp"
 #include "reactx/reactx.hpp"
 #include "reactx/router.hpp"
+#include "reactx/ui.hpp"
 #include "reactx/version.hpp"
 #include "site_docs.hpp"
 #include "site_docs_en.hpp"
@@ -59,7 +61,6 @@ EM_JS(void, site_js_scroll_to, (const char* id), {
 EM_JS(void, site_js_copy, (const char* text), {
     if (navigator.clipboard) navigator.clipboard.writeText(UTF8ToString(text)).catch(function() {});
 });
-EM_JS(void, site_js_title, (const char* title), { document.title = UTF8ToString(title); });
 
 // The language: saved choice, else the browser's (Russian or English).
 EM_JS(char*, site_js_lang, (), {
@@ -88,7 +89,6 @@ char* site_js_theme() { return siteDup("light"); }
 void site_js_set_theme(const char*) {}
 void site_js_scroll_to(const char*) {}
 void site_js_copy(const char*) {}
-void site_js_title(const char*) {}
 void site_js_set_lang(const char*) {}
 #endif  // REACTX_SITE_PRERENDER
 
@@ -104,13 +104,12 @@ const auto SiteLang = createStore(std::string("en"));
 
 bool useEnglish() { return useStore(SiteLang) == "en"; }
 
+// The search dialog (Ctrl+K, "/", the search buttons) is open.
+const auto SearchOpen = createStore(false);
+
 // The text in the current language.
 std::string tr(bool en, std::string_view english, std::string_view russian) {
     return std::string(en ? english : russian);
-}
-
-void useTitle(const std::string& title) {
-    useEffect([title] { site_js_title(title.c_str()); }, deps(title));
 }
 
 // ---- syntax highlighting (a small lexer; tokens become <span>s) ----
@@ -121,7 +120,7 @@ Lang detect(std::string_view code) {
     for (std::string_view word : {"target_link_libraries", "find_package", "reactx_add_app", "FetchContent"})
         if (code.find(word) != std::string_view::npos && code.find(';') == std::string_view::npos) return Lang::CMake;
     std::string_view first = code.substr(0, code.find('\n'));
-    for (std::string_view cmd : {"cmake ", "reactx ", "./", "git ", "cd ", "emcmake ", "source ", "sudo ", "ctest "})
+    for (std::string_view cmd : {"cmake ", "reactx ", "./", "git ", "cd ", "emcmake ", "source ", "sudo ", "ctest ", "curl ", "export ", "node ", "mkdir "})
         if (first.starts_with(cmd)) return Lang::Shell;
     if (code.find("def ") != std::string_view::npos || code.find("from flask") != std::string_view::npos ||
         code.find("import ") != std::string_view::npos || code.find("app = Flask") != std::string_view::npos)
@@ -302,24 +301,20 @@ struct CodeProps {
 
 // A code block with highlighting and a copy button.
 Element CodeBlock(const CodeProps& p) {
-    auto [copies, setCopies] = useState(0);
     bool en = useEnglish();
     Lang lang = detect(p.code);
     const auto& tokens = useMemo([&] { return Highlighter(lang).run(p.code); }, deps(p.code));
-
-    std::vector<Element> copy{tr(en, "copy", "копировать")};
-    // A new key on each click restarts the "скопировано" animation.
-    if (copies > 0) copy.push_back(h("span", {{"className", "copied"}, {"key", std::to_string(copies)}}, {tr(en, "copied", "скопировано")}));
     return h("figure", {{"className", "code"}}, {
         h("div", {{"className", "code-bar"}}, {
             h("span", {}, {p.title.empty() ? std::string(langName(lang)) : p.title}),
             h("button", {{"className", "copy"},
                          {"aria-label", tr(en, "Copy the code", "Скопировать код")},
-                         {"onClick", [code = p.code, setCopies] {
+                         {"onClick", [code = p.code, en] {
                               site_js_copy(code.c_str());
-                              setCopies([](int n) { return n + 1; });
+                              ui::toast({.text = tr(en, "Copied", "Скопировано"), .variant = ui::Variant::Success,
+                                         .duration = std::chrono::milliseconds(1600)});
                           }}},
-              std::move(copy)),
+              {tr(en, "copy", "копировать")}),
         }),
         h("pre", {}, {h("code", {}, tokens)}),
     });
@@ -382,7 +377,7 @@ Element LiveCounter(const LiveCounterProps& p) {
                               "Element Counter(const CounterProps& p) {\n"
                               "    auto [count, setCount] = useState(p.start);\n"
                               "    return h(\"box\", {}, {\n"
-                              "        h(\"text\", {}, {std::format(\"Count: {}\", count)}),\n"
+                              "        h(\"text\", {}, {\"Count: \" + std::to_string(count)}),\n"
                               "        h(\"button\", {{\"onClick\", [setCount] {\n"
                               "            setCount([](int c) { return c + 1; });\n"
                               "        }}}, {\"+1\"}),\n"
@@ -425,6 +420,118 @@ Element LiveCounter(const LiveCounterProps& p) {
     });
 }
 
+// ---- live rx::ui demos on the home page ----
+
+// 100,000 parts, computed from the row number: nothing is stored but the
+// sort order.
+constexpr int kParts = 100000;
+std::string partName(int i) {
+    static constexpr const char* kinds[] = {"Bolt", "Nut", "Washer", "Gear", "Spring", "Valve", "Hinge", "Pulley"};
+    return std::string(kinds[i % 8]) + " M" + std::to_string(3 + (i / 8) % 10);
+}
+int partQty(int i) { return static_cast<int>((static_cast<long long>(i) * 7919) % 500); }
+int partCents(int i) { return 50 + static_cast<int>((static_cast<long long>(i) * 104729) % 99950); }
+std::string money(int cents) {
+    std::string c = std::to_string(cents % 100);
+    return std::to_string(cents / 100) + "." + (c.size() < 2 ? "0" + c : c);
+}
+
+Element TableDemo(const Props&) {
+    bool en = useEnglish();
+    auto [sortBy, setSortBy] = useState(0);
+    auto [desc, setDesc] = useState(false);
+    auto [picked, setPicked] = useState(-1);
+    const auto& order = useMemo([sortBy, desc] {
+        std::vector<int> o(kParts);
+        std::iota(o.begin(), o.end(), 0);
+        if (sortBy == 2) std::ranges::stable_sort(o, {}, partQty);
+        if (sortBy == 3) std::ranges::stable_sort(o, {}, partCents);
+        if (desc) std::ranges::reverse(o);
+        return o;
+    }, deps(sortBy, desc));
+    auto list = ui::useVirtualList({.count = kParts, .rowHeight = 37, .height = 333});
+    std::vector<ui::TableRow> rows;
+    for (int r = list.first; r < list.last; ++r) {
+        int i = order[static_cast<std::size_t>(r)];
+        rows.push_back({.cells = {h("span", {{"className", "mono"}}, {"#" + std::to_string(i + 1)}), partName(i),
+                                  std::to_string(partQty(i)), money(partCents(i))},
+                        .key = std::to_string(i),
+                        .onSelect = [setPicked, i] { setPicked(i); },
+                        .selected = picked == i});
+    }
+    return h("div", {{"className", "live-pane"}}, {
+        ui::table({.columns = {{.title = "#", .width = 7, .sortable = true}, {.title = tr(en, "Part", "Деталь")},
+                               {.title = tr(en, "Qty", "Кол-во"), .width = 6, .align = ui::Align::End, .sortable = true},
+                               {.title = tr(en, "Price", "Цена"), .width = 7, .align = ui::Align::End, .sortable = true}},
+                   .rows = std::move(rows), .sortColumn = sortBy, .sortDescending = desc,
+                   .onSort = [setSortBy, setDesc, sortBy](int column) {
+                       if (column == sortBy) setDesc([](bool d) { return !d; });
+                       else { setSortBy(column); setDesc(false); }
+                   },
+                   .list = list}),
+        h("p", {{"className", "live-note"}},
+          {picked < 0 ? tr(en, "100,000 rows, about 20 in the page at a time. Scroll, sort, click a row.",
+                           "100 000 строк, на странице из них около 20. Прокрутите, отсортируйте, нажмите на строку.")
+                      : tr(en, "Picked: ", "Выбрано: ") + partName(picked) + " · #" + std::to_string(picked + 1)}),
+    });
+}
+
+Element FormDemo(const Props&) {
+    bool en = useEnglish();
+    auto [name, setName] = useState(std::string{});
+    auto [size, setSize] = useState(std::string("m"));
+    auto [gift, setGift] = useState(false);
+    auto order = [en, name, size, gift] {
+        if (name.empty()) {
+            ui::toast({.text = tr(en, "Type a name first", "Сначала введите имя"), .variant = ui::Variant::Danger});
+            return;
+        }
+        ui::toast({.text = tr(en, "Ordered for ", "Заказ для ") + name + " · " + size + (gift ? tr(en, " · gift", " · подарок") : ""),
+                   .variant = ui::Variant::Success});
+    };
+    return h("div", {{"className", "live-pane live-form"}}, {
+        ui::input({.value = name, .onChange = [setName](const std::string& t) { setName(t); },
+                   .onSubmit = [order](const std::string&) { order(); },
+                   .placeholder = "Ada Lovelace", .label = tr(en, "Name", "Имя"), .labelAbove = true}),
+        ui::select({.label = tr(en, "Size", "Размер"), .value = size,
+                    .options = {{"s", "S"}, {"m", "M"}, {"l", "L"}},
+                    .onChange = [setSize](const std::string& v) { setSize(v); }, .labelAbove = true}),
+        ui::checkbox({.label = tr(en, "Gift wrap", "Подарочная упаковка"), .checked = gift,
+                      .onChange = [setGift](bool on) { setGift(on); }}),
+        ui::button({.label = tr(en, "Order", "Заказать"), .onClick = order, .variant = ui::Variant::Primary}),
+    });
+}
+
+Element DialogDemo(const Props&) {
+    bool en = useEnglish();
+    auto [asking, setAsking] = useState(false);
+    auto [deleted, setDeleted] = useState(0);
+    return h("div", {{"className", "live-pane live-dialog"}}, {
+        ui::text({.text = tr(en, "Projects deleted: ", "Удалено проектов: ") + std::to_string(deleted), .muted = true}),
+        ui::button({.label = tr(en, "Delete the project…", "Удалить проект…"), .onClick = [setAsking] { setAsking(true); },
+                    .variant = ui::Variant::Danger}),
+        ui::confirm({.title = tr(en, "Delete the project?", "Удалить проект?"),
+                     .message = tr(en, "It's only a demo: nothing is really deleted.", "Это демо: на самом деле ничего не удалится."),
+                     .open = asking, .confirmLabel = tr(en, "Delete", "Удалить"), .cancelLabel = tr(en, "Cancel", "Отмена"),
+                     .danger = true,
+                     .onConfirm = [en, setAsking, setDeleted] {
+                         setAsking(false);
+                         setDeleted([](int n) { return n + 1; });
+                         ui::toast({.text = tr(en, "Deleted (not really)", "Удалено (понарошку)")});
+                     },
+                     .onCancel = [setAsking] { setAsking(false); }}),
+    });
+}
+
+Element LiveDemos(const Props&) {
+    bool en = useEnglish();
+    return h("div", {{"className", "live"}}, {
+        ui::tabs({.tabs = {{tr(en, "Table · 100,000 rows", "Таблица · 100 000 строк"), {h(TableDemo)}},
+                           {tr(en, "Form", "Форма"), {h(FormDemo)}},
+                           {tr(en, "Dialog and toast", "Диалог и уведомление"), {h(DialogDemo)}}}}),
+    });
+}
+
 Element Feature(std::string title, std::vector<Element> text) {
     return h("div", {{"className", "feature"}, {"key", title}}, {h("b", {}, {title}), h("p", {}, std::move(text))});
 }
@@ -448,8 +555,19 @@ Element Home(const Props&) {
                     router::link({.to = "/docs/start", .label = tr(en, "Get started →", "Быстрый старт →"), .className = "btn primary", .activeClassName = ""}),
                     h("a", {{"className", "btn"}, {"href", "https://github.com/sargisis/ReactX"}}, {"GitHub"}),
                 }),
+                h("ul", {{"className", "stats"}}, {
+                    h("li", {}, {h("b", {}, {"~120 KB"}), tr(en, ".wasm for a new app", ".wasm у нового приложения")}),
+                    h("li", {}, {h("b", {}, {"2"}), tr(en, "backends, one code", "бэкенда, один код")}),
+                    h("li", {}, {h("b", {}, {"0"}), tr(en, "lines of JavaScript", "строк JavaScript")}),
+                }),
             }),
             h(LiveCounter, {.start = 3}),
+        }),
+
+        h("section", {{"className", "section"}}, {
+            h("div", {{"className", "section-head"}}, {h("h2", {}, {tr(en, "Try it live", "Попробуйте вживую")}),
+                                                       h("span", {}, {tr(en, "rx::ui components, running right here", "компоненты rx::ui работают прямо здесь")})}),
+            h(LiveDemos),
         }),
 
         h("section", {{"className", "section"}}, {
@@ -554,26 +672,132 @@ std::string lower(std::string_view s) {
     return out;
 }
 
+// ---- search (Ctrl+K) ----
+
+struct Hit {
+    std::string slug, page, heading, snippet;
+    int section = -1;  // -1: the page itself
+    bool operator==(const Hit&) const = default;
+};
+
+// Pages and sections whose words contain the query: titles first, then text.
+std::vector<Hit> searchDocs(std::string_view query, bool en) {
+    std::string q = lower(query);
+    std::vector<Hit> titles, texts;
+    if (q.empty()) return {};
+    auto snippet = [&](std::string_view text) {
+        std::string low = lower(text);
+        auto at = low.find(q);
+        if (at == std::string::npos) at = 0;
+        std::size_t from = at > 40 ? at - 40 : 0;
+        while (from > 0 && (static_cast<unsigned char>(text[from]) & 0xC0) == 0x80) --from;  // whole UTF-8 characters
+        std::size_t to = std::min(text.size(), from + 120);
+        while (to < text.size() && (static_cast<unsigned char>(text[to]) & 0xC0) == 0x80) ++to;
+        std::string out = (from ? "…" : "") + std::string(text.substr(from, to - from)) + (to < text.size() ? "…" : "");
+        std::ranges::replace(out, '\n', ' ');
+        std::erase(out, '`');
+        return out;
+    };
+    for (const auto& page : docPages(en)) {
+        if (lower(page.title).contains(q) || lower(page.summary).contains(q))
+            titles.push_back({std::string(page.slug), std::string(page.title), {}, std::string(page.summary), -1});
+        for (std::size_t i = 0; i < page.sections.size(); ++i) {
+            const auto& sec = page.sections[i];
+            if (lower(sec.heading).contains(q))
+                titles.push_back({std::string(page.slug), std::string(page.title), std::string(sec.heading), snippet(sec.text), static_cast<int>(i)});
+            else if (lower(sec.text).contains(q) || lower(sec.code).contains(q))
+                texts.push_back({std::string(page.slug), std::string(page.title), std::string(sec.heading),
+                                 snippet(lower(sec.text).contains(q) ? sec.text : sec.code), static_cast<int>(i)});
+        }
+    }
+    titles.insert(titles.end(), texts.begin(), texts.end());
+    if (titles.size() > 12) titles.resize(12);
+    return titles;
+}
+
+void openHit(const Hit& hit) {
+    SearchOpen.set(false);
+    router::navigate("/docs/" + hit.slug);
+    if (hit.section >= 0)  // after the page is drawn
+        detail::setTimer(std::chrono::milliseconds(60), [id = "s-" + std::to_string(hit.section)] { site_js_scroll_to(id.c_str()); });
+}
+
+Element SearchDialog(const Props&) {
+    bool open = useStore(SearchOpen);
+    bool en = useEnglish();
+    auto [query, setQuery] = useState(std::string{});
+    auto [chosen, setChosen] = useState(0);
+    const auto& hits = useMemo([&] { return searchDocs(query, en); }, deps(query, en));
+    int current = hits.empty() ? 0 : std::clamp(chosen, 0, static_cast<int>(hits.size()) - 1);
+    auto close = [setQuery] {
+        SearchOpen.set(false);
+        setQuery(std::string{});
+    };
+    // Up / Down pick a result, Enter opens it (the field keeps the focus).
+    useKeyboard([&hits, current, setChosen, open](const KeyEvent& k) {
+        if (!open || hits.empty()) return false;
+        if (k.key == "Down") setChosen(std::min(current + 1, static_cast<int>(hits.size()) - 1));
+        else if (k.key == "Up") setChosen(std::max(current - 1, 0));
+        else return false;
+        return true;
+    });
+
+    std::vector<Element> results;
+    for (std::size_t i = 0; i < hits.size(); ++i) {
+        const auto& hit = hits[i];
+        bool on = static_cast<int>(i) == current;
+        results.push_back(h("button", {{"key", hit.slug + std::to_string(hit.section)},
+                                       {"className", on ? "hit hit--on" : "hit"},
+                                       {"scrollIntoView", on},
+                                       {"onClick", [hit, setQuery] { openHit(hit); setQuery(std::string{}); }}}, {
+            h("b", {}, {hit.heading.empty() ? hit.page : hit.heading}),
+            h("small", {}, {hit.heading.empty() ? tr(en, "page", "раздел") : hit.page}),
+            h("span", {}, {hit.snippet}),
+        }));
+    }
+    if (results.empty())
+        results.push_back(h("p", {{"className", "hits-empty"}, {"key", "empty"}},
+                            {query.empty() ? tr(en, "Hooks, router, table, prerender…", "Хуки, роутер, таблица, prerender…")
+                                           : tr(en, "Nothing found", "Ничего не найдено")}));
+    return ui::modal({.title = tr(en, "Search the docs", "Поиск по документации"), .open = open, .onClose = close, .width = 64,
+                      .children = {
+                          ui::input({.value = query,
+                                     .onChange = [setQuery, setChosen](const std::string& t) { setQuery(t); setChosen(0); },
+                                     .onSubmit = [&hits, current, setQuery](const std::string&) {
+                                         if (hits.empty()) return;
+                                         openHit(hits[static_cast<std::size_t>(current)]);
+                                         setQuery(std::string{});
+                                     },
+                                     .placeholder = tr(en, "Type to search, Enter to open", "Введите запрос, Enter — открыть")}),
+                          h("div", {{"className", "hits"}}, std::move(results)),
+                      }});
+}
+
+Element SearchButton(const Props& p) {
+    bool en = useEnglish();
+    return h("button", {{"className", "search-btn " + p.get<std::string>("className")}, {"onClick", [] { SearchOpen.set(true); }},
+                        {"aria-label", tr(en, "Search the docs", "Поиск по документации")}}, {
+        h("span", {}, {tr(en, "Search", "Поиск")}),
+        h("kbd", {}, {"Ctrl K"}),
+    });
+}
+
 struct SidebarProps {
     std::string current{};  // slug of the open page
 };
 
 Element Sidebar(const SidebarProps& p) {
-    auto [query, setQuery] = useState(std::string{});
     auto [open, setOpen] = useState(false);
     bool en = useEnglish();
     std::string location = router::useLocation();
     useEffect([setOpen] { setOpen(false); }, deps(location));  // close the mobile menu after a click
 
-    std::string q = lower(query);
     std::vector<Element> blocks;
     for (const auto& g : groups()) {
         std::vector<Element> links;
         for (auto slug : g.slugs) {
             const auto* page = findPage(slug, en);
             if (!page) continue;
-            if (!q.empty() && lower(page->title).find(q) == std::string::npos && lower(page->summary).find(q) == std::string::npos)
-                continue;
             links.push_back(router::link({.to = "/docs/" + std::string(page->slug), .label = std::string(page->title), .key = std::string(page->slug)}));
         }
         if (links.empty()) continue;
@@ -582,7 +806,6 @@ Element Sidebar(const SidebarProps& p) {
         for (auto& l : links) group.push_back(std::move(l));
         blocks.push_back(h("div", {{"className", "group"}, {"key", title}}, std::move(group)));
     }
-    if (blocks.empty()) blocks.push_back(h("div", {{"className", "nothing"}}, {tr(en, "nothing found", "ничего не найдено")}));
 
     const auto* page = findPage(p.current, en);
     return fragment({
@@ -590,11 +813,7 @@ Element Sidebar(const SidebarProps& p) {
                      {"onClick", [open, setOpen] { setOpen(!open); }}},
           {page ? std::string(page->title) : tr(en, "Sections", "Разделы"), h("span", {}, {open ? "✕" : "☰"})}),
         h("aside", {{"className", open ? "sidebar open" : "sidebar"}, {"aria-label", tr(en, "Documentation sections", "Разделы документации")}}, {
-            h("div", {{"className", "search-wrap"}}, {
-                h("input", {{"className", "search"}, {"type", "text"}, {"placeholder", tr(en, "search", "поиск")}, {"value", query},
-                            {"aria-label", tr(en, "Search the docs", "Поиск по разделам")},
-                            {"onInput", [setQuery](const std::string& text) { setQuery(text); }}}),
-            }),
+            h(SearchButton, {{"className", "search-btn--wide"}}),
             fragment(std::move(blocks)),
         }),
     });
@@ -829,6 +1048,14 @@ Element NotFound(const Props&) {
 
 Element Site(const Props&) {
     bool en = useEnglish();
+    // Ctrl+K anywhere, "/" outside text fields: search.
+    useKeyboard([](const KeyEvent& k) {
+        if ((k.ctrl && k.key == "k") || (!k.ctrl && !k.alt && k.key == "/")) {
+            SearchOpen.set(true);
+            return true;
+        }
+        return false;
+    });
     return fragment({
         h("header", {{"className", "header"}}, {
             h("div", {{"className", "wrap"}}, {
@@ -842,6 +1069,7 @@ Element Site(const Props&) {
                     router::link({.to = "/demos", .label = "demos", .key = "demos"}),
                     h("a", {{"href", "https://github.com/sargisis/ReactX"}, {"className", "gh"}, {"key", "gh"}}, {"github"}),
                 }),
+                h(SearchButton),
                 h(LangToggle),
                 h(ThemeToggle),
             }),
@@ -862,6 +1090,8 @@ Element Site(const Props&) {
                                h("a", {{"href", "https://github.com/sargisis/ReactX"}}, {tr(en, "source", "исходники")})}),
             }),
         }),
+        h(SearchDialog),
+        ui::toaster(),
     });
 }
 
@@ -875,39 +1105,62 @@ int main() {
     mountDom(h(Site));
 }
 #else
-// site_prerender <shell.html> <out.html>: the home page, rendered in English
-// and in Russian, in place of the loading text. A small script picks the
-// language before the first paint; the app then replaces it with the same
-// markup, so the page shows long before index.wasm arrives.
+// site_prerender <shell.html> <out/index.html>: every page that has a fixed
+// address — the home page into index.html, the docs into docs/index.html and
+// docs/<page>.html — rendered in English and in Russian, in place of the
+// loading text. A small script picks the language before the first paint; the
+// app then replaces it with the same markup, so pages show long before
+// index.wasm arrives (and search engines read them).
+std::string titleOf(std::string_view route, bool en) {
+    if (route == "/") return tr(en, "ReactX — React for C++26", "ReactX — React на C++26");
+    if (route == "/docs") return tr(en, "Documentation — ReactX", "Документация — ReactX");
+    const auto* page = findPage(route.substr(std::string_view("/docs/").size()), en);
+    return page ? std::string(page->title) + " — ReactX" : "ReactX";
+}
+
+// "Hooks — ReactX" as a JavaScript string literal.
+std::string jsString(std::string_view s) {
+    std::string out = "\"";
+    for (char c : s) out += c == '"' || c == '\\' ? std::string("\\") + c : std::string(1, c);
+    return out + "\"";
+}
+
 int main(int argc, char** argv) {
     if (argc != 3) {
-        std::fputs("usage: site_prerender <shell.html> <out.html>\n", stderr);
+        std::fputs("usage: site_prerender <shell.html> <out/index.html>\n", stderr);
         return 2;
     }
     std::ifstream in(argv[1], std::ios::binary);
-    std::string page{std::istreambuf_iterator<char>(in), {}};
+    std::string shell{std::istreambuf_iterator<char>(in), {}};
     // Emscripten minifies the shell in Release builds: quotes may be gone.
-    std::size_t at = page.find(R"(<div id="app">)");
-    if (at == std::string::npos) at = page.find("<div id=app>");
+    std::size_t at = shell.find(R"(<div id="app">)");
+    if (at == std::string::npos) at = shell.find("<div id=app>");
     constexpr std::string_view kBootEnd = "loading ReactX</div></div>";
-    std::size_t bootEnd = at == std::string::npos ? at : page.find(kBootEnd, at);
-    std::size_t baseAt = page.find("<base href=");
+    std::size_t bootEnd = at == std::string::npos ? at : shell.find(kBootEnd, at);
+    std::size_t baseAt = shell.find("<base href=");
     if (!in || bootEnd == std::string::npos || baseAt == std::string::npos) {
         std::fputs("site_prerender: no <base href> or loading text in the shell\n", stderr);
         return 1;
     }
     baseAt += std::string_view("<base href=").size();
-    if (page[baseAt] == '"') ++baseAt;
-    router::setBase(page.substr(baseAt, page.find_first_of("\" >", baseAt) - baseAt));
-    router::reset("/");
+    if (shell[baseAt] == '"') ++baseAt;
+    router::setBase(shell.substr(baseAt, shell.find_first_of("\" >", baseAt) - baseAt));
 
-    SiteLang.set("en");
-    std::string en = renderToString(h(Site));
-    SiteLang.set("ru");
-    std::string ru = renderToString(h(Site));
+    std::filesystem::path outDir = std::filesystem::path(argv[2]).parent_path();
+    std::vector<std::pair<std::string, std::filesystem::path>> routes{{"/", "index.html"}, {"/docs", "docs/index.html"}};
+    for (const auto& page : site_docs::pagesEn())
+        routes.emplace_back("/docs/" + std::string(page.slug), "docs/" + std::string(page.slug) + ".html");
 
-    std::string html = R"(<div id="app">)" + en + R"(</div><template id="rx-prerender-ru">)" + ru +
-                       R"js(</template><script>
+    for (const auto& [route, file] : routes) {
+        router::reset(route);
+        SiteLang.set("en");
+        std::string en = renderToString(h(Site));
+        SiteLang.set("ru");
+        std::string ru = renderToString(h(Site));
+
+        std::string page = shell;
+        std::string html = R"(<div id="app">)" + en + R"(</div><template id="rx-prerender-ru">)" + ru +
+                           R"js(</template><script>
     // The prerendered page in the visitor's language and theme (main() in site.cpp does the same).
     (function () {
       var l = null;
@@ -916,20 +1169,27 @@ int main(int argc, char** argv) {
       var app = document.getElementById("app");
       if (l === "ru") {
         document.documentElement.lang = "ru";
-        document.title = "ReactX — React на C++26";
+        document.title = )js" + jsString(titleOf(route, false)) + R"js(;
         app.innerHTML = document.getElementById("rx-prerender-ru").innerHTML;
       }
       var t = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
       var b = app.querySelector(".icon-btn:not(.lang-btn)");
-      if (t === "dark" && b) { b.textContent = "\u2600"; b.title = l === "ru" ? "Светлая тема" : "Light theme"; }
+      if (t === "dark" && b) { b.textContent = "☀"; b.title = l === "ru" ? "Светлая тема" : "Light theme"; }
     })();
   </script>)js";
-    page.replace(at, bootEnd + kBootEnd.size() - at, html);
-    std::ofstream out(argv[2], std::ios::binary);
-    out << page;
-    if (!out.flush()) {
-        std::fputs("site_prerender: can't write the page\n", stderr);
-        return 1;
+        page.replace(at, bootEnd + kBootEnd.size() - at, html);
+        // The page's own title, and rx::ui's stylesheet (live demos, search) so it looks right before the .wasm arrives.
+        if (auto t = page.find("<title>"), e = page.find("</title>"); t != std::string::npos && e != std::string::npos)
+            page.replace(t + 7, e - t - 7, titleOf(route, true));
+        if (auto head = page.find("</head>"); head != std::string::npos) page.insert(head, detail::prerenderHead());
+
+        std::filesystem::create_directories((outDir / file).parent_path());
+        std::ofstream out(outDir / file, std::ios::binary);
+        out << page;
+        if (!out.flush()) {
+            std::fprintf(stderr, "site_prerender: can't write %s\n", (outDir / file).c_str());
+            return 1;
+        }
     }
 }
 #endif

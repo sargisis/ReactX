@@ -224,9 +224,10 @@ if(EMSCRIPTEN)
   # static host: the site is the start page and also 404.html, so direct links
   # like /ReactX/docs/hooks open it (GitHub Pages has no other fallback).
   reactx_web_page(website examples/site.cpp site_app ${PROJECT_BINARY_DIR}/site_shell.html)
-  # The same site under Node: puts the home page's HTML (renderToString) into
-  # site/index.html, so it shows before index.wasm arrives. 404.html, which
-  # opens every other path, keeps the loading text.
+  # The same site under Node: puts the HTML of the home page and of every docs
+  # page (renderToString) into site/index.html, site/docs/index.html and
+  # site/docs/<page>.html, so they show before index.wasm arrives. 404.html,
+  # which opens every other path, keeps the loading text.
   add_executable(site_prerender examples/site.cpp)
   target_link_libraries(site_prerender PRIVATE reactx)
   target_compile_definitions(site_prerender PRIVATE REACTX_SITE_PRERENDER)

@@ -128,6 +128,12 @@ EM_JS(char*, rx_js_storage_set, (const char* key, const char* value, int remove)
         return stringToNewUTF8(String((e && e.name) || e) + ": " + String((e && e.message) || ""));
     }
 });
+EM_JS(char*, rx_js_get_title, (), {
+    return stringToNewUTF8(typeof document === "undefined" ? "" : document.title);
+});
+EM_JS(void, rx_js_set_title, (const char* title), {
+    if (typeof document !== "undefined") document.title = UTF8ToString(title);
+});
 std::string takeJsString(char* raw) {
     std::string value(raw);
     std::free(raw);
@@ -285,6 +291,36 @@ std::expected<void, std::string> storageRemove(std::string_view key) {
     if (auto it = detail::memoryStorage().find(key); it != detail::memoryStorage().end()) detail::memoryStorage().erase(it);
 #endif
     return {};
+}
+
+namespace detail {
+#if defined(__EMSCRIPTEN__)
+std::string pageTitle() { return takeJsString(rx_js_get_title()); }
+void setPageTitle(const std::string& title) { rx_js_set_title(title.c_str()); }
+#else
+namespace {
+std::string& memoryTitle() {
+    static std::string title;
+    return title;
+}
+}  // namespace
+std::string pageTitle() { return memoryTitle(); }
+void setPageTitle(const std::string& title) { memoryTitle() = title; }
+#endif
+}  // namespace detail
+
+void useTitle(std::string title) {
+    // The title before this component set its own: restored on unmount.
+    auto& slot = useRef(std::shared_ptr<std::optional<std::string>>{});
+    if (!slot) slot = std::make_shared<std::optional<std::string>>();
+    auto before = slot;
+    useEffect(
+        [title, before] {
+            if (!*before) *before = detail::pageTitle();
+            detail::setPageTitle(title);
+        },
+        deps(title));
+    useEffect([before] { return [before] { if (*before) detail::setPageTitle(**before); }; }, deps());
 }
 
 WindowSize useWindowSize() {

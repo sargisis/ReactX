@@ -243,6 +243,26 @@ TEST(storage_reports_missing_keys_and_removes) {
     CHECK(storageRead("rx-test-key").value() == std::optional<std::string>{});
 }
 
+Element TitledPage(const Props& p) {
+    useTitle(p.get<std::string>("title"));
+    return h("text", {}, {p.get<std::string>("title")});
+}
+
+TEST(use_title_sets_and_restores_the_page_title) {
+    detail::setPageTitle("Shop");
+    TextRenderer r;
+    Root root(r);
+    root.render(h(TitledPage, {{"title", "Orders"}}));
+    CHECK(detail::pageTitle() == "Orders");
+    root.render(h(TitledPage, {{"title", "Orders (3)"}}));
+    CHECK(detail::pageTitle() == "Orders (3)");
+    // Switching pages: the new page's title wins over the old page's restore.
+    root.render(h("box", {}, {h(TitledPage, {{"title", "Cart"}, {"key", "cart"}})}));
+    CHECK(detail::pageTitle() == "Cart");
+    root.render(h("box"));
+    CHECK(detail::pageTitle() == "Shop");
+}
+
 TEST(version_is_semver) {
     std::string v = rx::version();
     CHECK(v == std::to_string(REACTX_VERSION_MAJOR) + "." + std::to_string(REACTX_VERSION_MINOR) + "." +

@@ -1,4 +1,5 @@
 // Tests for rx::ui components on the terminal backend (no real terminal needed).
+#include <algorithm>
 #include <chrono>
 #include <functional>
 #include <thread>
@@ -197,6 +198,73 @@ TEST(label_above_lines_fields_up) {
     auto lines = s.renderer.frameLines();
     CHECK(lines.size() > 4 && lines[0].starts_with("Name") && lines[1].starts_with("Bolt") &&
           lines[3].starts_with("Quantity") && lines[4].starts_with("42"));
+}
+
+struct Stock {
+    std::string name;
+    int qty = 0;
+};
+
+Element StockTable(const Props&) {
+    auto [desc, setDesc] = useState(false);
+    auto [picked, setPicked] = useState(std::string{});
+    std::vector<Stock> items{{"bolt", 120}, {"nut", 7}, {"washer", 45}};
+    std::ranges::sort(items, [desc](const Stock& a, const Stock& b) { return desc ? a.qty > b.qty : a.qty < b.qty; });
+    std::vector<ui::TableRow> rows;
+    for (const auto& it : items)
+        rows.push_back({.cells = {it.name, std::to_string(it.qty)}, .key = it.name,
+                        .onSelect = [setPicked, name = it.name] { setPicked(name); }, .selected = picked == it.name});
+    return h("box", {}, {
+        ui::table({.columns = {{.title = "Name"}, {.title = "Qty", .width = 5, .align = ui::Align::End, .sortable = true}},
+                   .rows = std::move(rows),
+                   .sortColumn = 1,
+                   .sortDescending = desc,
+                   .onSort = [setDesc, desc](int) { setDesc(!desc); }}),
+        h("text", {}, {"picked:" + picked}),
+    });
+}
+
+TEST(table_lines_up_columns_and_sorts) {
+    Screen s(h(StockTable), 30, 10);
+    auto lines = s.renderer.frameLines();
+    // Border, header, then the rows sorted by quantity, numbers on the right.
+    CHECK(lines.size() > 4);
+    CHECK(contains(lines[1], "Name") && contains(lines[1], "Qty ▲"));
+    CHECK(contains(lines[2], "│ nut") && contains(lines[2], "    7 │"));
+    CHECK(contains(lines[4], "│ bolt") && contains(lines[4], "  120 │"));
+    s.press("Enter");  // the focus starts on the sortable header
+    lines = s.renderer.frameLines();
+    CHECK(contains(lines[1], "Qty ▼") && contains(lines[2], "bolt") && contains(lines[4], "nut"));
+    s.press("Tab");    // the first row
+    s.press("Enter");
+    CHECK(contains(s.text(), "picked:bolt"));
+}
+
+TEST(table_shows_empty_text) {
+    Screen s(ui::table({.columns = {{.title = "Name"}}, .emptyText = "Nothing here"}), 30, 6);
+    CHECK(contains(s.text(), "Name") && contains(s.text(), "Nothing here"));
+}
+
+struct BigTableProps {
+    int count = 0;
+};
+
+Element BigTable(const BigTableProps& p) {
+    auto list = ui::useVirtualList({.count = p.count});
+    std::vector<ui::TableRow> rows;
+    for (int i = list.first; i < list.last; ++i)
+        rows.push_back({.cells = {"row " + std::to_string(i), std::to_string(i * 2)}, .key = std::to_string(i)});
+    return ui::table({.columns = {{.title = "Row"}, {.title = "Double", .width = 8, .align = ui::Align::End}},
+                      .rows = std::move(rows), .list = list});
+}
+
+TEST(table_with_a_virtual_list_draws_only_rows_on_screen) {
+    Screen s(h(BigTable, {.count = 50000}), 30, 12);
+    CHECK(contains(s.text(), "row 0") && contains(s.text(), "Double"));
+    CHECK(s.renderer.nodeCount() < 400);
+    s.press("PageDown");
+    s.root.flush();
+    CHECK(!contains(s.text(), "row 0 ") && contains(s.text(), "Double"));  // the header stays
 }
 
 struct BigLogProps {

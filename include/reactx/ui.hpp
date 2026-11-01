@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -264,6 +265,48 @@ struct VirtualList {
     Setter<std::pair<int, int>> setViewport{};  // top, height
 };
 VirtualList useVirtualList(VirtualListOptions options);
+
+// ---- table ----
+// Columns with headers that line up in the browser and in a terminal. The
+// rows are yours: sort them yourself when a header is clicked.
+//   ui::table({.columns = {{.title = "Name", .sortable = true},
+//                          {.title = "Qty", .width = 6, .align = ui::Align::End, .sortable = true}},
+//              .rows = rows,          // {.cells = {item.name, std::to_string(item.qty)}, .key = item.id}
+//              .sortColumn = sortBy, .sortDescending = desc,
+//              .onSort = [setSortBy](int column) { setSortBy(column); }})
+// Long tables: pass a ui::useVirtualList and only the rows list.first ..
+// list.last-1 (rows[0] is row list.first):
+//   auto list = ui::useVirtualList({.count = n, .rowHeight = 36, .height = 480});
+//   ui::table({.columns = ..., .rows = visibleRows, .list = list})
+struct TableColumn {
+    std::string title{};
+    int width = 0;               // characters (terminal cells, `ch` in the browser); 0 = share the room left
+    Align align = Align::Start;  // End for numbers
+    bool sortable = false;       // the header is a button that calls onSort
+};
+
+struct TableRow {
+    std::vector<Element> cells{};  // one per column: text or any element
+    std::string key{};             // keeps the row when rows move (sorting)
+    Callback onSelect{};           // click or Enter on the row
+    bool selected = false;
+};
+
+struct TableProps {
+    std::vector<TableColumn> columns{};
+    std::vector<TableRow> rows{};
+    int sortColumn = -1;           // shows an arrow on that header
+    bool sortDescending = false;
+    std::function<void(int column)> onSort{};
+    std::string emptyText{};       // shown when there are no rows
+    std::optional<VirtualList> list{};  // draw only the rows on screen (see above)
+    std::string key{};
+};
+Element table(TableProps props);
+
+namespace detail {
+Element TableView(const TableProps& props);  // ui_web.cpp / ui_terminal.cpp
+}  // namespace detail
 
 // ---- toasts ----
 // A short message in a corner that goes away by itself, sent from anywhere on

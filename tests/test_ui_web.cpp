@@ -1,4 +1,5 @@
 // rx::ui in the browser: WebAssembly under Node with tests/web/fake_dom.js.
+#include <algorithm>
 #include <emscripten.h>
 
 #include <chrono>
@@ -79,6 +80,20 @@ Element App(const Props&) {
 }
 
 // The newer atoms: card, stack, text, select, tooltip, confirm, toasts.
+std::string pickedRow;
+
+Element WebTable(const Props&) {
+    auto [desc, setDesc] = useState(false);
+    std::vector<std::pair<std::string, int>> items{{"bolt", 120}, {"nut", 7}, {"washer", 45}};
+    std::ranges::sort(items, [desc](const auto& a, const auto& b) { return desc ? a.second > b.second : a.second < b.second; });
+    std::vector<ui::TableRow> rows;
+    for (const auto& [name, qty] : items)
+        rows.push_back({.cells = {name, std::to_string(qty)}, .key = name, .onSelect = [name] { pickedRow = name; }});
+    return ui::table({.columns = {{.title = "Name"}, {.title = "Qty", .width = 5, .align = ui::Align::End, .sortable = true}},
+                      .rows = std::move(rows), .sortColumn = 1, .sortDescending = desc,
+                      .onSort = [setDesc, desc](int) { setDesc(!desc); }});
+}
+
 Element Atoms(const Props&) {
     auto [size, setSize] = useState(std::string("m"));
     auto [asking, setAsking] = useState(true);
@@ -227,6 +242,20 @@ int main() {
     CHECK(has("rx-toast rx-toast--success") && has("Saved!"));
     js("rxTest.clickClass('rx-toast')");
     CHECK(!has("Saved!"));
+
+    std::cout << "table: columns, sorting, rows\n";
+    mountDom(h(WebTable));  // replaces the app above
+    CHECK(has("<div class=\"rx-table\" role=\"table\" style=\"--rx-table-cols: minmax(10ch, 1fr) 8ch ; --rx-table-min: 20ch\">"));
+    CHECK(has("<div aria-sort=\"ascending\" class=\"rx-table__cell rx-table__cell--end\" role=\"columnheader\">"
+              "<button class=\"rx-table__sort\" type=\"button\">Qty ▲</button>"));
+    CHECK(html().find(">nut<") < html().find(">bolt<"));
+    js("rxTest.clickClass('rx-table__sort')");
+    CHECK(has("Qty ▼") && html().find(">bolt<") < html().find(">nut<"));
+    js("rxTest.clickText('washer')");  // a cell: the click reaches the row
+    CHECK(pickedRow == "washer");
+    js("rxTest.keyClass('rx-table__row', 'Enter', 0)");
+    CHECK(pickedRow == "bolt");
+    CHECK(has("class=\"rx-table__row rx-table__row--click\" role=\"row\" tabindex=\"0\""));
 
     std::cout << (failures ? "FAILED: " + std::to_string(failures) : std::string("OK, all tests passed")) << '\n';
     return failures ? 1 : 0;

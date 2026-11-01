@@ -203,6 +203,8 @@ void toast(ToastProps p) {
 
 Element toaster() { return h(Toaster); }
 
+Element table(TableProps p) { return h(detail::TableView, std::move(p)); }
+
 // ---- virtualList ----
 
 namespace {

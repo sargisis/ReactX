@@ -115,7 +115,7 @@ void quick(const fs::path& tmp) {
     auto agents = read(app / "AGENTS.md");  // notes for AI agents: filled in, web rules, the API link
     CHECK(contains(agents, "# my-app — notes for coding agents") && contains(agents, "reactx/dom.hpp"));
     CHECK(contains(agents, "llms.txt") && contains(agents, "onPointerDown") && !contains(agents, "{{"));
-    CHECK(contains(agents, "reactx/ui.hpp") && contains(agents, "--target app_tests"));  // components, tests
+    CHECK(contains(agents, "reactx/ui.hpp") && contains(agents, "app_tests"));  // components, tests
     auto manifest = rx::json::parse(read(app / "reactx.json"));
     CHECK(manifest["name"].asString() == "my-app");
     CHECK(manifest["template"].asString() == "web");
@@ -366,6 +366,23 @@ void endToEnd(const fs::path& tmp) {
     auto again = reactx({"build"}, tmp / "term-app");
     CHECK(again.code == 0 && contains(again.out, "Configuring done"));
 
+    std::cout << "e2e: a native build of a web project builds its tests, not the browser main\n";
+    {
+        fs::path dir = tmp / "web-tests";
+        CHECK(reactx({"new", "web-tests", "--local"}, tmp).code == 0);
+        fs::create_directories(dir / "tests");
+        std::ofstream(dir / "tests/app_tests.cpp") << "#include \"reactx/reactx.hpp\"\nint main() { return rx::h(\"p\").type == \"p\" ? 0 : 1; }\n";
+        std::ofstream(dir / "CMakeLists.txt", std::ios::app)
+            << "if(NOT EMSCRIPTEN)\n  add_executable(app_tests tests/app_tests.cpp)\n"
+               "  target_link_libraries(app_tests PRIVATE reactx::reactx)\nendif()\n";
+        std::string cmd = "cd '" + dir.string() + "' && cmake -S . -B build/test -G Ninja -DCMAKE_CXX_COMPILER='" REACTX_TEST_CXX
+                          "' > build.log 2>&1 && cmake --build build/test >> build.log 2>&1 && ./build/test/app_tests";
+        bool ok = std::system(cmd.c_str()) == 0;
+        CHECK(ok);
+        if (!ok) std::cerr << read(dir / "build.log").substr(0, 3000) << '\n';
+        CHECK(!fs::exists(dir / "build/test/web_tests"));  // the app (main calls mountDom) is left out
+    }
+
     if (!std::getenv("EMSDK")) {
         std::cout << "e2e: web part SKIPPED (EMSDK is not set)\n";
         return;
@@ -382,6 +399,7 @@ void endToEnd(const fs::path& tmp) {
 
     std::cout << "e2e: build reports the .wasm size and what makes it big\n";
     CHECK(contains(wb.out, "index.wasm: ") && !contains(wb.out, "reactx: size:"));  // a fresh project is lean
+    CHECK(contains(wb.out, "biggest parts: ") && contains(wb.out, "ReactX reconciler.cpp"));
     {
         std::ofstream main(web / "src/main.cpp", std::ios::app);
         main << "\n#include <format>\nstatic const std::string sizeProbe = std::format(\"{}\", 42);\n";

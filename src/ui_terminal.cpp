@@ -253,3 +253,71 @@ Element Toaster(const Props&) {
 }
 
 }  // namespace rx::ui
+
+namespace rx::ui::detail {
+
+Element TableView(const TableProps& p) {
+    const Theme& t = useTheme();
+    // A cell: `width` cells wide, or a share of the room left; text is cut, not wrapped.
+    auto cell = [](const TableColumn& c, Element content, const std::string& color, bool bold) {
+        if (content.kind == ElementKind::Text)
+            content = h("text", {{"color", color}, {"bold", bold}, {"wrap", false}}, {std::move(content)});
+        Element box = h("box", {{"direction", "row"}, {"overflow", "hidden"},
+                                {"justifyContent", c.align == Align::End      ? "end"
+                                                   : c.align == Align::Center ? "center"
+                                                                              : "start"}},
+                        {std::move(content)});
+        if (c.width > 0) {
+            box.props.set("width", std::int64_t{c.width});
+            box.props.set("flexShrink", std::int64_t{0});
+        } else {
+            box.props.set("flexGrow", std::int64_t{1});
+            box.props.set("flexBasis", std::int64_t{0});
+            box.props.set("minWidth", std::int64_t{0});
+        }
+        return box;
+    };
+    std::vector<Element> head;
+    for (std::size_t i = 0; i < p.columns.size(); ++i) {
+        const auto& c = p.columns[i];
+        bool sorted = static_cast<int>(i) == p.sortColumn;
+        std::string label = c.title + (sorted ? (p.sortDescending ? " ▼" : " ▲") : "");
+        Element content = label;
+        if (c.sortable && p.onSort)
+            content = h("box", {{"focusable", true}, {"onClick", [onSort = p.onSort, i] { onSort(static_cast<int>(i)); }}},
+                        {h("text", {{"color", sorted ? t.accent : t.muted}, {"bold", true}, {"underline", true}, {"wrap", false}},
+                           {label})});
+        head.push_back(cell(c, std::move(content), t.muted, true));
+    }
+    std::vector<Element> rows;
+    rows.reserve(p.rows.size());
+    for (std::size_t r = 0; r < p.rows.size(); ++r) {
+        const auto& row = p.rows[r];
+        const std::string& color = row.selected ? t.accent : t.text;
+        std::vector<Element> cells;
+        for (std::size_t i = 0; i < p.columns.size(); ++i)
+            cells.push_back(cell(p.columns[i], i < row.cells.size() ? row.cells[i] : Element(""), color, row.selected));
+        Element e = h("box", {{"direction", "row"}, {"gap", 1}}, std::move(cells));
+        if (row.onSelect) {
+            e.props.set("focusable", true);
+            e.props.set("scrollIntoView", row.selected);
+            e.props.set("onClick", row.onSelect);
+        }
+        e.key = row.key.empty() ? std::to_string(r) : row.key;
+        rows.push_back(std::move(e));
+    }
+    std::vector<Element> parts;
+    parts.push_back(h("box", {{"direction", "row"}, {"gap", 1}, {"flexShrink", 0}}, std::move(head)));
+    if (p.rows.empty() && !p.emptyText.empty())
+        parts.push_back(h("text", {{"color", t.muted}, {"dim", true}}, {p.emptyText}));
+    else if (p.list)
+        parts.push_back(p.list->view(std::move(rows)));
+    else
+        parts.push_back(h("box", {}, std::move(rows)));
+    // With a virtual list the table takes the room left in its column, like a scroll box.
+    return h("box", {{"border", true}, {"color", t.muted}, {"paddingX", 1}, {"flexShrink", 1}, {"minHeight", 0},
+                     {"flexGrow", std::int64_t{p.list ? 1 : 0}}},
+             std::move(parts));
+}
+
+}  // namespace rx::ui::detail

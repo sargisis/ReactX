@@ -20,6 +20,16 @@ function(reactx_add_app target)
   add_executable(${target} ${APP_SOURCES})
   target_link_libraries(${target} PRIVATE reactx::reactx)
   if(NOT EMSCRIPTEN)
+    # A web project's main() calls mountDom, which exists only in the browser
+    # build: natively the app is built only when asked for (--target, or
+    # `reactx build --native`), so tests and helper programs build on their own.
+    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/reactx.json)
+      file(READ ${CMAKE_CURRENT_SOURCE_DIR}/reactx.json manifest)
+      string(JSON kind ERROR_VARIABLE no_kind GET "${manifest}" template)
+      if(NOT no_kind AND kind STREQUAL "web")
+        set_target_properties(${target} PROPERTIES EXCLUDE_FROM_ALL TRUE)
+      endif()
+    endif()
     return()
   endif()
 

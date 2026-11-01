@@ -121,6 +121,25 @@ constexpr const char* kCss = R"css(
 .rx-toast--success { border-left-color: var(--rx-success); }
 .rx-toast--danger { border-left-color: var(--rx-danger); }
 .rx-toast:focus-visible { outline: 2px solid var(--rx-accent); outline-offset: 2px; }
+.rx-table { display: flex; flex-direction: column; min-height: 0; width: 100%; max-width: 100%; box-sizing: border-box;
+            border: 1px solid var(--rx-border); border-radius: var(--rx-radius); overflow-x: auto; overflow-y: hidden; }
+.rx-table > * { min-width: var(--rx-table-min); }
+.rx-table__head, .rx-table__row { display: grid; grid-template-columns: var(--rx-table-cols); align-items: center; }
+.rx-table__head { color: var(--rx-muted); border-bottom: 1px solid var(--rx-border); overflow-y: hidden; scrollbar-gutter: stable; }
+.rx-table__head > * { font-size: .85rem; font-weight: 600; }  /* on the cells: the columns are in ch of the table's font */
+.rx-table__body, .rx-table > .rx-vlist { overflow-y: auto; min-height: 0; scrollbar-gutter: stable; }
+.rx-table__row { box-sizing: border-box; height: 100%; border-bottom: 1px solid var(--rx-hover); }
+.rx-table__row--click { cursor: pointer; }
+.rx-table__row--click:hover { background: var(--rx-hover); }
+.rx-table__row:focus-visible { outline: 2px solid var(--rx-accent); outline-offset: -2px; }
+.rx-table__row--selected { color: var(--rx-accent); font-weight: 600; }
+.rx-table__cell { padding: 7px 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rx-table__cell--end { text-align: right; }
+.rx-table__cell--center { text-align: center; }
+.rx-table__sort { font: inherit; color: inherit; background: none; border: none; padding: 0; cursor: pointer; }
+.rx-table__sort:focus-visible { outline: 2px solid var(--rx-accent); outline-offset: 2px; }
+.rx-table__empty { margin: 0; padding: 14px 12px; color: var(--rx-muted); text-align: center; }
+.rx-table > .rx-vlist { border: none; }
 @keyframes rx-toast-in { from { opacity: 0; transform: translateY(8px); } }
 )css";
 
@@ -405,3 +424,71 @@ Element Toaster(const Props&) {
 }
 
 }  // namespace rx::ui
+
+namespace rx::ui::detail {
+
+Element TableView(const TableProps& p) {
+    ensureStyles();
+    // Fixed columns get their characters plus the cell's padding (~3ch);
+    // the others share the rest, at least 10ch each. Narrower than that (a
+    // phone), the table scrolls sideways inside itself.
+    std::string cols;
+    int least = 2;  // the vertical scroll bar
+    for (const auto& c : p.columns) {
+        cols += (c.width > 0 ? std::to_string(c.width + 3) + "ch" : std::string("minmax(10ch, 1fr)")) + " ";
+        least += c.width > 0 ? c.width + 3 : 10;
+    }
+    auto cellClass = [](const TableColumn& c) {
+        return std::string(c.align == Align::End      ? "rx-table__cell rx-table__cell--end"
+                           : c.align == Align::Center ? "rx-table__cell rx-table__cell--center"
+                                                      : "rx-table__cell");
+    };
+    std::vector<Element> head;
+    for (std::size_t i = 0; i < p.columns.size(); ++i) {
+        const auto& c = p.columns[i];
+        bool sorted = static_cast<int>(i) == p.sortColumn;
+        std::string sort = !sorted ? "none" : p.sortDescending ? "descending" : "ascending";
+        Element label = c.title + (sorted ? (p.sortDescending ? " ▼" : " ▲") : "");
+        if (c.sortable && p.onSort)
+            label = h("button", {{"type", "button"}, {"className", "rx-table__sort"},
+                                 {"onClick", [onSort = p.onSort, i] { onSort(static_cast<int>(i)); }}},
+                      {std::move(label)});
+        Element cell = h("div", {{"role", "columnheader"}, {"className", cellClass(c)}}, {std::move(label)});
+        if (c.sortable) cell.props.set("aria-sort", sort);
+        head.push_back(std::move(cell));
+    }
+    std::vector<Element> rows;
+    rows.reserve(p.rows.size());
+    for (std::size_t r = 0; r < p.rows.size(); ++r) {
+        const auto& row = p.rows[r];
+        std::vector<Element> cells;
+        for (std::size_t i = 0; i < p.columns.size(); ++i)
+            cells.push_back(h("div", {{"role", "cell"}, {"className", cellClass(p.columns[i])}},
+                              {i < row.cells.size() ? row.cells[i] : Element{}}));
+        std::string cls = "rx-table__row";
+        if (row.onSelect) cls += " rx-table__row--click";
+        if (row.selected) cls += " rx-table__row--selected";
+        Element e = h("div", {{"role", "row"}, {"className", cls}}, std::move(cells));
+        if (row.selected) e.props.set("aria-selected", "true");
+        if (row.onSelect) {
+            e.props.set("tabindex", "0");
+            e.props.set("onClick", row.onSelect);
+            e.props.set("onKey", KeyHandler([select = row.onSelect](const KeyEvent& k) {
+                            if (k.key == "Enter" || k.key == " ") select();
+                        }));
+        }
+        e.key = row.key.empty() ? std::to_string(r) : row.key;
+        rows.push_back(std::move(e));
+    }
+    std::vector<Element> parts;
+    parts.push_back(h("div", {{"role", "row"}, {"className", "rx-table__head"}}, std::move(head)));
+    if (p.rows.empty() && !p.emptyText.empty())
+        parts.push_back(h("p", {{"className", "rx-table__empty"}}, {p.emptyText}));
+    else if (p.list)
+        parts.push_back(p.list->view(std::move(rows)));
+    else
+        parts.push_back(h("div", {{"role", "rowgroup"}, {"className", "rx-table__body"}}, std::move(rows)));
+    return h("div", {{"role", "table"}, {"className", "rx-table"}, {"style", "--rx-table-cols: " + cols + "; --rx-table-min: " + std::to_string(least) + "ch"}}, std::move(parts));
+}
+
+}  // namespace rx::ui::detail

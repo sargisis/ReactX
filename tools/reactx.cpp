@@ -20,6 +20,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <charconv>
 #include <atomic>
 #include <cctype>
 #include <cerrno>
@@ -492,7 +493,8 @@ body { margin: 0; }
 .nav { display: flex; gap: 12px; margin-bottom: 24px; }
 .nav a { color: inherit; opacity: .7; text-decoration: none; }
 .nav a.active { opacity: 1; font-weight: 600; }
-.page { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.page { display: flex; flex-direction: column; gap: 12px; }
+.page > .rx-btn { align-self: flex-start; }  /* buttons keep their width; rows, tables and forms fill the page */
 h1 { margin: 0; }
 )css";
 
@@ -661,7 +663,8 @@ int cmdNew(const std::vector<std::string>& args) {
                                  "\n- Tests run natively: keep components in their own file (not `main.cpp`, which calls"
                                  "\n  `mountDom`), add `if(NOT EMSCRIPTEN) add_executable(app_tests tests/app_tests.cpp src/app.cpp)`"
                                  "\n  + `target_link_libraries(app_tests PRIVATE reactx::reactx) endif()` to CMakeLists.txt and build"
-                                 "\n  only that target: `cmake -S . -B build/test && cmake --build build/test --target app_tests`."}};
+                                 "\n  natively: `cmake -S . -B build/test && cmake --build build/test` (the app itself is left out"
+                                 "\n  of a native build: its main calls `mountDom`)."}};
     writeManifest(dir, manifest);
     writeOrFail(dir / "CMakeLists.txt", fill(std::string(kCMakeLists), vars));
     writeOrFail(dir / "CMakePresets.json", kPresets);
@@ -913,7 +916,7 @@ int cmdInstall(const std::vector<std::string>& args) {
 }
 
 // Configures (first time) and builds a preset; returns true on success.
-bool build(const fs::path& root, const std::string& preset) {
+bool build(const fs::path& root, const std::string& preset, const std::string& target = {}) {
     if (preset == "web" && !std::getenv("EMSDK"))
         fail("the web build needs Emscripten: run `reactx install` (or set EMSDK)");
     fs::path cache = root / "build" / preset / "CMakeCache.txt";
@@ -931,7 +934,9 @@ bool build(const fs::path& root, const std::string& preset) {
             configure.push_back(std::string("-DCMAKE_CXX_COMPILER=") + std::string(compiler));
         if (run(configure, root) != 0) return false;
     }
-    return run({"cmake", "--build", "--preset", preset}, root) == 0;
+    std::vector<std::string> command{"cmake", "--build", "--preset", preset};
+    if (!target.empty()) command.insert(command.end(), {"--target", target});
+    return run(command, root) == 0;
 }
 
 // What makes a web build big, from the linker map reactx_add_app writes
@@ -967,6 +972,60 @@ std::vector<std::string> sizeAdvice(std::string_view map) {
     return advice;
 }
 
+// The biggest parts of a web build, from the same linker map: the share of
+// code and data each source file (the app's own, ReactX's) or library takes.
+// The map is written before wasm-opt shrinks the module, so the shares are
+// what is worth reading, not the bytes.
+std::string biggestParts(std::string_view map, std::size_t count = 5) {
+    std::vector<std::pair<std::string, std::uint64_t>> parts;
+    std::uint64_t total = 0;
+    auto nameOf = [](std::string_view in) -> std::string {
+        if (in.starts_with("<")) return {};  // <internal>: made by the linker
+        if (auto open = in.find(".a("); open != std::string_view::npos) {
+            std::string_view lib = in.substr(0, open);
+            lib = lib.substr(lib.find_last_of('/') + 1);
+            std::string_view file = in.substr(open + 3);
+            file = file.substr(0, file.find(')'));
+            if (lib == "libreactx") return "ReactX " + std::string(file.substr(0, file.find(".o")));
+            if (lib.starts_with("libc++")) return "the C++ library";
+            if (lib.starts_with("libc") || lib.starts_with("libdlmalloc")) return "the C library";
+            return std::string(lib);
+        }
+        if (auto dir = in.find(".dir/"); dir != std::string_view::npos) in = in.substr(dir + 5);
+        if (in.ends_with(".o")) in.remove_suffix(2);
+        return std::string(in);
+    };
+    for (auto part : std::views::split(map, '\n')) {
+        std::string_view line(part.begin(), part.end());
+        // "...main.cpp.o:(symbol)" or "...libreactx.a(dom.cpp.o):(symbol)"
+        std::size_t end = line.find(".o:(");
+        if (end != std::string_view::npos) end += 2;
+        else if (end = line.find(".o):("); end != std::string_view::npos) end += 3;
+        else continue;
+        std::size_t at = end;
+        // "   Addr   Off   Size   In:(symbol)": Size is the third column (hex).
+        std::vector<std::string_view> cols;
+        for (auto c : std::views::split(line.substr(0, at), ' '))
+            if (!std::ranges::empty(c)) cols.emplace_back(c.begin(), c.end());
+        if (cols.size() < 4) continue;
+        std::uint64_t size = 0;
+        if (std::from_chars(cols[2].data(), cols[2].data() + cols[2].size(), size, 16).ec != std::errc{}) continue;
+        std::size_t from = line.find(cols[3]);
+        std::string name = nameOf(line.substr(from, end - from));
+        if (name.empty()) continue;
+        total += size;
+        auto it = std::ranges::find(parts, name, &std::pair<std::string, std::uint64_t>::first);
+        if (it == parts.end()) parts.emplace_back(name, size);
+        else it->second += size;
+    }
+    if (total == 0) return {};
+    std::ranges::sort(parts, std::greater{}, &std::pair<std::string, std::uint64_t>::second);
+    std::string out;
+    for (std::size_t i = 0; i < std::min(count, parts.size()); ++i)
+        out += (i ? ", " : "") + parts[i].first + " " + std::to_string((parts[i].second * 100 + total / 2) / total) + "%";
+    return out;
+}
+
 // After a web build: the size of each .wasm and what to do if it is avoidably big.
 void reportWebSize(const fs::path& root) {
     std::error_code ec;
@@ -977,6 +1036,7 @@ void reportWebSize(const fs::path& root) {
         if (!entry.path().string().ends_with(".link.map")) continue;
         std::ifstream in(entry.path(), std::ios::binary);
         std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        if (auto parts = biggestParts(text); !parts.empty()) std::println("  biggest parts: {}", parts);
         for (const auto& line : sizeAdvice(text)) std::println("reactx: size: {}", line);
     }
 }
@@ -990,7 +1050,9 @@ int cmdBuild(const std::vector<std::string>& args) {
         else fail("build: unknown option " + a);
     }
     std::string preset = native ? "native" : "web";
-    if (!build(root, preset)) fail("build failed");
+    // A web project's app is left out of a plain native build (its main calls mountDom): name it.
+    std::string target = native && !isTerminal(manifest) ? cmakeName(manifest.name) : std::string();
+    if (!build(root, preset, target)) fail("build failed");
     std::println("Built: {}", (root / (native ? "build/native" : "build/web/dist")).string());
     if (!native) reportWebSize(root);
     return 0;
@@ -1072,7 +1134,7 @@ int cmdDev(const std::vector<std::string>& args) {
     }
 
     if (native) {  // terminal app: build and run it
-        if (!build(root, "native")) fail("build failed");
+        if (!build(root, "native", isTerminal(manifest) ? std::string() : cmakeName(manifest.name))) fail("build failed");
         return run({(root / "build/native" / cmakeName(manifest.name)).string()}, root);
     }
 

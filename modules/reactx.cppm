@@ -68,6 +68,7 @@ using rx::storageRead;
 using rx::storageWrite;
 using rx::storageRemove;
 using rx::useWindowSize;
+using rx::useTitle;
 using rx::WindowSize;
 using rx::deps;
 using rx::useReducer;
@@ -204,6 +205,10 @@ using rx::ui::ToastProps;
 using rx::ui::VirtualListOptions;
 using rx::ui::VirtualList;
 using rx::ui::useVirtualList;
+using rx::ui::TableColumn;
+using rx::ui::TableRow;
+using rx::ui::TableProps;
+using rx::ui::table;
 
 using rx::ui::button;
 using rx::ui::input;

@@ -344,6 +344,17 @@ void notifyResize(WindowSize size);
 // re-renders when it changes.
 WindowSize useWindowSize();
 
+// Sets the page title (the browser tab) while the component is mounted and
+// puts the previous title back when it unmounts, so each route page can name
+// itself:  rx::useTitle("Orders (" + std::to_string(count) + ")");
+// Natively it is kept in memory (detail::pageTitle) and the terminal is not
+// touched.
+void useTitle(std::string title);
+namespace detail {
+std::string pageTitle();
+void setPageTitle(const std::string& title);
+}  // namespace detail
+
 // The browser's localStorage, with errors as values: storage turned off
 // (private mode, a sandboxed iframe), the quota is full. A missing key is not
 // an error: storageRead gives std::nullopt. Natively the values live in

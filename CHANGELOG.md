@@ -6,6 +6,21 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+## [0.17.0] — 2026-11-02
+
+Text in the terminal: emoji and Chinese, Japanese and Korean characters take their real two columns, so borders and tables stay straight; `input` and `textarea` edit where the cursor is (arrows, Home/End, Ctrl+arrows by words, Delete); and `ui::textarea` has several lines in a terminal too. Also from an outside review of the website: `install.sh` checks the release's SHA-256, outdated limits in the docs are fixed, `/demos` opens directly. A MINOR release for the new terminal tag; apps update without changes.
+
+**Update:** `reactx upgrade`, then `reactx update` in each project.
+
+### Added
+
+- Terminal: a `textarea` tag (`value`, `placeholder`, `rows`) and `ui::textarea` with several lines — Enter starts a line, Up / Down move between lines (past the first or last one the focus moves on), long lines wrap and the field scrolls to the cursor.
+- Terminal: `input` and `textarea` edit where the cursor is — Left / Right, Home / End, Ctrl+Left / Right by words, Backspace / Delete at the cursor; a long value scrolls sideways to keep it in view. The cursor is an inverted cell (`TerminalRenderer::caret()` says where).
+
+### Fixed
+
+- Terminal: emoji and Chinese, Japanese and Korean characters take two columns, so borders, titles, table columns and wrapping no longer slip; a character with its marks (é, 👍🏽, ❤️, flags, family emoji) is one for drawing, the cursor and Backspace. Typing an emoji made of several code points works.
+
 ### Changed
 
 - `install.sh` checks the downloaded archive against the SHA-256 the release publishes next to it (as `reactx upgrade` already did) and installs nothing if they differ.
@@ -393,7 +408,8 @@ The first release.
 - **A documentation site** built with ReactX: https://sargisis.github.io/ReactX/, published by GitHub Actions through the `gh-pages` branch.
 - The version in one place (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; new projects from `reactx new` use ReactX by release tag.
 
-[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/sargisis/ReactX/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/sargisis/ReactX/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/sargisis/ReactX/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/sargisis/ReactX/compare/v0.13.0...v0.14.0

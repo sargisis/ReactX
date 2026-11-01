@@ -150,14 +150,14 @@ inline const std::vector<Page>& pagesEn() {
                               "and --target links it to your app.",
                  "reactx add fmt https://github.com/fmtlib/fmt.git --rev 11.0.2 --target fmt::fmt\nreactx remove fmt"},
                 {"reactx update", "Moves your project to the newest ReactX release. --check only tells you whether there is one.",
-                 "reactx update --check   # ReactX v0.15.0 -> v0.16.0 is available\n"
+                 "reactx update --check   # ReactX v0.16.0 -> v0.17.0 is available\n"
                  "reactx update\n"
                  "reactx build"},
                 {"reactx.json", "Everything about the project in one file.",
                  "{\n"
                  "  \"name\": \"my-app\",\n"
                  "  \"template\": \"web\",\n"
-                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.16.0\" },\n"
+                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.17.0\" },\n"
                  "  \"dependencies\": { \"fmt\": { \"git\": \"...\", \"rev\": \"11.0.2\", \"target\": \"fmt::fmt\" } },\n"
                  "  \"web\": { \"base\": \"/\", \"proxy\": { \"/api\": \"http://127.0.0.1:5000\" } }\n"
                  "}"},
@@ -177,9 +177,9 @@ inline const std::vector<Page>& pagesEn() {
                  "cd my-app && reactx update && reactx build"},
                 {"Upgrading a project", "reactx update finds the newest release and writes it into reactx.json; the next build downloads it. "
                               "By hand: change rev to the new tag.",
-                 "reactx update\n# or in reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.16.0\" }"},
+                 "reactx update\n# or in reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.17.0\" }"},
                 {"The version in code", "",
-                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"0.16.0\"\n"
+                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"0.17.0\"\n"
                  "static_assert(REACTX_VERSION_MAJOR == 0);"},
             },
         },
@@ -337,8 +337,16 @@ inline const std::vector<Page>& pagesEn() {
             {
                 {"Run", "TerminalApp draws your components in the terminal and handles keys until Ctrl+C.",
                  "TerminalApp app;\napp.run(h(App));"},
-                {"Tags", "box is a flex container, text is text that wraps, input is a text field, button is a button. "
-                         "Tab and the arrows move focus, Enter or Space press.", ""},
+                {"Tags", "box is a flex container, text is text that wraps, input is a text field, textarea a field of "
+                         "several lines (rows), button is a button. Tab and the arrows move focus, Enter or Space press.", ""},
+                {"Text fields", "input and textarea edit where the cursor is: Left / Right, Home / End, Ctrl+Left / Right by "
+                                "words, Backspace and Delete. A textarea also takes Enter for a new line and Up / Down between "
+                                "lines, wraps long lines and scrolls to the cursor. Emoji and Chinese, Japanese or Korean "
+                                "characters take two columns, so borders and table columns stay in line; 👍🏽 or a flag is "
+                                "one character for the cursor and Backspace.",
+                 "ui::textarea({.value = note, .onChange = setNoteFn, .label = \"Note\", .rows = 6})\n"
+                 "// or the tag itself:\n"
+                 "h(\"textarea\", {{\"value\", note}, {\"rows\", 6}, {\"onInput\", setNoteFn}})"},
                 {"Layout", "Flexbox, the same engine as React Native (Yoga): direction, justifyContent, alignItems, flexGrow, "
                            "width and height in cells or percent, padding, margin, gap, borders.",
                  "h(\"box\", {{\"flexGrow\", 1}, {\"justifyContent\", \"center\"}, {\"alignItems\", \"center\"}}, {\n"
@@ -438,7 +446,7 @@ inline const std::vector<Page>& pagesEn() {
                  "ui::input({.value = form.values.name, .onChange = form.set(\"name\", &Signup::name),\n"
                  "           .label = \"Name\", .error = form.error(\"name\")})\n"
                  "ui::button({.label = \"Sign up\", .onClick = form.submit})"},
-                {"More fields", "textarea for several lines (one line in a terminal for now), radioGroup when every option "
+                {"More fields", "textarea for several lines (in a terminal too), radioGroup when every option "
                                 "should be visible, slider for a number in a range, progress for how far something got.",
                  "ui::textarea({.value = note, .onChange = setNoteFn, .label = \"Note\", .rows = 3})\n"
                  "ui::radioGroup({.label = \"Plan\", .value = plan, .options = {{\"free\", \"Free\"}, {\"pro\", \"Pro\"}},\n"

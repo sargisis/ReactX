@@ -288,7 +288,7 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 | `modal` | `title`, `open`, `onClose` (Escape), `width`; закрывает то, что под ним, держит фокус внутри и возвращает его после закрытия |
 | `list` / `listItem` | рамка с заголовком, `emptyText`, `scroll` (прокрутка внутри вместо роста); пункт: `label`, `detail` справа, `selected` (новый выбранный пункт прокручивается на виду), `onSelect`, `onKey` |
 | `select` | `label`, `value`, `options` (`{value, label}`), `onChange(value)`; в браузере нативный `<select>`, в терминале ‹ › со стрелками ← → / Enter или кликом; `labelAbove` |
-| `textarea` | `value`, `onChange`, `placeholder`, `label`, `rows`; в терминале пока одна строка |
+| `textarea` | `value`, `onChange`, `placeholder`, `label`, `rows`; и в терминале: Enter, ↑ ↓ по строкам, перенос, прокрутка |
 | `radioGroup` | `label`, `value`, `options`, `onChange(value)`, `row`: все варианты на виду; в браузере нативные radio, в терминале (•) со стрелками ↑ ↓ или кликом |
 | `slider` | `label`, `value`, `min`, `max`, `step`, `onChange(int)`, `showValue`; в браузере ползунок, в терминале ← → / Home / End или клик |
 | `progress` | `value` из `max`, `label`, `variant`: полоса с процентами |

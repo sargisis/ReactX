@@ -136,7 +136,7 @@ inline const std::vector<Page>& pages() {
                  "code --install-extension llvm-vs-code-extensions.vscode-clangd\nreactx build   # пишет compile_commands.json для clangd"},
                 {"Новый проект", "reactx new создаёт папку с reactx.json (манифест, как package.json), CMakeLists.txt, "
                                  "CMakePresets.json и src/main.cpp. ReactX подключается с GitHub по тегу релиза "
-                                 "(например, v0.16.0), а не по ветке, поэтому проект не сломается от новых изменений; --local — из исходников, "
+                                 "(например, v0.17.0), а не по ветке, поэтому проект не сломается от новых изменений; --local — из исходников, "
                                  "из которых собран сам CLI. --terminal — терминальное приложение вместо веба.",
                  "reactx new my-app\ncd my-app"},
                 {"reactx dev", "Собирает веб-версию, запускает встроенный сервер на C++ (тот же, что reactx_serve) и следит за "
@@ -168,15 +168,15 @@ inline const std::vector<Page>& pages() {
                 {"reactx update", "Переводит проект на новейший релиз ReactX: находит теги в репозитории из reactx.json, "
                                   "выбирает самый новый по SemVer (без -rc) и записывает его в rev. --check только проверяет, "
                                   "--to — конкретная версия. Следующий reactx build скачает её сам.",
-                 "reactx update --check   # ReactX v0.15.0 → v0.16.0 is available\n"
-                 "reactx update           # записывает v0.16.0 в reactx.json\n"
+                 "reactx update --check   # ReactX v0.16.0 → v0.17.0 is available\n"
+                 "reactx update           # записывает v0.17.0 в reactx.json\n"
                  "reactx update --to v0.3.0\n"
                  "reactx build"},
                 {"reactx.json", "Всё, что нужно проекту, в одном файле.",
                  "{\n"
                  "  \"name\": \"my-app\",\n"
                  "  \"template\": \"web\",\n"
-                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.16.0\" },\n"
+                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.17.0\" },\n"
                  "  \"dependencies\": { \"fmt\": { \"git\": \"...\", \"rev\": \"11.0.2\", \"target\": \"fmt::fmt\" } },\n"
                  "  \"web\": { \"base\": \"/\", \"proxy\": { \"/api\": \"http://127.0.0.1:5000\" } }\n"
                  "}"},
@@ -191,7 +191,7 @@ inline const std::vector<Page>& pages() {
                            "Что изменилось в каждой версии — в CHANGELOG.ru.md.", ""},
                 {"Версия в коде", "Номер версии записан в одном месте — project(ReactX VERSION ...) в CMakeLists.txt; "
                                   "из него генерируется reactx/version.hpp.",
-                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"0.16.0\"\n"
+                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"0.17.0\"\n"
                  "static_assert(REACTX_VERSION_MAJOR == 0);"},
                 {"Обновить reactx", "Два шага: сам инструмент, потом каждый проект. reactx upgrade заменяет reactx новейшим релизом "
                                     "(проверяя SHA-256); до v0.14.0 — запустите установщик ещё раз. Раз в день reactx сам проверяет "
@@ -201,7 +201,7 @@ inline const std::vector<Page>& pages() {
                  "cd my-app && reactx update && reactx build"},
                 {"Обновить проект", "reactx update находит новейший релиз и записывает его в reactx.json; reactx build скачивает его. "
                                "Вручную — поменяйте rev на новый тег.",
-                 "reactx update\n# или в reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.16.0\" }"},
+                 "reactx update\n# или в reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.17.0\" }"},
             },
         },
         {
@@ -387,8 +387,16 @@ inline const std::vector<Page>& pages() {
             {
                 {"Запуск", "TerminalApp включает raw-режим, рисует дерево и обрабатывает клавиши до Ctrl+C.",
                  "TerminalApp app;\napp.run(h(App, {{\"onQuit\", Callback([&app] { app.quit(); })}}));"},
-                {"Теги", "box — flex-контейнер, text — текст с переносом, input — поле ввода, button — кнопка. "
-                         "Tab и стрелки переключают фокус, Enter/пробел нажимают.", ""},
+                {"Теги", "box — flex-контейнер, text — текст с переносом, input — поле ввода, textarea — поле в несколько "
+                         "строк (rows), button — кнопка. Tab и стрелки переключают фокус, Enter/пробел нажимают.", ""},
+                {"Поля ввода", "input и textarea редактируют там, где стоит курсор: ← →, Home / End, Ctrl+← → по словам, "
+                               "Backspace и Delete. textarea ещё принимает Enter (новая строка) и ↑ ↓ (между строками), "
+                               "переносит длинные строки и прокручивается к курсору. Эмодзи и китайские, японские, корейские "
+                               "символы занимают две колонки, поэтому рамки и колонки таблиц не съезжают; 👍🏽 или флаг для "
+                               "курсора и Backspace — один символ.",
+                 "ui::textarea({.value = note, .onChange = setNoteFn, .label = \"Заметка\", .rows = 6})\n"
+                 "// или сам тег:\n"
+                 "h(\"textarea\", {{\"value\", note}, {\"rows\", 6}, {\"onInput\", setNoteFn}})"},
                 {"Flexbox", "Раскладку считает Yoga (движок React Native): direction, justifyContent, alignItems, flexGrow, "
                             "width/height в клетках или процентах, padding, margin, gap, position: absolute.",
                  "h(\"box\", {{\"flexGrow\", 1}, {\"justifyContent\", \"center\"}, {\"alignItems\", \"center\"}}, {\n"
@@ -489,7 +497,7 @@ inline const std::vector<Page>& pages() {
                  "ui::input({.value = form.values.name, .onChange = form.set(\"name\", &Signup::name),\n"
                  "           .label = \"Имя\", .error = form.error(\"name\")})\n"
                  "ui::button({.label = \"Зарегистрироваться\", .onClick = form.submit})"},
-                {"Ещё поля", "textarea — несколько строк (в терминале пока одна), radioGroup — когда все варианты должны быть "
+                {"Ещё поля", "textarea — несколько строк (и в терминале), radioGroup — когда все варианты должны быть "
                              "на виду, slider — число в диапазоне, progress — сколько уже сделано.",
                  "ui::textarea({.value = note, .onChange = setNoteFn, .label = \"Комментарий\", .rows = 3})\n"
                  "ui::radioGroup({.label = \"Тариф\", .value = plan, .options = {{\"free\", \"Free\"}, {\"pro\", \"Pro\"}},\n"

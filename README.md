@@ -300,7 +300,7 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 | `modal` | `title`, `open`, `onClose` (Escape), `width`; covers what is under it, keeps the focus inside and gives it back when closed |
 | `list` / `listItem` | a bordered box with a title, `emptyText`, `scroll` (scrolls inside instead of growing); an item: `label`, `detail` on the right, `selected` (a newly selected item scrolls into view), `onSelect`, `onKey` |
 | `select` | `label`, `value`, `options` (`{value, label}`), `onChange(value)`; a native `<select>` in the browser, ‹ › with Left / Right / Enter or a click in a terminal; `labelAbove` |
-| `textarea` | `value`, `onChange`, `placeholder`, `label`, `rows`; one line in a terminal for now |
+| `textarea` | `value`, `onChange`, `placeholder`, `label`, `rows`; in a terminal too: Enter, Up / Down between lines, wrapping, scrolling |
 | `radioGroup` | `label`, `value`, `options`, `onChange(value)`, `row`: every option visible; native radios in the browser, (•) with Up / Down or a click in a terminal |
 | `slider` | `label`, `value`, `min`, `max`, `step`, `onChange(int)`, `showValue`; a range input in the browser, Left / Right / Home / End or a click in a terminal |
 | `progress` | `value` of `max`, `label`, `variant`: a bar with the percentage |

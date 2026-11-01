@@ -107,7 +107,7 @@ reactx new my-app && cd my-app      # a web project (or --terminal)
 reactx dev                          # a C++ server; rebuilds and reloads the page on every save
 ```
 
-Open http://127.0.0.1:8090/ and edit `src/main.cpp`. `reactx build --native` builds the same components for the terminal; then `main` picks the entry point: `mountDom` exists only in the browser (natively it's a clear compile error), the terminal uses `TerminalApp`:
+Open http://127.0.0.1:8090/ and edit `src/app.cpp` (the components; `main.cpp` only starts them, `tests/` tests them with `reactx test`). `reactx build --native` builds the same components for the terminal; then `main` picks the entry point: `mountDom` exists only in the browser (natively it's a clear compile error), the terminal uses `TerminalApp`:
 
 ```cpp
 #ifdef __EMSCRIPTEN__
@@ -122,6 +122,7 @@ Next:
 ```sh
 reactx build                        # build/web/dist — files for any static host; prints the .wasm size
                                     # and warns about std::format / printed doubles (~100 KB each)
+reactx test                         # build and run tests/*.cpp (reactx/testing.hpp); reactx test <name> runs some
 reactx add magic_enum https://github.com/Neargye/magic_enum.git --rev v0.9.8 --target magic_enum::magic_enum
 reactx update                       # move the project to the newest ReactX release
 reactx upgrade                      # replace the reactx tool with the newest release
@@ -180,7 +181,7 @@ For a terminal: `#include "reactx/terminal.hpp"` and `TerminalApp().run(h(App))`
 | **Browser** | WebAssembly + DOM, controlled inputs, SVG, event delegation |
 | **Components** | `rx::ui`: buttons, inputs, checkboxes, tabs, modals, lists — themed |
 | **Apps** | a router (History API), `useFetch`, `useWebSocket`, JSON with reflection, an HTTP server in C++ (with WebSockets), a REST API |
-| **Tools** | the `reactx` CLI (`new`, `dev`, `build`, `add`, `remove`, `update`), the `import reactx;` module, `TextRenderer` for tests |
+| **Tools** | the `reactx` CLI (`new`, `dev`, `build`, `test`, `add`, `remove`, `update`), the `import reactx;` module, `reactx/testing.hpp` (`Screen`: `click`, `type`, `press`, `shows`) and `TextRenderer` for tests |
 
 ## Reference
 

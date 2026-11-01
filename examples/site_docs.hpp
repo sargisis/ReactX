@@ -87,7 +87,7 @@ inline const std::vector<Page>& pages() {
                                            "С --terminal — программа для терминала.",
                  "reactx new my-app\ncd my-app"},
                 {"3. Запустите", "reactx dev собирает приложение, запускает локальный сервер и пересобирает страницу при каждом "
-                                 "сохранении. Откройте http://127.0.0.1:8090/ и правьте src/main.cpp.",
+                                 "сохранении. Откройте http://127.0.0.1:8090/ и правьте src/app.cpp.",
                  "reactx dev"},
                 {"Первый компонент", "Компонент — это функция: получает props (структуру) и возвращает элементы. useState хранит "
                                      "значение между отрисовками; когда оно меняется, компонент перерисовывается.",
@@ -135,8 +135,8 @@ inline const std::vector<Page>& pages() {
                              "reactx build. Веб-проекты используют clangd из Emscripten — ставить ничего не нужно.",
                  "code --install-extension llvm-vs-code-extensions.vscode-clangd\nreactx build   # пишет compile_commands.json для clangd"},
                 {"Новый проект", "reactx new создаёт папку с reactx.json (манифест, как package.json), CMakeLists.txt, "
-                                 "CMakePresets.json и src/main.cpp. ReactX подключается с GitHub по тегу релиза "
-                                 "(например, v0.17.0), а не по ветке, поэтому проект не сломается от новых изменений; --local — из исходников, "
+                                 "CMakePresets.json, src/ (app.cpp, main.cpp) и tests/. ReactX подключается с GitHub по тегу релиза "
+                                 "(например, v0.18.0), а не по ветке, поэтому проект не сломается от новых изменений; --local — из исходников, "
                                  "из которых собран сам CLI. --terminal — терминальное приложение вместо веба.",
                  "reactx new my-app\ncd my-app"},
                 {"reactx dev", "Собирает веб-версию, запускает встроенный сервер на C++ (тот же, что reactx_serve) и следит за "
@@ -156,6 +156,21 @@ inline const std::vector<Page>& pages() {
                                        "браузерной сборке (нативно — понятная ошибка компиляции), поэтому main выбирает точку входа.",
                  "int main() {\n#ifdef __EMSCRIPTEN__\n    mountDom(h(App));\n#else\n    TerminalApp app;   // reactx/terminal.hpp\n"
                  "    app.run(h(App));\n#endif\n}"},
+                {"reactx test", "Собирает все tests/*.cpp нативно (с исходниками приложения, кроме main.cpp) и запускает их. "
+                                "Тест рисует приложение на терминале в памяти и действует как пользователь: нажимает на "
+                                "надпись, печатает в поле с фокусом, жмёт клавиши, а потом проверяет, что видно на экране. "
+                                "reactx new кладёт компоненты в src/app.cpp, а пример теста — в tests/app_tests.cpp. "
+                                "reactx test <имя> запускает тесты, в имени которых есть это слово.",
+                 "#include \"app.hpp\"\n"
+                 "#include \"reactx/testing.hpp\"\n\n"
+                 "RX_TEST(the_button_counts_clicks) {\n"
+                 "    rx::testing::Screen s(rx::h(App));\n"
+                 "    CHECK(s.click(\"Clicked 0 times\"));\n"
+                 "    s.type(\"Аня\");          // в поле с фокусом\n"
+                 "    s.press(\"Ctrl+s\");      // \"Enter\", \"Tab\", \"Up\", ...\n"
+                 "    CHECK(s.shows(\"Clicked 1 times\"));\n"
+                 "}\n\n"
+                 "// reactx test           -> OK, 2 tests passed"},
                 {"reactx build", "Сборка для публикации: build/web/dist — обычные файлы для любого статического хостинга "
                                  "(404.html уже лежит рядом с index.html для маршрутов). Для терминального проекта — "
                                  "build/native/<имя>. Веб-сборка ещё печатает размер .wasm и его самые большие части "
@@ -168,15 +183,15 @@ inline const std::vector<Page>& pages() {
                 {"reactx update", "Переводит проект на новейший релиз ReactX: находит теги в репозитории из reactx.json, "
                                   "выбирает самый новый по SemVer (без -rc) и записывает его в rev. --check только проверяет, "
                                   "--to — конкретная версия. Следующий reactx build скачает её сам.",
-                 "reactx update --check   # ReactX v0.16.0 → v0.17.0 is available\n"
-                 "reactx update           # записывает v0.17.0 в reactx.json\n"
+                 "reactx update --check   # ReactX v0.17.0 → v0.18.0 is available\n"
+                 "reactx update           # записывает v0.18.0 в reactx.json\n"
                  "reactx update --to v0.3.0\n"
                  "reactx build"},
                 {"reactx.json", "Всё, что нужно проекту, в одном файле.",
                  "{\n"
                  "  \"name\": \"my-app\",\n"
                  "  \"template\": \"web\",\n"
-                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.17.0\" },\n"
+                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.18.0\" },\n"
                  "  \"dependencies\": { \"fmt\": { \"git\": \"...\", \"rev\": \"11.0.2\", \"target\": \"fmt::fmt\" } },\n"
                  "  \"web\": { \"base\": \"/\", \"proxy\": { \"/api\": \"http://127.0.0.1:5000\" } }\n"
                  "}"},
@@ -191,7 +206,7 @@ inline const std::vector<Page>& pages() {
                            "Что изменилось в каждой версии — в CHANGELOG.ru.md.", ""},
                 {"Версия в коде", "Номер версии записан в одном месте — project(ReactX VERSION ...) в CMakeLists.txt; "
                                   "из него генерируется reactx/version.hpp.",
-                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"0.17.0\"\n"
+                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"0.18.0\"\n"
                  "static_assert(REACTX_VERSION_MAJOR == 0);"},
                 {"Обновить reactx", "Два шага: сам инструмент, потом каждый проект. reactx upgrade заменяет reactx новейшим релизом "
                                     "(проверяя SHA-256); до v0.14.0 — запустите установщик ещё раз. Раз в день reactx сам проверяет "
@@ -201,7 +216,7 @@ inline const std::vector<Page>& pages() {
                  "cd my-app && reactx update && reactx build"},
                 {"Обновить проект", "reactx update находит новейший релиз и записывает его в reactx.json; reactx build скачивает его. "
                                "Вручную — поменяйте rev на новый тег.",
-                 "reactx update\n# или в reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.17.0\" }"},
+                 "reactx update\n# или в reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.18.0\" }"},
             },
         },
         {

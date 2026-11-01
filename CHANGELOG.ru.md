@@ -6,6 +6,21 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ## [Не выпущено]
 
+## [0.18.0] — 2026-11-02
+
+Тесты приложения одной командой: `reactx test` собирает `tests/*.cpp` и запускает их. `reactx/testing.hpp` рисует приложение на терминале в памяти и действует как пользователь — `click("Save")`, `type("Аня")`, `press("Ctrl+s")`, а потом `CHECK(s.shows("Saved"))`. Новые проекты держат компоненты в `src/app.cpp` и сразу содержат тест. MINOR-релиз: новый API, и новые проекты устроены иначе; существующие приложения обновляются без правок (чтобы тестировать, вынесите компоненты из `main.cpp`).
+
+**Обновиться:** `reactx upgrade`, затем `reactx update` в каждом проекте.
+
+### Добавлено
+
+- `reactx test [имя]`: собирает `tests/*.cpp` проекта нативно (с исходниками приложения, кроме `main.cpp`; `reactx_add_app` делает из них `<app>_tests`) и запускает их; код выхода говорит, прошли ли они, имя запускает часть.
+- `reactx/testing.hpp` (`reactx::testing`): `rx::testing::Screen` рисует приложение на терминале в памяти и действует как пользователь — `click("Save")`, `type("Аня")`, `press("Ctrl+s")`, `shows("Saved")`, `settle()` для таймеров, `render()`, `resize()`; `RX_TEST` / `CHECK` и `main` для тестовых программ.
+
+### Изменено
+
+- `reactx new` кладёт компоненты в `src/app.cpp` + `app.hpp` (`main.cpp` только запускает `App`), а пример теста — в `tests/app_tests.cpp`; AGENTS.md проекта рассказывает про `reactx test`.
+
 ## [0.17.0] — 2026-11-02
 
 Текст в терминале: эмодзи и китайские, японские, корейские символы занимают свои настоящие две колонки, поэтому рамки и таблицы ровные; `input` и `textarea` редактируют там, где стоит курсор (стрелки, Home/End, Ctrl+стрелки по словам, Delete); а `ui::textarea` и в терминале многострочный. Ещё по внешнему отзыву о сайте: `install.sh` проверяет SHA-256 релиза, устаревшие ограничения в документации исправлены, `/demos` открывается напрямую. MINOR-релиз из-за нового тега в терминале; приложения обновляются без правок.
@@ -408,7 +423,8 @@ ReactX без установки компиляторов: готовый `react
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.17.0...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/sargisis/ReactX/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/sargisis/ReactX/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/sargisis/ReactX/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/sargisis/ReactX/compare/v0.14.0...v0.15.0

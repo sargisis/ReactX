@@ -95,7 +95,7 @@ reactx new my-app && cd my-app      # веб-проект (или --terminal)
 reactx dev                          # сервер на C++, пересборка и обновление страницы при сохранении
 ```
 
-Откройте http://127.0.0.1:8090/ и правьте `src/main.cpp`. `reactx build --native` собирает те же компоненты для терминала — тогда `main` выбирает точку входа: `mountDom` есть только в браузере (нативно это понятная ошибка компиляции), в терминале — `TerminalApp`:
+Откройте http://127.0.0.1:8090/ и правьте `src/app.cpp` (компоненты; `main.cpp` только запускает их, `tests/` проверяет их через `reactx test`). `reactx build --native` собирает те же компоненты для терминала — тогда `main` выбирает точку входа: `mountDom` есть только в браузере (нативно это понятная ошибка компиляции), в терминале — `TerminalApp`:
 
 ```cpp
 #ifdef __EMSCRIPTEN__
@@ -110,6 +110,7 @@ reactx dev                          # сервер на C++, пересборк�
 ```sh
 reactx build                        # build/web/dist — файлы для любого хостинга; печатает размер .wasm
                                     # и предупреждает о std::format / печати double (~100 КБ каждое)
+reactx test                         # собрать и запустить tests/*.cpp (reactx/testing.hpp); reactx test <имя> — часть
 reactx add magic_enum https://github.com/Neargye/magic_enum.git --rev v0.9.8 --target magic_enum::magic_enum
 reactx update                       # перевести проект на новейший релиз ReactX
 reactx upgrade                      # заменить сам reactx новейшим релизом
@@ -168,7 +169,7 @@ int main() { mountDom(h(App)); }
 | **Браузер** | WebAssembly + DOM, управляемые поля, SVG, делегирование событий |
 | **Компоненты** | `rx::ui`: кнопки, поля, флажки, вкладки, модальные окна, списки — с темой |
 | **Приложения** | роутер (History API), `useFetch`, `useWebSocket`, JSON с рефлексией, HTTP-сервер на C++ (с WebSocket), REST API |
-| **Инструменты** | CLI `reactx` (`new`, `dev`, `build`, `add`, `remove`, `update`), модуль `import reactx;`, `TextRenderer` для тестов |
+| **Инструменты** | CLI `reactx` (`new`, `dev`, `build`, `test`, `add`, `remove`, `update`), модуль `import reactx;`, `reactx/testing.hpp` (`Screen`: `click`, `type`, `press`, `shows`) и `TextRenderer` для тестов |
 
 ## Справочник
 

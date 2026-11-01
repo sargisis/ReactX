@@ -74,7 +74,7 @@ inline const std::vector<Page>& pagesEn() {
                                      "Add --terminal for a terminal app instead.",
                  "reactx new my-app\ncd my-app"},
                 {"3. Run it", "reactx dev builds the app, opens a local server and rebuilds the page every time you save a file. "
-                              "Open http://127.0.0.1:8090/ and edit src/main.cpp.",
+                              "Open http://127.0.0.1:8090/ and edit src/app.cpp.",
                  "reactx dev"},
                 {"Your first component", "A component is a function: it gets its props (a struct) and returns elements. "
                                          "useState keeps a value between renders; changing it redraws the component.",
@@ -122,7 +122,7 @@ inline const std::vector<Page>& pagesEn() {
                                 "set up; run reactx build once so clangd knows the flags.",
                  "code --install-extension llvm-vs-code-extensions.vscode-clangd\nreactx build"},
                 {"reactx new", "Creates a folder with reactx.json (the project file, like package.json), CMakeLists.txt, "
-                               "src/main.cpp, editor settings and AGENTS.md. ReactX is pinned to a release tag, so new "
+                               "src/ (app.cpp, main.cpp), tests/, editor settings and AGENTS.md. ReactX is pinned to a release tag, so new "
                                "ReactX versions never break your project by surprise. --terminal makes a terminal app.",
                  "reactx new my-app\ncd my-app"},
                 {"reactx dev", "Builds the web app, serves it and watches src/, public/ and reactx.json. After every successful "
@@ -141,6 +141,21 @@ inline const std::vector<Page>& pagesEn() {
                                                           "mountDom exists only in the browser, so main() picks the entry point:",
                  "int main() {\n#ifdef __EMSCRIPTEN__\n    mountDom(h(App));\n#else\n    TerminalApp app;   // reactx/terminal.hpp\n"
                  "    app.run(h(App));\n#endif\n}"},
+                {"reactx test", "Builds every tests/*.cpp natively (with the app's sources except main.cpp) and runs them. "
+                                "A test draws the app on an in-memory terminal and acts like a user: click a label, type into "
+                                "the focused field, press keys, then check what the screen shows. reactx new puts the "
+                                "components in src/app.cpp and an example test in tests/app_tests.cpp. reactx test <name> "
+                                "runs the tests whose name contains it.",
+                 "#include \"app.hpp\"\n"
+                 "#include \"reactx/testing.hpp\"\n\n"
+                 "RX_TEST(the_button_counts_clicks) {\n"
+                 "    rx::testing::Screen s(rx::h(App));\n"
+                 "    CHECK(s.click(\"Clicked 0 times\"));\n"
+                 "    s.type(\"Ann\");          // into the focused field\n"
+                 "    s.press(\"Ctrl+s\");      // \"Enter\", \"Tab\", \"Up\", ...\n"
+                 "    CHECK(s.shows(\"Clicked 1 times\"));\n"
+                 "}\n\n"
+                 "// reactx test           -> OK, 2 tests passed"},
                 {"reactx build", "Builds for publishing: build/web/dist holds plain files for any static host "
                                  "(GitHub Pages, Netlify, nginx). A terminal app goes to build/native/<name>. A web build also prints the "
                                  "size of the .wasm and its biggest parts, and names code that pulls in std::format (~100 KB).",
@@ -150,14 +165,14 @@ inline const std::vector<Page>& pagesEn() {
                               "and --target links it to your app.",
                  "reactx add fmt https://github.com/fmtlib/fmt.git --rev 11.0.2 --target fmt::fmt\nreactx remove fmt"},
                 {"reactx update", "Moves your project to the newest ReactX release. --check only tells you whether there is one.",
-                 "reactx update --check   # ReactX v0.16.0 -> v0.17.0 is available\n"
+                 "reactx update --check   # ReactX v0.17.0 -> v0.18.0 is available\n"
                  "reactx update\n"
                  "reactx build"},
                 {"reactx.json", "Everything about the project in one file.",
                  "{\n"
                  "  \"name\": \"my-app\",\n"
                  "  \"template\": \"web\",\n"
-                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.17.0\" },\n"
+                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.18.0\" },\n"
                  "  \"dependencies\": { \"fmt\": { \"git\": \"...\", \"rev\": \"11.0.2\", \"target\": \"fmt::fmt\" } },\n"
                  "  \"web\": { \"base\": \"/\", \"proxy\": { \"/api\": \"http://127.0.0.1:5000\" } }\n"
                  "}"},
@@ -177,9 +192,9 @@ inline const std::vector<Page>& pagesEn() {
                  "cd my-app && reactx update && reactx build"},
                 {"Upgrading a project", "reactx update finds the newest release and writes it into reactx.json; the next build downloads it. "
                               "By hand: change rev to the new tag.",
-                 "reactx update\n# or in reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.17.0\" }"},
+                 "reactx update\n# or in reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.18.0\" }"},
                 {"The version in code", "",
-                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"0.17.0\"\n"
+                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"0.18.0\"\n"
                  "static_assert(REACTX_VERSION_MAJOR == 0);"},
             },
         },

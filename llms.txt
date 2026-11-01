@@ -6,7 +6,7 @@ Native (terminal) builds need GCC 16+ (the C++26 standard library); browser buil
 
 ## Which version has what
 
-`reactx new` pins the project to the CLI's release (`"rev"` in `reactx.json`). Everything in this file is in v0.17.0: the terminal `textarea`, editing at the cursor and wide characters came in v0.17.0; `ui::useForm`, `.error` on fields, `ui::textarea`, `radioGroup`, `slider` and `progress` came in v0.16.0; `ui::table`, `useTitle` and `mountDom` replacing the app in its container came in v0.15.0; `ui::useVirtualList`, `labelAbove`, `reactx upgrade`, `useCallback` with any signature, `ui::checkbox` `.onChange(bool)`, `FetchResponse::errorText()` and `useState` of types without `==` came in v0.14.0; `useWebSocket` and `HttpServer::webSocket` came in v0.13.0; prerendering from `reactx.json`, `ref.scrollTo` / `scrollBy` / `scrollMetrics`, the `scrollIntoView` prop and `HttpServer::onFile` came in v0.12.0; scrolling in the terminal (`overflow: "scroll"`, `ui::list({.scroll = true})`, `position: "fixed"`, `onScroll`) and `ref.scrollIntoView()` came in v0.11.0; the rx::ui components (`select`, `confirm`, `toast`/`toaster`, `tooltip`, `card`, `stack`, `text`) came in v0.10.0; `useNodeRef` / the `ref` prop / `ref.focus()`, `reactx/js.hpp`, pointer and hover events and the mouse in the terminal in v0.9.0; `renderToString` in v0.8.3. If a name from this file doesn't exist ("'useNodeRef' was not declared in this scope", "'confirm' is not a member of 'rx::ui'"), the project is on an older release: `reactx update` moves it to the newest one (`reactx --version` shows the CLI's).
+`reactx new` pins the project to the CLI's release (`"rev"` in `reactx.json`). Everything in this file is in v0.18.0: `reactx test` and `reactx/testing.hpp` came in v0.18.0; the terminal `textarea`, editing at the cursor and wide characters came in v0.17.0; `ui::useForm`, `.error` on fields, `ui::textarea`, `radioGroup`, `slider` and `progress` came in v0.16.0; `ui::table`, `useTitle` and `mountDom` replacing the app in its container came in v0.15.0; `ui::useVirtualList`, `labelAbove`, `reactx upgrade`, `useCallback` with any signature, `ui::checkbox` `.onChange(bool)`, `FetchResponse::errorText()` and `useState` of types without `==` came in v0.14.0; `useWebSocket` and `HttpServer::webSocket` came in v0.13.0; prerendering from `reactx.json`, `ref.scrollTo` / `scrollBy` / `scrollMetrics`, the `scrollIntoView` prop and `HttpServer::onFile` came in v0.12.0; scrolling in the terminal (`overflow: "scroll"`, `ui::list({.scroll = true})`, `position: "fixed"`, `onScroll`) and `ref.scrollIntoView()` came in v0.11.0; the rx::ui components (`select`, `confirm`, `toast`/`toaster`, `tooltip`, `card`, `stack`, `text`) came in v0.10.0; `useNodeRef` / the `ref` prop / `ref.focus()`, `reactx/js.hpp`, pointer and hover events and the mouse in the terminal in v0.9.0; `renderToString` in v0.8.3. If a name from this file doesn't exist ("'useNodeRef' was not declared in this scope", "'confirm' is not a member of 'rx::ui'"), the project is on an older release: `reactx update` moves it to the newest one (`reactx --version` shows the CLI's).
 
 ## A complete program
 
@@ -244,6 +244,28 @@ Prerendered pages show before the `.wasm` arrives (and work for search engines):
 
 ## Testing components (no terminal, no browser)
 
+(v0.18.0+) `reactx test` builds every `tests/*.cpp` of the project natively, with the app's sources except `main.cpp`, and runs them; `reactx test <name>` runs the tests whose name contains it; the exit code says if they passed. `reactx new` makes `src/app.cpp` + `app.hpp` (the components), a `main.cpp` that only starts `App`, and `tests/app_tests.cpp`. Keep components out of `main.cpp`: tests can't include it. A test draws the app on an in-memory terminal and acts like a user (`reactx/testing.hpp`, no `main` needed):
+
+```cpp
+#include "app.hpp"
+#include "reactx/testing.hpp"
+using namespace rx;
+
+RX_TEST(saving_a_note) {
+    testing::Screen s(h(App));          // 80x24; Screen(h(App), 40, 10) for another size
+    CHECK(s.shows("No notes yet"));
+    s.click("New");                     // a mouse click on the first place showing this text
+    s.type("Milk 🥛");                  // into the focused field
+    s.press("Ctrl+s");                  // through useKeyboard, then the focused element: "Enter", "Tab", "Up", "Escape", ...
+    CHECK(s.shows("Milk 🥛"));
+    s.settle(std::chrono::milliseconds(300));  // waits, then runs due timers (useDebounce, useTimeout) and redraws
+}
+```
+
+`s.text()` / `s.lines()` give the screen, `s.render(h(App, {...}))` new props, `s.resize(w, h)`, `s.root()` / `s.renderer()` the parts. A failed `CHECK` prints the expression and its line and the test goes on. In a web project `ui::` components show their terminal form there and `mountDom`, `document`, `window` don't exist. Projects made before v0.18.0: `reactx update`, then move the components out of `main.cpp` and add `src/app.cpp` to `SOURCES`.
+
+The tree itself, without a screen:
+
 ```cpp
 #include "reactx/reactx.hpp"
 #include "reactx/text_renderer.hpp"
@@ -253,8 +275,6 @@ root.render(h(Counter, {.start = 1}));
 root.dispatch(*r.findByProp("id", "inc"), "onClick");   // or "onInput", std::string("text")
 assert(r.toString().find("Count: 2") != std::string::npos);
 ```
-
-In a web project (`reactx new`) keep components out of `main.cpp` (it calls `mountDom`) and build only the test target natively: in CMakeLists.txt `if(NOT EMSCRIPTEN) add_executable(app_tests tests/app_tests.cpp src/app.cpp) target_link_libraries(app_tests PRIVATE reactx::reactx) endif()`, then `cmake -S . -B build/test && cmake --build build/test --target app_tests && ./build/test/app_tests` (v0.15.0+: `--target` isn't needed, a native build leaves the web app out by itself). In a test, `ui::...` components draw their terminal version.
 
 `dispatch` and `render` re-render on their own. After a setter or `Store::set` called outside them (a captured setter, a `setLocalFetch` answer, a timer) call `root.flush()` before reading `r.toString()`, or the test checks the old tree.
 
@@ -283,7 +303,7 @@ In a web project (`reactx new`) keep components out of `main.cpp` (it calls `mou
 
 ## CLI
 
-`reactx new <name> [--terminal]`, `reactx dev [--port N] [--host 0.0.0.0] [--proxy [PREFIX=]URL]` (C++ dev server, rebuild + page reload on save; `--proxy http://127.0.0.1:5000` forwards `/api` to a Flask/Django/Express backend, also `"web": {"proxy": {"/api": "http://..."}}` in `reactx.json`), `reactx build` (web: `build/web/dist`), `reactx add <name> <git-url> --rev <tag> --target <cmake-target>`, `reactx remove <name>`, `reactx update [--check] [--to vX.Y.Z]` (the project's ReactX version), (v0.14.0+) `reactx upgrade [--check]` (the reactx tool itself, from GitHub Releases; before v0.14.0 run the installer line again; reactx says once a day when a new release is out, `REACTX_NO_UPDATE_CHECK=1` turns that off), `reactx install [--check]` (downloads Emscripten, and CMake/Ninja if missing, into `~/.reactx`, no sudo; `reactx build`/`dev` then find them without `EMSDK`; it needs `curl git python3 tar xz` — on Debian/Ubuntu `xz-utils` — and ~1.5 GB free; a `tar` error means `xz` is missing, the disk is full or a download broke: delete `~/.reactx/emsdk` and run it again). New machine, Linux x86-64: `curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh`. `reactx <command> --help` explains one command. Everything about a project is in `reactx.json`. No GCC 16 or Emscripten? The image `ghcr.io/sargisis/reactx` has everything, and every project from `reactx new` has a `.devcontainer/` for it (inside a container run `reactx dev --host 0.0.0.0`).
+`reactx new <name> [--terminal]`, `reactx dev [--port N] [--host 0.0.0.0] [--proxy [PREFIX=]URL]` (C++ dev server, rebuild + page reload on save; `--proxy http://127.0.0.1:5000` forwards `/api` to a Flask/Django/Express backend, also `"web": {"proxy": {"/api": "http://..."}}` in `reactx.json`), `reactx build` (web: `build/web/dist`), (v0.18.0+) `reactx test [name]` (`tests/*.cpp`), `reactx add <name> <git-url> --rev <tag> --target <cmake-target>`, `reactx remove <name>`, `reactx update [--check] [--to vX.Y.Z]` (the project's ReactX version), (v0.14.0+) `reactx upgrade [--check]` (the reactx tool itself, from GitHub Releases; before v0.14.0 run the installer line again; reactx says once a day when a new release is out, `REACTX_NO_UPDATE_CHECK=1` turns that off), `reactx install [--check]` (downloads Emscripten, and CMake/Ninja if missing, into `~/.reactx`, no sudo; `reactx build`/`dev` then find them without `EMSDK`; it needs `curl git python3 tar xz` — on Debian/Ubuntu `xz-utils` — and ~1.5 GB free; a `tar` error means `xz` is missing, the disk is full or a download broke: delete `~/.reactx/emsdk` and run it again). New machine, Linux x86-64: `curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh`. `reactx <command> --help` explains one command. Everything about a project is in `reactx.json`. No GCC 16 or Emscripten? The image `ghcr.io/sargisis/reactx` has everything, and every project from `reactx new` has a `.devcontainer/` for it (inside a container run `reactx dev --host 0.0.0.0`).
 
 ## Docs
 

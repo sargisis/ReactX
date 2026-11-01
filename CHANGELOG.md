@@ -6,6 +6,21 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+## [0.18.0] — 2026-11-02
+
+Tests for your app with one command: `reactx test` builds `tests/*.cpp` and runs them. `reactx/testing.hpp` draws the app on an in-memory terminal and acts like a user — `click("Save")`, `type("Ann")`, `press("Ctrl+s")`, then `CHECK(s.shows("Saved"))`. New projects keep their components in `src/app.cpp` and come with a test. A MINOR release: new API, and new projects are laid out differently; existing apps update without changes (to test one, move its components out of `main.cpp`).
+
+**Update:** `reactx upgrade`, then `reactx update` in each project.
+
+### Added
+
+- `reactx test [name]`: builds the project's `tests/*.cpp` natively (with the app's sources except `main.cpp`; `reactx_add_app` makes `<app>_tests` of them) and runs them; the exit code says if they passed, a name runs some of them.
+- `reactx/testing.hpp` (`reactx::testing`): `rx::testing::Screen` draws an app on an in-memory terminal and acts like a user — `click("Save")`, `type("Ann")`, `press("Ctrl+s")`, `shows("Saved")`, `settle()` for timers, `render()`, `resize()`; `RX_TEST` / `CHECK` and a `main` for test programs.
+
+### Changed
+
+- `reactx new` puts the components into `src/app.cpp` + `app.hpp` (`main.cpp` only starts `App`) and an example test into `tests/app_tests.cpp`; the project's AGENTS.md explains `reactx test`.
+
 ## [0.17.0] — 2026-11-02
 
 Text in the terminal: emoji and Chinese, Japanese and Korean characters take their real two columns, so borders and tables stay straight; `input` and `textarea` edit where the cursor is (arrows, Home/End, Ctrl+arrows by words, Delete); and `ui::textarea` has several lines in a terminal too. Also from an outside review of the website: `install.sh` checks the release's SHA-256, outdated limits in the docs are fixed, `/demos` opens directly. A MINOR release for the new terminal tag; apps update without changes.
@@ -408,7 +423,8 @@ The first release.
 - **A documentation site** built with ReactX: https://sargisis.github.io/ReactX/, published by GitHub Actions through the `gh-pages` branch.
 - The version in one place (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; new projects from `reactx new` use ReactX by release tag.
 
-[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/sargisis/ReactX/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/sargisis/ReactX/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/sargisis/ReactX/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/sargisis/ReactX/compare/v0.14.0...v0.15.0

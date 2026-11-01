@@ -8,6 +8,7 @@
 
 #include "reactx/reactx.hpp"
 #include "reactx/terminal.hpp"
+#include "../src/utf8.hpp"
 
 using namespace rx;
 
@@ -215,6 +216,139 @@ TEST(first_focusable_gets_focus_and_tab_cycles) {
     CHECK(r.focused() == list[1]);
 }
 
+// ---- wide characters and editing ----
+
+TEST(characters_have_their_terminal_width) {
+    using detail::textCells;
+    CHECK(textCells("abc") == 3 && textCells("ёжик") == 4);
+    CHECK(textCells("中文") == 4 && textCells("한국") == 4 && textCells("ｱ") == 1);
+    CHECK(textCells("🎁") == 2 && textCells("✅") == 2 && textCells("❤️") == 2 && textCells("❤") == 1);
+    CHECK(textCells("é") == 1);                                   // e + an accent: one character
+    CHECK(detail::utf8Glyphs("👍🏽").size() == 1 && textCells("👍🏽") == 2);  // a skin tone joins
+    CHECK(detail::utf8Glyphs("👨‍👩‍👧").size() == 1 && textCells("👨‍👩‍👧") == 2);  // a family is one character
+    CHECK(detail::utf8Glyphs("🇷🇺🇫🇷").size() == 2 && textCells("🇷🇺") == 2);    // flags are pairs
+}
+
+// Every line of the frame takes the same number of terminal columns, so the
+// borders line up whatever is inside.
+bool bordersLineUp(const TerminalRenderer& r) {
+    auto lines = r.frameLines();
+    if (lines.empty()) return false;
+    int width = detail::textCells(lines[0]);
+    for (const auto& l : lines)
+        if (!l.empty() && detail::textCells(l) != width) return false;
+    return true;
+}
+
+TEST(wide_characters_keep_borders_in_place) {
+    TerminalRenderer r;
+    r.setSize(20, 6);
+    Root root(r);
+    root.render(h("box", {{"border", true}, {"title", "Заказ 🎁"}, {"width", 16}}, {
+        h("text", {}, {"Gift 🎁 ok"}),
+        h("text", {}, {"中文 and ✅"}),
+        h("text", {}, {"plain"}),
+    }));
+    CHECK(contains(r.frameText(), "Gift 🎁 ok") && contains(r.frameText(), "中文 and ✅"));
+    CHECK(contains(r.frameText(), "┌─ Заказ 🎁 ──"));
+    CHECK(bordersLineUp(r));
+}
+
+TEST(wide_characters_wrap_and_clip_by_columns) {
+    TerminalRenderer r;
+    r.setSize(9, 4);
+    Root root(r);
+    root.render(h("box", {{"width", 7}}, {h("text", {}, {"中文中文中文"})}));  // 12 columns into 7
+    auto lines = r.frameLines();
+    CHECK(lines.size() == 2 && lines[0] == "中文中" && lines[1] == "文中文");
+    root.render(h("box", {{"width", 5}}, {h("text", {{"wrap", false}}, {"ab中文"})}));  // cut: no half character
+    CHECK(r.frameLines().at(0) == "ab中");
+}
+
+Element Editor(const Props& p) {
+    auto [text, setText] = useState(p.get<std::string>("start"));
+    bool multi = p.get<bool>("multi");
+    return h("box", {}, {
+        h(multi ? "textarea" : "input", {{"value", text}, {"rows", 3}, {"width", 12},
+                                         {"onInput", [setText](const std::string& t) { setText(t); }}}),
+        h("text", {}, {"val=[" + text + "]"}),
+    });
+}
+
+void keys(TerminalRenderer& r, Root& root, std::initializer_list<const char*> list) {
+    for (const char* k : list) r.handleKey(root, key(k));
+}
+
+TEST(the_cursor_moves_and_edits_inside_the_text) {
+    TerminalRenderer r;
+    r.setSize(30, 6);
+    Root root(r);
+    root.render(h(Editor, {{"start", "hello"}}));
+    CHECK(r.caret() == std::pair(5, 0));  // at the end
+    keys(r, root, {"Left", "Left", "X"});
+    CHECK(contains(r.frameText(), "val=[helXlo]") && r.caret() == std::pair(4, 0));
+    keys(r, root, {"Home", "A", "End", "Z"});
+    CHECK(contains(r.frameText(), "val=[AhelXloZ]"));
+    keys(r, root, {"Home", "Delete", "Right", "Backspace"});
+    CHECK(contains(r.frameText(), "val=[elXloZ]") && r.caret() == std::pair(0, 0));
+    r.handleKey(root, KeyEvent{.key = "Right", .ctrl = true});  // a word at a time
+    CHECK(r.caret() == std::pair(6, 0));
+}
+
+TEST(the_cursor_steps_over_whole_characters) {
+    TerminalRenderer r;
+    r.setSize(30, 6);
+    Root root(r);
+    root.render(h(Editor, {{"start", "a🎁b"}}));
+    keys(r, root, {"Left"});
+    CHECK(r.caret() == std::pair(3, 0));  // after the 2-column gift
+    keys(r, root, {"Left"});
+    CHECK(r.caret() == std::pair(1, 0));
+    keys(r, root, {"Delete"});
+    CHECK(contains(r.frameText(), "val=[ab]"));
+    keys(r, root, {"я", "👍🏽"});
+    CHECK(contains(r.frameText(), "val=[aя👍🏽b]") && r.caret() == std::pair(4, 0));
+    keys(r, root, {"Backspace"});  // the thumb and its skin tone go together
+    CHECK(contains(r.frameText(), "val=[aяb]"));
+}
+
+TEST(a_long_input_scrolls_to_keep_the_cursor_in_view) {
+    TerminalRenderer r;
+    r.setSize(30, 6);
+    Root root(r);
+    root.render(h(Editor, {{"start", "abcdefghijklmnopqrstuvwxyz"}}));  // 26 letters in 12 columns
+    CHECK(contains(r.frameLines().at(0), "pqrstuvwxyz"));  // the end, where the cursor is
+    keys(r, root, {"Home"});
+    CHECK(r.frameLines().at(0).starts_with("abcdefghijkl") && r.caret() == std::pair(0, 0));
+}
+
+TEST(a_textarea_edits_several_lines) {
+    TerminalRenderer r;
+    r.setSize(30, 8);
+    Root root(r);
+    root.render(h(Editor, {{"start", ""}, {"multi", true}}));
+    keys(r, root, {"a", "b", "Enter", "c", "d", "e"});
+    CHECK(contains(r.frameText(), "val=[ab\ncde]"));
+    CHECK(r.caret() == std::pair(3, 1));
+    keys(r, root, {"Up", "X"});  // the same column, or the end of a shorter line
+    CHECK(contains(r.frameText(), "val=[abX\ncde]") && r.caret() == std::pair(3, 0));
+    keys(r, root, {"Down", "Home", "Backspace"});  // joins the lines
+    CHECK(contains(r.frameText(), "val=[abXcde]"));
+}
+
+TEST(a_textarea_wraps_and_scrolls_to_the_cursor) {
+    TerminalRenderer r;
+    r.setSize(30, 8);
+    Root root(r);
+    // 3 rows of 12 columns; 5 lines of text.
+    root.render(h(Editor, {{"start", "one\ntwo\nthree\nfour\nfive and a long tail"}, {"multi", true}}));
+    auto lines = r.frameLines();
+    CHECK(lines.size() > 2 && lines[0].starts_with("four") && lines[1].starts_with("five and a l") && lines[2].starts_with("ong tail"));
+    CHECK(r.caret() == std::pair(8, 2));
+    keys(r, root, {"Up", "Up", "Up"});  // "five and" -> "four" (shorter: its end) -> "three"
+    CHECK(r.frameLines().at(0).starts_with("three") && r.caret() == std::pair(4, 0));
+}
+
 TEST(typing_edits_the_focused_input) {
     TerminalRenderer r;
     Root root(r);
@@ -223,7 +357,7 @@ TEST(typing_edits_the_focused_input) {
     CHECK(contains(r.frameText(), "name=hiя "));
     r.handleKey(root, key("Backspace"));
     CHECK(contains(r.frameText(), "name=hi "));
-    CHECK(contains(r.frameText(), "hi_"));  // cursor in the focused field
+    CHECK(r.caret().has_value());  // the cursor in the focused field
 }
 
 TEST(enter_clicks_the_focused_button) {

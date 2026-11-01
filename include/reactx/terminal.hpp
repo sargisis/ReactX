@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -160,7 +161,10 @@ public:
     // Send onScroll to the boxes that scrolled since the last call (handleKey,
     // handleMouse and TerminalApp do it; tests that call scrollBy call it).
     void sendScrollEvents(Root& root);
-    // The focus is in an input (keys that type text belong to it).
+    // Where the cursor of the focused input or textarea was drawn in the last
+    // repaint (column, row), if it is on screen.
+    std::optional<std::pair<int, int>> caret() const { return caret_; }
+    // The focus is in an input or a textarea (keys that type text belong to it).
     bool editingText() const;
 
 private:
@@ -218,6 +222,21 @@ private:
     std::unordered_map<NodeHandle, int> scrollTop_;
     std::unordered_map<NodeHandle, ScrollBox> scrollBoxes_;
     std::unordered_map<NodeHandle, ScrollBox> lastScrollBoxes_;  // of the repaint before (followEnd)
+    // Text fields (input, textarea): where the cursor is and what is scrolled
+    // away. The value comes from the app; if it changed by other means than
+    // typing here, the cursor goes to its end.
+    struct Edit {
+        std::string expect;                    // the value after the last edit made here
+        std::size_t cursor = std::string::npos;  // a byte offset into the value
+        int scrollX = 0;                       // input: cells hidden on the left
+        int scrollY = 0;                       // textarea: lines hidden above
+        int width = 0;                         // textarea: the width it was drawn with (Up / Down)
+    };
+    std::unordered_map<NodeHandle, Edit> edits_;
+    std::optional<std::pair<int, int>> caret_;
+    std::size_t cursorIn(NodeHandle field, const std::string& value);
+    bool editKey(Root& root, NodeHandle field, const KeyEvent& key, bool multiline);
+    void drawField(NodeHandle h, const Rect& content, const Rect& clip, Style style, bool multiline, Frame& frame);
     std::vector<NodeHandle> scrolled_;  // onScroll still to send
     NodeHandle scrolledTo_ = 0;         // the focus last scrolled into view
     NodeHandle scrollRequest_ = 0;      // scrollIntoView for the next repaint

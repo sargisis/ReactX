@@ -149,17 +149,18 @@ TEST(theme_provider_changes_colors) {
 
 TEST(input_types_and_submits) {
     Screen s(h(Form));
-    CHECK(contains(s.text(), "Name: _"));  // focused: cursor instead of the placeholder
+    CHECK(s.renderer.caret() == std::pair(6, 0));  // focused: the cursor instead of the placeholder
+    CHECK(!contains(s.text(), "your name"));
     s.press("Tab");
-    CHECK(contains(s.text(), "Name: your name"));
+    CHECK(contains(s.text(), "Name: your name") && !s.renderer.caret());
     s.press("Tab");  // back to the field
     s.type("Ann");
-    CHECK(contains(s.text(), "Name: Ann_"));
+    CHECK(contains(s.text(), "Name: Ann") && s.renderer.caret() == std::pair(9, 0));
     submitted.clear();
     s.press("Enter");
     CHECK(submitted == "Ann");
     s.press("Escape");  // clears the field
-    CHECK(contains(s.text(), "Name: _"));
+    CHECK(s.renderer.caret() == std::pair(6, 0) && !contains(s.text(), "Ann"));
 }
 
 TEST(input_takes_the_free_room_in_a_row_but_not_in_a_column) {

@@ -14,6 +14,7 @@
 #include <utility>
 
 #include "reactx/terminal.hpp"
+#include "reactx/parse.hpp"
 #include "utf8.hpp"
 
 namespace rx {
@@ -29,7 +30,7 @@ std::string prop(const PropMap& props, std::string_view name, std::string fallba
 
 bool flag(const PropMap& props, std::string_view name) { return prop(props, name) == "true"; }
 
-bool isLeafType(std::string_view type) { return type == "text" || type == "button" || type == "input"; }
+bool isLeafType(std::string_view type) { return type == "text" || type == "button" || type == "input" || type == "textarea"; }
 
 std::vector<std::string> splitLines(const std::string& text) {
     std::vector<std::string> lines;
@@ -45,17 +46,18 @@ std::vector<std::string> splitLines(const std::string& text) {
 
 int textWidth(const std::string& text) {
     int w = 0;
-    for (const auto& line : splitLines(text)) w = std::max(w, detail::utf8Length(line));
+    for (const auto& line : splitLines(text)) w = std::max(w, detail::textCells(line));
     return w;
 }
 
-// Word wrap to `width` columns. Lines that fit are kept as they are
-// (including leading spaces); words longer than a line are split.
+// Word wrap to `width` columns (wide characters take two). Lines that fit
+// are kept as they are (including leading spaces); words longer than a line
+// are split between characters.
 std::vector<std::string> wrapText(const std::string& text, int width) {
     width = std::max(width, 1);
     std::vector<std::string> out;
     for (const std::string& paragraph : splitLines(text)) {
-        if (detail::utf8Length(paragraph) <= width) {
+        if (detail::textCells(paragraph) <= width) {
             out.push_back(paragraph);
             continue;
         }
@@ -65,26 +67,33 @@ std::vector<std::string> wrapText(const std::string& text, int width) {
         while (start <= paragraph.size()) {
             auto end = paragraph.find(' ', start);
             if (end == std::string::npos) end = paragraph.size();
-            std::string word = paragraph.substr(start, end - start);
+            std::string_view word(paragraph.data() + start, end - start);
             start = end + 1;
             if (word.empty()) continue;
 
-            auto chars = detail::utf8Split(word);
+            auto glyphs = detail::utf8Glyphs(word);
             std::size_t pos = 0;
-            while (chars.size() - pos > static_cast<std::size_t>(width)) {  // long word
+            int left = detail::textCells(word);
+            while (left > width) {  // a word longer than a line: cut it into pieces
                 if (lineLen > 0) {
                     out.push_back(std::move(line));
                     line.clear();
                     lineLen = 0;
                 }
                 std::string piece;
-                for (int i = 0; i < width; ++i) piece += chars[pos++];
+                int used = 0;
+                while (pos < glyphs.size() && (used == 0 || used + glyphs[pos].width <= width)) {
+                    piece += glyphs[pos].text;
+                    used += glyphs[pos].width;
+                    left -= glyphs[pos].width;
+                    ++pos;
+                }
                 out.push_back(std::move(piece));
             }
             std::string rest;
-            for (; pos < chars.size(); ++pos) rest += chars[pos];
-            int restLen = detail::utf8Length(rest);
-            if (restLen == 0) continue;
+            for (; pos < glyphs.size(); ++pos) rest += glyphs[pos].text;
+            int restLen = left;
+            if (rest.empty()) continue;
             if (lineLen == 0) {
                 line = std::move(rest);
                 lineLen = restLen;
@@ -237,6 +246,8 @@ struct Leaf {
     enum Kind { Text, Button, Input } kind = Text;
     std::string text;  // text, button label, or input value/placeholder
     bool wrap = true;
+    int rows = 1;      // a textarea's height
+    bool operator==(const Leaf&) const = default;
 };
 
 int clampTo(int natural, float available, YGMeasureMode mode) {
@@ -249,8 +260,11 @@ YGSize measureLeaf(YGNodeConstRef node, float width, YGMeasureMode widthMode, fl
     const Leaf& leaf = *static_cast<const Leaf*>(YGNodeGetContext(node));
     int w = 0, h = 1;
     switch (leaf.kind) {
-        case Leaf::Button: w = clampTo(detail::utf8Length(leaf.text) + 4, width, widthMode); break;
-        case Leaf::Input: w = clampTo(std::max(detail::utf8Length(leaf.text) + 1, 10), width, widthMode); break;
+        case Leaf::Button: w = clampTo(detail::textCells(leaf.text) + 4, width, widthMode); break;
+        case Leaf::Input:
+            w = clampTo(std::max(textWidth(leaf.text) + 1, 10), width, widthMode);
+            h = leaf.rows;
+            break;
         case Leaf::Text: {
             int natural = textWidth(leaf.text);
             if (widthMode == YGMeasureModeUndefined || !leaf.wrap) {
@@ -258,7 +272,7 @@ YGSize measureLeaf(YGNodeConstRef node, float width, YGMeasureMode widthMode, fl
                 h = static_cast<int>(splitLines(leaf.text).size());
             } else {
                 auto lines = wrapText(leaf.text, static_cast<int>(width));
-                for (const auto& l : lines) w = std::max(w, detail::utf8Length(l));
+                for (const auto& l : lines) w = std::max(w, detail::textCells(l));
                 if (widthMode == YGMeasureModeExactly) w = static_cast<int>(width);
                 h = static_cast<int>(lines.size());
             }
@@ -408,8 +422,9 @@ struct TerminalRenderer::Layout {
             next.kind = Leaf::Input;
             next.text = prop(n.props, "value");
             if (next.text.empty()) next.text = prop(n.props, "placeholder");
+            if (n.type == "textarea") next.rows = std::clamp(rx::parseNumber<int>(prop(n.props, "rows")).value_or(4), 1, 100);
         }
-        if (e.fresh || next.kind != e.leaf->kind || next.text != e.leaf->text || next.wrap != e.leaf->wrap) {
+        if (e.fresh || next != *e.leaf) {
             *e.leaf = std::move(next);
             YGNodeMarkDirty(e.y);
         }
@@ -515,7 +530,10 @@ struct TerminalRenderer::Layout {
 // The cells of one repaint.
 struct TerminalRenderer::Frame {
     struct Cell {
-        std::inplace_vector<char, 4> ch{' '};  // one UTF-8 code point, no heap (C++26)
+        // One character (a glyph: a code point and its marks), no heap (C++26).
+        // Empty: the right half of the wide character in the cell before.
+        std::inplace_vector<char, 16> ch{' '};
+        bool continuation() const { return ch.empty(); }
         Style style;
         std::string_view text() const { return {ch.data(), ch.size()}; }
     };
@@ -609,6 +627,7 @@ void TerminalRenderer::destroyNode(NodeHandle h) {
     if (h == scrollRequest_) scrollRequest_ = 0;
     scrollTop_.erase(h);
     scrollBoxes_.erase(h);
+    edits_.erase(h);
     TextRenderer::destroyNode(h);
 }
 
@@ -636,14 +655,41 @@ void TerminalRenderer::put(Frame& frame, int x, int y, const Rect& clip, std::st
     Frame::Screen screen = frame.screen();
     if (y < 0 || y < clip.top || y >= clip.bottom || y >= static_cast<int>(screen.extent(0))) return;
     int right = std::min(clip.right, static_cast<int>(screen.extent(1)));
-    for (std::string_view ch : detail::utf8Split(text)) {
+    int left = std::max(clip.left, 0);
+    auto at = [&](int col) -> Frame::Cell& { return screen[static_cast<std::size_t>(y), static_cast<std::size_t>(col)]; };
+    // Writing over half of a wide character blanks its other half.
+    auto claim = [&](int col) {
+        if (at(col).continuation() && col > 0) at(col - 1).ch = {' '};
+        if (col + 1 < static_cast<int>(screen.extent(1)) && at(col + 1).continuation()) at(col + 1).ch = {' '};
+    };
+    auto blank = [&](int col) {
+        if (col < left || col >= right) return;
+        claim(col);
+        at(col).ch = {' '};
+        at(col).style = style;
+    };
+    for (const detail::Glyph& g : detail::utf8Glyphs(text)) {
         if (x >= right) break;
-        if (x >= clip.left && x >= 0 && static_cast<unsigned char>(ch[0]) >= 0x20) {
-            Frame::Cell& cell = screen[static_cast<std::size_t>(y), static_cast<std::size_t>(x)];
-            cell.ch.assign(ch.begin(), ch.end());  // utf8Split: at most 4 bytes
-            cell.style = style;
+        if (g.width == 0) continue;  // a control character or a mark with nothing before it
+        if (x >= left) {
+            if (g.width == 2 && x + 1 >= right) {
+                blank(x);  // half of it would be cut off
+            } else {
+                claim(x);
+                Frame::Cell& cell = at(x);
+                if (g.text.size() <= cell.ch.capacity()) cell.ch.assign(g.text.begin(), g.text.end());
+                else cell.ch.assign(g.text.begin(), g.text.begin() + static_cast<std::ptrdiff_t>(detail::utf8SeqLength(static_cast<unsigned char>(g.text[0]))));
+                cell.style = style;
+                if (g.width == 2) {
+                    claim(x + 1);
+                    at(x + 1).ch.clear();
+                    at(x + 1).style = style;
+                }
+            }
+        } else if (g.width == 2 && x + 1 >= left) {
+            blank(x + 1);  // the left half is cut off
         }
-        ++x;
+        x += g.width;
     }
 }
 
@@ -694,26 +740,8 @@ void TerminalRenderer::draw(const Layout& layout, NodeHandle h, float originX, f
         put(frame, content.left, content.top, content.intersect(clip), "[ " + textOf(*n) + " ]", st);
         return;
     }
-    if (n->type == "input") {
-        Rect area = content.intersect(clip);
-        std::string value = prop(n->props, "value");
-        Style field = st;
-        field.underline = true;
-        put(frame, content.left, content.top, area, std::string(static_cast<std::size_t>(contentW), ' '), field);
-        if (value.empty() && h != focused_) {
-            Style hint = field;
-            hint.dim = true;
-            put(frame, content.left, content.top, area, prop(n->props, "placeholder"), hint);
-        } else {
-            // Keep the end of the text (and the cursor) visible.
-            std::string shown = value + (h == focused_ ? "_" : "");
-            auto chars = detail::utf8Split(shown);
-            auto room = static_cast<std::size_t>(contentW);
-            std::size_t skip = chars.size() > room ? chars.size() - room : 0;
-            std::string tail;
-            for (std::size_t i = skip; i < chars.size(); ++i) tail += chars[i];
-            put(frame, content.left, content.top, area, tail, field);
-        }
+    if (n->type == "input" || n->type == "textarea") {
+        drawField(h, content, clip, st, n->type == "textarea", frame);
         return;
     }
 
@@ -799,13 +827,15 @@ void TerminalRenderer::draw(const Layout& layout, NodeHandle h, float originX, f
         std::string topLine(tl);
         int used = 1;
         if (!title.empty() && w > 6) {
-            auto chars = detail::utf8Split(title);
-            std::size_t room = static_cast<std::size_t>(w - 6);
-            if (chars.size() > room) chars.resize(room);
+            int room = w - 6, cells = 0;
             std::string t;
-            for (auto c : chars) t += c;
+            for (const detail::Glyph& g : detail::utf8Glyphs(title)) {
+                if (cells + g.width > room) break;
+                t += g.text;
+                cells += g.width;
+            }
             topLine += std::string(hz) + " " + t + " ";
-            used += 3 + static_cast<int>(chars.size());
+            used += 3 + cells;
         }
         for (; used < w - 1; ++used) topLine += hz;
         topLine += tr;
@@ -832,6 +862,7 @@ std::string TerminalRenderer::Frame::lineToAnsi(std::span<const Cell> line) {
     Style current;
     for (std::size_t i = 0; i < end; ++i) {
         const Cell& c = line[i];
+        if (c.continuation()) continue;  // the right half of a wide character: the terminal moved two columns
         if (c.style != current) {
             out += "\x1b[0";
             if (int fg = colorCode(c.style.fg)) out += ";" + std::to_string(fg);
@@ -874,6 +905,7 @@ void TerminalRenderer::repaint() {
 
     frame_ = std::make_unique<Frame>(static_cast<std::size_t>(height_), static_cast<std::size_t>(width_));
     hits_.clear();
+    caret_.reset();
     origins_.clear();
     lastScrollBoxes_ = std::exchange(scrollBoxes_, {});
     Rect screenRect{0, 0, width_, height_};
@@ -926,7 +958,7 @@ std::string TerminalRenderer::frameText() const {
 // ---- focus ----
 
 bool TerminalRenderer::isFocusable(const Node& n) const {
-    return !n.isText && (n.type == "input" || n.type == "button" || flag(n.props, "focusable"));
+    return !n.isText && (n.type == "input" || n.type == "textarea" || n.type == "button" || flag(n.props, "focusable"));
 }
 
 void TerminalRenderer::collectFocusable(NodeHandle h, std::vector<NodeHandle>& out) const {
@@ -1025,7 +1057,7 @@ bool TerminalRenderer::bubbleKey(Root& root, const KeyEvent& key) {
 
 bool TerminalRenderer::editingText() const {
     const Node* n = findNode(focused_);
-    return n && !n->isText && n->type == "input";
+    return n && !n->isText && (n->type == "input" || n->type == "textarea");
 }
 
 bool TerminalRenderer::handleKey(Root& root, const KeyEvent& key) {
@@ -1041,6 +1073,23 @@ bool TerminalRenderer::handleKey(Root& root, const KeyEvent& key) {
 }
 
 bool TerminalRenderer::handleKeyNow(Root& root, const KeyEvent& key) {
+    // A text field moves its cursor: Ctrl+Left / Right by words, and in a
+    // textarea Up / Down between lines (past the first or last line they move
+    // the focus, as in any other place).
+    const Node* f = findNode(focused_);
+    bool field = f && !f->isText && (f->type == "input" || f->type == "textarea");
+    bool caretKey = key.key == "Left" || key.key == "Right" || key.key == "Home" || key.key == "End";
+    if (field && key.ctrl && !key.alt && caretKey) {
+        NodeHandle target = focused_;
+        bool handled = bubbleKey(root, key);
+        return (findNode(target) && editKey(root, target, key, f->type == "textarea")) || handled;
+    }
+    if (field && f->type == "textarea" && !key.ctrl && !key.alt && (key.key == "Up" || key.key == "Down")) {
+        NodeHandle target = focused_;
+        bool handled = bubbleKey(root, key);
+        if (findNode(target) && editKey(root, target, key, true)) return true;
+        if (handled || focused_ != target) return true;
+    }
     if (key.ctrl || key.alt) return bubbleKey(root, key);  // no default action
     if ((key.key == "Tab" && !key.shift) || key.key == "Down") {
         focusNext();
@@ -1062,18 +1111,231 @@ bool TerminalRenderer::handleKeyNow(Root& root, const KeyEvent& key) {
     const Node* n = findNode(target);
     if (!n) return handled;  // the handler removed the node
 
-    if (n->type == "input") {
-        std::string value = prop(n->props, "value");
-        if (key.key == "Backspace") {
-            if (value.empty()) return handled;
-            detail::utf8PopBack(value);
-            return root.dispatch(target, "onInput", value) || handled;
-        }
-        if (detail::isPrintableKey(key.key))
-            return root.dispatch(target, "onInput", value + key.key) || handled;
-    }
+    if ((n->type == "input" || n->type == "textarea") && editKey(root, target, key, n->type == "textarea")) return true;
     if (key.key == "Enter" || key.key == " ") return root.dispatch(target, "onClick") || handled;
     return scrollKey(key) || handled;
+}
+
+// ---- text fields: cursor and editing ----
+
+namespace {
+
+// Where the cursor may stop: the start of each character, and the end.
+std::vector<std::size_t> stops(std::string_view v) {
+    std::vector<std::size_t> out;
+    for (const detail::Glyph& g : detail::utf8Glyphs(v)) out.push_back(static_cast<std::size_t>(g.text.data() - v.data()));
+    out.push_back(v.size());
+    return out;
+}
+std::size_t stepLeft(std::string_view v, std::size_t pos) {
+    auto s = stops(v);
+    auto it = std::ranges::lower_bound(s, pos);
+    return it == s.begin() ? 0 : *(it - 1);
+}
+std::size_t stepRight(std::string_view v, std::size_t pos) {
+    auto s = stops(v);
+    auto it = std::ranges::upper_bound(s, pos);
+    return it == s.end() ? v.size() : *it;
+}
+bool isSpace(char c) { return c == ' ' || c == '\n' || c == '\t'; }
+// Ctrl+Left / Ctrl+Right: to the start of this or the previous word, past the end of the next one.
+std::size_t wordLeft(std::string_view v, std::size_t pos) {
+    while (pos > 0 && isSpace(v[pos - 1])) --pos;
+    while (pos > 0 && !isSpace(v[pos - 1])) pos = stepLeft(v, pos);
+    return pos;
+}
+std::size_t wordRight(std::string_view v, std::size_t pos) {
+    while (pos < v.size() && isSpace(v[pos])) ++pos;
+    while (pos < v.size() && !isSpace(v[pos])) pos = stepRight(v, pos);
+    return pos;
+}
+
+// A textarea's lines on screen: its own lines, wrapped at `width` cells
+// between characters (an editor doesn't move words around while you type).
+struct VisualLine {
+    std::size_t begin = 0, end = 0;  // bytes of the value, without the '\n'
+};
+std::vector<VisualLine> visualLines(std::string_view v, int width) {
+    std::vector<VisualLine> out;
+    std::size_t begin = 0;
+    int used = 0;
+    for (const detail::Glyph& g : detail::utf8Glyphs(v)) {
+        auto at = static_cast<std::size_t>(g.text.data() - v.data());
+        if (g.text == "\n") {
+            out.push_back({begin, at});
+            begin = at + 1;
+            used = 0;
+            continue;
+        }
+        if (used > 0 && used + g.width > width) {
+            out.push_back({begin, at});
+            begin = at;
+            used = 0;
+        }
+        used += g.width;
+    }
+    out.push_back({begin, v.size()});
+    return out;
+}
+// The line and column (cells) of a byte offset.
+std::pair<std::size_t, int> lineAndColumn(std::string_view v, const std::vector<VisualLine>& lines, std::size_t pos) {
+    std::size_t i = 0;
+    while (i + 1 < lines.size() && lines[i + 1].begin <= pos) ++i;
+    return {i, detail::textCells(v.substr(lines[i].begin, pos - lines[i].begin))};
+}
+// The byte offset in `line` closest to column `col` (not past it).
+std::size_t offsetAt(std::string_view v, const VisualLine& line, int col) {
+    std::size_t pos = line.begin;
+    int cells = 0;
+    for (const detail::Glyph& g : detail::utf8Glyphs(v.substr(line.begin, line.end - line.begin))) {
+        if (cells + g.width > col) break;
+        cells += g.width;
+        pos += g.text.size();
+    }
+    return pos;
+}
+
+}  // namespace
+
+std::size_t TerminalRenderer::cursorIn(NodeHandle field, const std::string& value) {
+    Edit& e = edits_[field];
+    if (e.cursor == std::string::npos || value != e.expect) {
+        e.expect = value;
+        e.cursor = value.size();
+    }
+    e.cursor = std::min(e.cursor, value.size());
+    return e.cursor;
+}
+
+// The keys of a focused input or textarea. True if the key was used.
+bool TerminalRenderer::editKey(Root& root, NodeHandle field, const KeyEvent& key, bool multiline) {
+    const Node* n = findNode(field);
+    if (!n) return false;
+    std::string value = prop(n->props, "value");
+    std::size_t cur = cursorIn(field, value);
+    Edit& e = edits_[field];
+    // Set the edit state first: dispatching re-renders and repaints.
+    auto change = [&](std::string next, std::size_t pos) {
+        e.expect = next;
+        e.cursor = pos;
+        root.dispatch(field, "onInput", next);
+        return true;
+    };
+    auto move = [&](std::size_t pos) {
+        e.cursor = pos;
+        repaint();
+        return true;
+    };
+    std::vector<VisualLine> lines;
+    std::size_t line = 0;
+    int col = 0;
+    if (multiline) {
+        lines = visualLines(value, std::max(e.width, 1));
+        std::tie(line, col) = lineAndColumn(value, lines, cur);
+    }
+    if (key.alt) return false;
+    if (key.ctrl) {
+        if (key.key == "Left") return move(wordLeft(value, cur));
+        if (key.key == "Right") return move(wordRight(value, cur));
+        if (key.key == "Home") return move(0);
+        if (key.key == "End") return move(value.size());
+        return false;
+    }
+    if (key.key == "Backspace") {
+        if (cur == 0) return true;
+        std::size_t from = stepLeft(value, cur);
+        return change(value.erase(from, cur - from), from);
+    }
+    if (key.key == "Delete") {
+        if (cur == value.size()) return true;
+        std::size_t to = stepRight(value, cur);
+        return change(value.erase(cur, to - cur), cur);
+    }
+    if (key.key == "Left") return move(stepLeft(value, cur));
+    if (key.key == "Right") return move(stepRight(value, cur));
+    if (key.key == "Home") return move(multiline ? lines[line].begin : 0);
+    if (key.key == "End") return move(multiline ? lines[line].end : value.size());
+    // Past the first or last line: not used here, the focus moves on.
+    if (multiline && key.key == "Up") return line > 0 && move(offsetAt(value, lines[line - 1], col));
+    if (multiline && key.key == "Down") return line + 1 < lines.size() && move(offsetAt(value, lines[line + 1], col));
+    if (multiline && key.key == "Enter") return change(value.insert(cur, "\n"), cur + 1);
+    if (detail::isPrintableKey(key.key)) return change(value.insert(cur, key.key), cur + key.key.size());
+    return false;
+}
+
+// An input (one line, scrolled sideways) or a textarea (lines, scrolled down):
+// the cursor stays in view and shows as an inverted cell while focused.
+void TerminalRenderer::drawField(NodeHandle h, const Rect& content, const Rect& clip, Style st, bool multiline, Frame& frame) {
+    const Node* n = findNode(h);
+    std::string value = prop(n->props, "value");
+    Rect area = content.intersect(clip);
+    int width = std::max(content.right - content.left, 0);
+    int height = multiline ? std::max(content.bottom - content.top, 1) : 1;
+    bool focused = h == focused_;
+    Style field = st;
+    field.underline = true;
+    for (int row = 0; row < height; ++row)
+        put(frame, content.left, content.top + row, area, std::string(static_cast<std::size_t>(width), ' '), field);
+    if (value.empty() && !focused) {
+        Style hint = field;
+        hint.dim = true;
+        auto lines = multiline ? wrapText(prop(n->props, "placeholder"), width) : splitLines(prop(n->props, "placeholder"));
+        for (int row = 0; row < height && row < static_cast<int>(lines.size()); ++row)
+            put(frame, content.left, content.top + row, area, lines[static_cast<std::size_t>(row)], hint);
+        return;
+    }
+    std::size_t cur = cursorIn(h, value);
+    Edit& e = edits_[h];
+    Style caret = field;
+    caret.reverse = !field.reverse;
+    auto glyphAt = [&](std::size_t pos) -> std::string {  // the character under the cursor (a space at the end)
+        if (pos >= value.size() || value[pos] == '\n') return " ";
+        return std::string(detail::utf8Glyphs(std::string_view(value).substr(pos)).front().text);
+    };
+
+    if (!multiline) {
+        int at = detail::textCells(std::string_view(value).substr(0, cur));
+        int total = detail::textCells(value);
+        if (!focused) {
+            e.scrollX = 0;
+        } else {
+            if (at < e.scrollX) e.scrollX = at;
+            if (at >= e.scrollX + width) e.scrollX = at - width + 1;
+            e.scrollX = std::clamp(e.scrollX, 0, std::max(0, total + 1 - width));
+        }
+        std::string shown;
+        int pos = 0;
+        for (const detail::Glyph& g : detail::utf8Glyphs(value)) {
+            if (pos >= e.scrollX) shown += g.text;
+            else if (pos + g.width > e.scrollX) shown += ' ';  // a wide character cut in half
+            pos += g.width;
+        }
+        put(frame, content.left, content.top, area, shown, field);
+        if (focused) {
+            put(frame, content.left + at - e.scrollX, content.top, area, glyphAt(cur), caret);
+            caret_ = std::pair{content.left + at - e.scrollX, content.top};
+        }
+        return;
+    }
+
+    e.width = std::max(width, 1);
+    auto lines = visualLines(value, e.width);
+    auto [line, col] = lineAndColumn(value, lines, cur);
+    int row = static_cast<int>(line);
+    if (focused) {
+        if (row < e.scrollY) e.scrollY = row;
+        if (row >= e.scrollY + height) e.scrollY = row - height + 1;
+    }
+    e.scrollY = std::clamp(e.scrollY, 0, std::max(0, static_cast<int>(lines.size()) - height));
+    for (int r = 0; r < height; ++r) {
+        auto i = static_cast<std::size_t>(e.scrollY + r);
+        if (i >= lines.size()) break;
+        put(frame, content.left, content.top + r, area, std::string_view(value).substr(lines[i].begin, lines[i].end - lines[i].begin), field);
+    }
+    if (focused) {
+        put(frame, content.left + col, content.top + row - e.scrollY, area, glyphAt(cur), caret);
+        caret_ = std::pair{content.left + col, content.top + row - e.scrollY};
+    }
 }
 
 // ---- mouse ----

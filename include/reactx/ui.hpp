@@ -221,8 +221,8 @@ Element select(SelectProps props);
 
 // ---- more form fields ----
 
-// Several lines of text. In a terminal it is one line for now (v0.17 brings
-// editing several lines there); Enter submits nothing, so a newline is typed.
+// Several lines of text: Enter starts a new line (in a terminal too, where Up /
+// Down move between lines and the field scrolls).
 struct TextareaProps {
     std::string value{};
     InputHandler onChange{};

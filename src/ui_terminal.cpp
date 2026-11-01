@@ -216,11 +216,22 @@ Element Select(const Props& p) {
     }), p, t);
 }
 
-// One line for now: the terminal's input edits a single line (v0.17 brings more).
+// Several lines: Enter starts a new one, Up / Down move between them, long
+// lines wrap and the field scrolls to keep the cursor in view.
 Element Textarea(const Props& p) {
-    Props one = p;
-    one.set("labelAbove", true);
-    return Input(one);
+    const Theme& t = useTheme();
+    std::string label = p.get<std::string>("label");
+    Element field = h("textarea", {
+        {"value", p.get<std::string>("value")},
+        {"placeholder", p.get<std::string>("placeholder")},
+        {"rows", p.get<int>("rows", 4)},
+        {"color", p.get<std::string>("error").empty() ? t.text : t.danger},
+        {"onInput", p.get<InputHandler>("onChange")},
+    });
+    std::vector<Element> parts;
+    if (!label.empty()) parts.push_back(h("text", {{"color", t.muted}, {"wrap", false}}, {label}));
+    parts.push_back(std::move(field));
+    return withError(h("box", {{"growInRow", 1}}, std::move(parts)), p, t);
 }
 
 Element RadioGroup(const Props& p) {

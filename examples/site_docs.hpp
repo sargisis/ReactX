@@ -54,13 +54,13 @@ inline const std::vector<Page>& pages() {
                 {"Установка: macOS",
                  "На macOS (Apple Silicon M1/M2/M3/M4 и Intel) всё устанавливается через Homebrew:\n\n"
                  "- brew install cmake ninja git\n"
-                 "- GCC для нативных C++26 приложений или Apple Clang\n"
+                 "- GCC 16 или новее для нативной сборки (Apple Clang пока не собирает ReactX; проверьте g++-16 --version)\n"
                  "- Emscripten для сборки веб-приложений (через brew или emsdk)",
                  "# 1. Установите инструменты и GCC через Homebrew:\n"
                  "brew install cmake ninja git gcc emscripten\n\n"
                  "# 2. Соберите CLI reactx из исходников:\n"
                  "git clone https://github.com/sargisis/ReactX.git && cd ReactX\n"
-                 "cmake --preset release -DCMAKE_CXX_COMPILER=g++-14 && cmake --build --preset release\n"
+                 "cmake --preset release -DCMAKE_CXX_COMPILER=g++-16 && cmake --build --preset release\n"
                  "cmake --install build/release --prefix ~/.local     # ~/.local/bin/reactx"},
                 {"Установка: Windows",
                  "На Windows для нативной поддержки C++26 и POSIX-терминала рекомендуется использовать WSL 2 (Windows Subsystem for Linux):\n\n"
@@ -652,14 +652,14 @@ inline const std::vector<Page>& pages() {
                  "- GET, POST, PUT, PATCH, DELETE с JSON-телом, статусы, ошибки сети, разбор JSON через std::expected, без падений на кривом ответе.\n"
                  "- Прокси reactx dev --proxy проверен сквозными тестами с настоящим бэкендом и фаззингом. Нашли и исправили DoS-уязвимость.",
                  ""},
-                {"Чего не хватает (реальные пробелы)",
-                 "В текущей реализации есть архитектурные ограничения, которые важно учитывать:\n\n"
-                 "- Своих заголовков запроса. Нельзя передать Authorization: Bearer <token>. Для API с JWT это главная проблема. Авторизация через cookie работает (браузер отправляет их сам на тот же адрес), а через токен в заголовке — нет.\n"
-                 "- Заголовков ответа: нельзя прочитать, например, Location или заголовки пагинации.\n"
-                 "- Отмены запроса и своего таймаута.\n"
-                 "- WebSocket / потоковых ответов (SSE): чат в реальном времени можно сделать только опросом через useInterval.\n"
-                 "- В терминальных приложениях только http://, без HTTPS.\n"
-                 "- Прокси reactx dev — только для разработки. В продакшене API раздаёт Flask, nginx и т. п. (как в примере выше), а не ReactX.",
+                {"Чего не хватает",
+                 "Чего пока нет в этом релизе:\n\n"
+                 "- Терминальные приложения ходят только по http:// (без HTTPS); в браузере fetch — браузерный, HTTPS работает.\n"
+                 "- Server-Sent Events (SSE) не обёрнуты; для живых данных — useWebSocket, или опрос через useInterval.\n"
+                 "- Прокси reactx dev --proxy и HttpServer — для разработки: в продакшене API и файлы раздаёт Flask, nginx "
+                 "или другой боевой сервер.\n\n"
+                 "Уже есть (раньше этого не хватало): заголовки запроса (Authorization: Bearer ...), заголовки ответа "
+                 "(r.header(\"etag\")), таймаут и cancel() — см. «Данные: fetch и JSON»; WebSocket — useWebSocket.",
                  ""},
             },
         },

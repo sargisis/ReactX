@@ -6,6 +6,14 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Changed
+
+- `install.sh` checks the downloaded archive against the SHA-256 the release publishes next to it (as `reactx upgrade` already did) and installs nothing if they differ.
+
+### Fixed
+
+- Docs: «Current limitations» of the backend page listed request headers, response headers, timeouts, cancelling and WebSockets as missing — they all exist; the macOS install built with `g++-14` instead of GCC 16. `/demos` on the website answered 404 to direct visits (now prerendered like the docs).
+
 ## [0.16.0] — 2026-11-01
 
 Forms: `ui::useForm` keeps a form's values in your own struct, checks them with your function and shows each error under its field once that field changed or a submit was tried. New fields: `ui::textarea`, `ui::radioGroup`, `ui::slider`, `ui::progress`, and `.error` on every field. All of them work in the browser and in a terminal (a terminal textarea is one line until v0.17). Try them on the website's home page. A MINOR release for the new API; apps update without changes.

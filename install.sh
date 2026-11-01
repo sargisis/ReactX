@@ -53,7 +53,22 @@ path_hint() {
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 echo "Downloading reactx $version..."
-curl -fL --progress-bar "https://github.com/$repo/releases/download/$tag/reactx-$version-linux-x86_64.tar.gz" | tar xz -C "$tmp"
+name=reactx-$version-linux-x86_64.tar.gz
+url=https://github.com/$repo/releases/download/$tag/$name
+curl -fL --progress-bar -o "$tmp/$name" "$url"
+# The release publishes the archive's SHA-256 next to it: install only what matches.
+if command -v sha256sum > /dev/null && curl -fsSL -o "$tmp/$name.sha256" "$url.sha256" 2> /dev/null; then
+  expected=$(cut -d' ' -f1 < "$tmp/$name.sha256")
+  actual=$(sha256sum "$tmp/$name" | cut -d' ' -f1)
+  if [ "$expected" != "$actual" ]; then
+    echo "reactx: the download doesn't match its SHA-256 ($url.sha256); nothing was installed"
+    exit 1
+  fi
+  echo "SHA-256 checked."
+else
+  echo "reactx: no SHA-256 to check against (sha256sum or $name.sha256 is missing); installing anyway"
+fi
+tar xzf "$tmp/$name" -C "$tmp"
 
 bin=${REACTX_BIN:-$HOME/.local/bin}
 mkdir -p "$bin"

@@ -595,9 +595,9 @@ Element Home(const Props&) {
                     h("a", {{"className", "btn"}, {"href", "https://github.com/sargisis/ReactX"}}, {"GitHub"}),
                 }),
                 h("ul", {{"className", "stats"}}, {
-                    h("li", {}, {h("b", {}, {"~120 KB"}), tr(en, ".wasm for a new app", ".wasm у нового приложения")}),
+                    h("li", {}, {h("b", {}, {"~60 KB"}), tr(en, "a new app, gzip", "новое приложение, gzip")}),
                     h("li", {}, {h("b", {}, {"2"}), tr(en, "backends, one code", "бэкенда, один код")}),
-                    h("li", {}, {h("b", {}, {"0"}), tr(en, "lines of JavaScript", "строк JavaScript")}),
+                    h("li", {}, {h("b", {}, {"0"}), tr(en, "lines of JavaScript to write", "строк JavaScript писать")}),
                 }),
             }),
             h(LiveCounter, {.start = 3}),
@@ -616,7 +616,7 @@ Element Home(const Props&) {
                 Feature(tr(en, "Hooks", "Хуки"), {code("useState"), " ", code("useEffect"), " ", code("useReducer"), " ", code("useStore"), " ",
                                                   code("useContext"), tr(en, " — like in React.", " — как в React.")}),
                 Feature(tr(en, "Typed props", "Props — структура"), {code("h(Counter, {.start = 5})"),
-                                                                     tr(en, ": a typo in a field name is a compile error.", ": опечатку в имени поля ловит компилятор.")}),
+                                                                     tr(en, ": a typo in your component's props is a compile error.", ": опечатку в props вашего компонента ловит компилятор.")}),
                 Feature(tr(en, "Two backends", "Два бэкенда"), {tr(en, "Terminal (ANSI, Flexbox layout) and browser (the DOM through WebAssembly).",
                                                                   "Терминал (ANSI, Flexbox на Yoga) и браузер (DOM через WebAssembly).")}),
                 Feature(tr(en, "Router and data", "Роутер и данные"), {tr(en, "Pages, links, ", "Страницы, ссылки, "), code("useFetch"),
@@ -624,9 +624,43 @@ Element Home(const Props&) {
                 Feature(tr(en, "C++ dev server", "Сервер на C++"), {code("reactx dev"), tr(en, " rebuilds and reloads the page on every save; ", " пересобирает и обновляет страницу при сохранении; "),
                                                                     code("--proxy"), tr(en, " for your own backend.", " — для своего бэкенда.")}),
                 Feature(tr(en, "Safe by default", "Надёжность"), {tr(en, "Error boundaries, ", "Границы ошибок, "), code("std::expected"),
-                                                                  tr(en, ", contracts; every change runs sanitizers and fuzzing.",
-                                                                     ", контракты; каждое изменение проверяется санитайзерами и фаззингом.")}),
+                                                                  tr(en, ", contracts; every change runs sanitizers and fuzzing in ",
+                                                                     ", контракты; каждое изменение проверяется санитайзерами и фаззингом в "),
+                                                                  h("a", {{"href", "https://github.com/sargisis/ReactX/actions"}}, {"CI"}),
+                                                                  " · ",
+                                                                  router::link({.to = "/docs/safety", .label = tr(en, "how", "как"), .activeClassName = ""})}),
             }}),
+        }),
+
+        h("section", {{"className", "section"}}, {
+            h("div", {{"className", "section-head"}}, {h("h2", {}, {tr(en, "Where it fits", "Кому подходит")}),
+                                                       h("span", {}, {tr(en, "and what isn't there yet", "и чего пока нет")})}),
+            h("div", {{"className", "fit"}}, {
+                h("div", {{"className", "fit-col"}}, {
+                    h("h3", {}, {tr(en, "Good for", "Подходит")}),
+                    h("ul", {}, {
+                        h("li", {}, {tr(en, "A tool for a server: a terminal UI over SSH and the same screens in the browser.",
+                                        "Утилита для сервера: интерфейс в терминале по SSH и те же экраны в браузере.")}),
+                        h("li", {}, {tr(en, "A UI for an existing C++ library: call it directly, no bindings, no second language.",
+                                        "Интерфейс к готовой C++-библиотеке: вызывайте её напрямую, без биндингов и второго языка.")}),
+                        h("li", {}, {tr(en, "Internal dashboards and admin pages by a C++ team that doesn't want a JavaScript stack.",
+                                        "Внутренние дашборды и админки, когда C++-команде не нужен стек JavaScript.")}),
+                    }),
+                }),
+                h("div", {{"className", "fit-col fit-col--not"}}, {
+                    h("h3", {}, {tr(en, "Not yet", "Пока нет")}),
+                    h("ul", {}, {
+                        h("li", {}, {tr(en, "Version 0.x: the API may still change before 1.0 (with a note in the changelog).",
+                                        "Версия 0.x: до 1.0 API ещё может меняться (с пометкой в changelog).")}),
+                        h("li", {}, {tr(en, "Native builds need GCC 16; Clang and MSVC don't build it yet. Windows: through WSL.",
+                                        "Нативная сборка требует GCC 16; Clang и MSVC её пока не собирают. Windows — через WSL.")}),
+                        h("li", {}, {tr(en, "No JSX and no hydration: prerendered pages are replaced by the app, not taken over.",
+                                        "Нет JSX и гидрации: заранее отрисованные страницы приложение заменяет, а не подхватывает.")}),
+                        h("li", {}, {tr(en, "A young ecosystem: rx::ui and the docs, not thousands of npm packages.",
+                                        "Молодая экосистема: rx::ui и документация, а не тысячи npm-пакетов.")}),
+                    }),
+                }),
+            }),
         }),
 
         h("section", {{"className", "section"}}, {
@@ -634,8 +668,13 @@ Element Home(const Props&) {
             h("div", {{"className", "steps"}}, {
                 h("div", {{"className", "step"}, {"key", "1"}}, {
                     h("div", {}, {h("h3", {}, {tr(en, "Install reactx", "Установите reactx")}),
-                                  h("p", {}, {tr(en, "One line on Linux: reactx and the compiler, into your home folder, no sudo.",
-                                                 "Одна строка в Linux: reactx и компилятор, в домашнюю папку, без sudo.")}),}),
+                                  h("p", {}, {tr(en, "Linux x86-64, one line: reactx and the compiler into your home folder, no sudo; "
+                                                     "the download's SHA-256 is checked. ",
+                                                 "Linux x86-64, одна строка: reactx и компилятор в домашнюю папку, без sudo; "
+                                                     "SHA-256 загрузки проверяется. "),
+                                              h("a", {{"href", "install.sh"}}, {tr(en, "Read the script", "Прочитать скрипт")}), " · ",
+                                              router::link({.to = "/docs/start", .label = tr(en, "macOS, Windows (WSL), Docker", "macOS, Windows (WSL), Docker"),
+                                                            .activeClassName = ""})}),}),
                     h(CodeBlock, {.code = "curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh"}),
                 }),
                 h("div", {{"className", "step"}, {"key", "2"}}, {
@@ -1161,6 +1200,7 @@ int main() {
 std::string titleOf(std::string_view route, bool en) {
     if (route == "/") return tr(en, "ReactX — React for C++26", "ReactX — React на C++26");
     if (route == "/docs") return tr(en, "Documentation — ReactX", "Документация — ReactX");
+    if (route == "/demos") return tr(en, "Demos — ReactX", "Демо — ReactX");
     const auto* page = findPage(route.substr(std::string_view("/docs/").size()), en);
     return page ? std::string(page->title) + " — ReactX" : "ReactX";
 }
@@ -1194,7 +1234,8 @@ int main(int argc, char** argv) {
     router::setBase(shell.substr(baseAt, shell.find_first_of("\" >", baseAt) - baseAt));
 
     std::filesystem::path outDir = std::filesystem::path(argv[2]).parent_path();
-    std::vector<std::pair<std::string, std::filesystem::path>> routes{{"/", "index.html"}, {"/docs", "docs/index.html"}};
+    std::vector<std::pair<std::string, std::filesystem::path>> routes{{"/", "index.html"}, {"/docs", "docs/index.html"},
+                                                                       {"/demos", "demos.html"}};
     for (const auto& page : site_docs::pagesEn())
         routes.emplace_back("/docs/" + std::string(page.slug), "docs/" + std::string(page.slug) + ".html");
 

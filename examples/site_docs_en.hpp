@@ -41,13 +41,13 @@ inline const std::vector<Page>& pagesEn() {
                 {"Install: macOS",
                  "On macOS (Apple Silicon M1/M2/M3/M4 and Intel), tools are installed using Homebrew:\n\n"
                  "- brew install cmake ninja git\n"
-                 "- GCC with C++26 support for native builds\n"
+                 "- GCC 16 or newer for native builds (Apple Clang can't build ReactX yet; check with g++-16 --version)\n"
                  "- Emscripten for WebAssembly web apps",
                  "# 1. Install dependencies via Homebrew:\n"
                  "brew install cmake ninja git gcc emscripten\n\n"
                  "# 2. Build the reactx CLI from source:\n"
                  "git clone https://github.com/sargisis/ReactX.git && cd ReactX\n"
-                 "cmake --preset release -DCMAKE_CXX_COMPILER=g++-14 && cmake --build --preset release\n"
+                 "cmake --preset release -DCMAKE_CXX_COMPILER=g++-16 && cmake --build --preset release\n"
                  "cmake --install build/release --prefix ~/.local     # ~/.local/bin/reactx"},
                 {"Install: Windows",
                  "On Windows, using WSL 2 (Windows Subsystem for Linux) is recommended for full C++26 and POSIX terminal compatibility:\n\n"
@@ -593,13 +593,13 @@ inline const std::vector<Page>& pagesEn() {
                  "- Proxy: reactx dev --proxy is verified with end-to-end integration tests against real backends and fuzzing; a DoS vulnerability was identified and fixed.",
                  ""},
                 {"Current limitations",
-                 "Current gaps to keep in mind when designing your application:\n\n"
-                 "- Custom request headers: custom headers like Authorization: Bearer <token> cannot be sent yet. This is the main limitation for JWT APIs. Cookie-based authentication works out of the box (the browser sends cookies automatically to the same origin).\n"
-                 "- Response headers: response headers (such as Location or pagination headers) cannot be inspected.\n"
-                 "- Cancellation and timeouts: AbortController and custom request timeouts are not yet supported.\n"
-                 "- WebSockets / Streaming (SSE): streaming responses are not supported; real-time updates require polling via useInterval.\n"
-                 "- Terminal applications: console apps support http:// only (no HTTPS).\n"
-                 "- Dev proxy: reactx dev --proxy is for local development only. In production, API and static files should be served by Flask, Nginx, or a production web server.",
+                 "What is still missing, as of this release:\n\n"
+                 "- Terminal apps speak http:// only (no HTTPS); in the browser fetch is the browser's own, so HTTPS works.\n"
+                 "- Server-Sent Events (SSE) aren't wrapped; use useWebSocket for live data, or useInterval to poll.\n"
+                 "- The dev proxy (reactx dev --proxy) and HttpServer are for development: in production let Flask, nginx or "
+                 "another production server serve the API and the files.\n\n"
+                 "Already there (they used to be gaps): request headers (Authorization: Bearer ...), response headers "
+                 "(r.header(\"etag\")), a timeout and cancel() — see «Data: fetch and JSON»; WebSockets — useWebSocket.",
                  ""},
             },
         },

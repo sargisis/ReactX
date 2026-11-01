@@ -158,7 +158,10 @@ inline const std::vector<Page>& pages() {
                  "    app.run(h(App));\n#endif\n}"},
                 {"reactx build", "Сборка для публикации: build/web/dist — обычные файлы для любого статического хостинга "
                                  "(404.html уже лежит рядом с index.html для маршрутов). Для терминального проекта — "
-                                 "build/native/<имя>.", "reactx build"},
+                                 "build/native/<имя>. Веб-сборка ещё печатает размер .wasm и его самые большие части "
+                                 "и называет код, который тянет std::format (~100 КБ).",
+                 "reactx build\n# index.wasm: 122 KB (the page shows nothing until it is downloaded)\n"
+                 "#   biggest parts: src/app.cpp 23%, ReactX reconciler.cpp 15%, the C++ library 12%, ..."},
                 {"Зависимости", "reactx add записывает git-репозиторий в reactx.json; CMake проекта подключает его через "
                                 "FetchContent, а --target сразу связывает библиотеку с приложением.",
                  "reactx add fmt https://github.com/fmtlib/fmt.git --rev 11.0.2 --target fmt::fmt\nreactx remove fmt"},
@@ -276,7 +279,8 @@ inline const std::vector<Page>& pages() {
             "hooks", "Хуки", "useState, useEffect, useReducer, useStore, useMemo, таймеры, клавиши, хранилище.",
             {
                 {"useState", "Возвращает значение и setter. Setter принимает новое значение или функцию от старого. "
-                             "Равное значение не вызывает перерисовку.",
+                             "Равное значение не вызывает перерисовку. Подходит любой тип, и std::vector своих структур тоже: "
+                             "если есть == (свой или у всех частей), равное значение пропускается, если нет — каждый set перерисовывает.",
                  "auto [name, setName] = useState(std::string{});\nsetName(\"Аня\");\nsetCount([](int c) { return c + 1; });"},
                 {"useEffect", "Запускается после отрисовки. deps(...) — когда перезапускать; deps() — один раз. "
                               "Может вернуть функцию очистки.",
@@ -405,7 +409,8 @@ inline const std::vector<Page>& pages() {
             "browser", "Браузер", "WebAssembly, DOM, CSS.",
             {
                 {"mountDom", "Монтирует приложение в <div id=\"app\"> страницы (заменяя то, что там было: текст загрузки, пререндер) "
-                             "и живёт после main().",
+                             "и живёт после main(). Повторный mountDom в тот же контейнер сначала размонтирует старое приложение "
+                             "(его таймеры и сокеты останавливаются).",
                  "int main() { mountDom(h(App)); }"},
                 {"Пререндер", "Перечислите маршруты в reactx.json — и страница видна до загрузки .wasm: reactx build запускает ту же "
                               "программу под Node, где mountDom пишет HTML каждого маршрута (renderToString) в dist/index.html, "
@@ -455,9 +460,12 @@ inline const std::vector<Page>& pages() {
             "ui", "Компоненты rx::ui", "Готовые кнопки, поля, списки выбора, окна, уведомления, подсказки и списки с темой.",
             {
                 {"Компоненты", "button, input, checkbox, select, tabs, modal, confirm, list и listItem, tooltip, card, stack и text. "
-                               "Один и тот же код работает в терминале и в браузере. Свойства — назначенные инициализаторы C++20.",
+                               "Один и тот же код работает в терминале и в браузере. Свойства — назначенные инициализаторы C++20. "
+                               "В формах .labelAbove = true ставит подпись поля или списка на отдельную строку, и поля выравниваются; "
+                               ".onChange у checkbox получает новое состояние.",
                  "ui::button({.label = \"Сохранить\", .onClick = save, .variant = ui::Variant::Primary})\n"
-                 "ui::input({.value = name, .onChange = setNameFn, .onSubmit = addFn, .label = \"Имя\"})\n"
+                 "ui::input({.value = name, .onChange = setNameFn, .onSubmit = addFn, .label = \"Имя\", .labelAbove = true})\n"
+                 "ui::checkbox({.label = \"Согласен\", .checked = on, .onChange = [setOn](bool v) { setOn(v); }})\n"
                  "ui::modal({.title = \"Удалить?\", .open = asking, .onClose = closeFn, .children = {...}})"},
                 {"Длинные списки", "ui::useVirtualList рисует только строки на экране: 100 000 строк стоят как 40, в обоих бэкендах. "
                                    "Строки first..last рисуете сами и отдаёте в view(). follow держит конец на виду, пока "
@@ -559,7 +567,8 @@ inline const std::vector<Page>& pages() {
         {
             "server", "Сервер на C++", "rx::net::HttpServer, reactx_serve, api_server.",
             {
-                {"HttpServer", "HTTP/1.1 на POSIX-сокетах: файлы сайта, маршруты с параметрами, SPA-режим.",
+                {"HttpServer", "HTTP/1.1 на POSIX-сокетах: файлы сайта, маршруты с параметрами, SPA-режим. server.onFile(fn) "
+                               "меняет каждый файл (тело или заголовки) перед отправкой: заголовки кэша, вставленный скрипт.",
                  "rx::net::HttpServer server(\"127.0.0.1\", 8090);\n"
                  "server.get(\"/api/hello/:name\", [](const rx::net::Request& req) {\n"
                  "    return rx::net::Response::json(json::object({{\"hello\", req.pathParam(\"name\")}}).dump());\n"

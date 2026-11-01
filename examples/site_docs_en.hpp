@@ -142,7 +142,10 @@ inline const std::vector<Page>& pagesEn() {
                  "int main() {\n#ifdef __EMSCRIPTEN__\n    mountDom(h(App));\n#else\n    TerminalApp app;   // reactx/terminal.hpp\n"
                  "    app.run(h(App));\n#endif\n}"},
                 {"reactx build", "Builds for publishing: build/web/dist holds plain files for any static host "
-                                 "(GitHub Pages, Netlify, nginx). A terminal app goes to build/native/<name>.", "reactx build"},
+                                 "(GitHub Pages, Netlify, nginx). A terminal app goes to build/native/<name>. A web build also prints the "
+                                 "size of the .wasm and its biggest parts, and names code that pulls in std::format (~100 KB).",
+                 "reactx build\n# index.wasm: 122 KB (the page shows nothing until it is downloaded)\n"
+                 "#   biggest parts: src/app.cpp 23%, ReactX reconciler.cpp 15%, the C++ library 12%, ..."},
                 {"Libraries", "reactx add records a git repository in reactx.json; CMake fetches it on the next build, "
                               "and --target links it to your app.",
                  "reactx add fmt https://github.com/fmtlib/fmt.git --rev 11.0.2 --target fmt::fmt\nreactx remove fmt"},
@@ -243,7 +246,8 @@ inline const std::vector<Page>& pagesEn() {
             "hooks", "Hooks", "State, effects, timers, keyboard shortcuts, shared stores.",
             {
                 {"useState", "A value that survives re-renders. The setter takes a new value or a function of the old one; "
-                             "setting the same value does nothing.",
+                             "setting the same value does nothing. Any type works, a std::vector of your own structs too: "
+                             "with == (its own, or of all its parts) an equal value is skipped, without it every set re-renders.",
                  "auto [name, setName] = useState(std::string{});\nsetName(\"Ann\");\nsetCount([](int c) { return c + 1; });"},
                 {"useEffect", "Runs after the screen updates. deps(...) says when to run it again; deps() means once. "
                               "Return a function to clean up.",
@@ -354,7 +358,8 @@ inline const std::vector<Page>& pagesEn() {
         {
             "browser", "Browser apps", "WebAssembly, the DOM and CSS.",
             {
-                {"mountDom", "Puts your app into <div id=\"app\"> of the page, replacing what it showed (a loading text, prerendered HTML).",
+                {"mountDom", "Puts your app into <div id=\"app\"> of the page, replacing what it showed (a loading text, prerendered HTML). "
+                             "Mounting again into the same container unmounts the old app first (its timers and sockets stop).",
                  "int main() { mountDom(h(App)); }"},
                 {"Prerender", "List routes in reactx.json and the page shows before the .wasm arrives: reactx build runs the same "
                               "program under Node, where mountDom writes each route's HTML (renderToString) into dist/index.html, "
@@ -404,9 +409,12 @@ inline const std::vector<Page>& pagesEn() {
             "ui", "Ready components (rx::ui)", "Buttons, inputs, selects, dialogs, toasts, tooltips and lists with a theme.",
             {
                 {"Components", "button, input, checkbox, select, tabs, modal, confirm, list and listItem, tooltip, card, stack "
-                               "and text. The same code works in the terminal and in the browser.",
+                               "and text. The same code works in the terminal and in the browser. In forms, .labelAbove = true "
+                               "puts the label of an input or select on its own line, so the fields line up; a checkbox's "
+                               ".onChange gets the new state.",
                  "ui::button({.label = \"Save\", .onClick = save, .variant = ui::Variant::Primary})\n"
-                 "ui::input({.value = name, .onChange = setNameFn, .onSubmit = addFn, .label = \"Name\"})\n"
+                 "ui::input({.value = name, .onChange = setNameFn, .onSubmit = addFn, .label = \"Name\", .labelAbove = true})\n"
+                 "ui::checkbox({.label = \"Agree\", .checked = on, .onChange = [setOn](bool v) { setOn(v); }})\n"
                  "ui::modal({.title = \"Delete?\", .open = asking, .onClose = closeFn, .children = {...}})"},
                 {"Long lists", "ui::useVirtualList draws only the rows on screen: 100,000 rows cost what 40 do, in both backends. "
                                "Draw rows first..last yourself and pass them to view(). follow keeps the end in view while "
@@ -507,7 +515,8 @@ inline const std::vector<Page>& pagesEn() {
         {
             "server", "C++ server", "A small HTTP server for development and your own APIs.",
             {
-                {"HttpServer", "Serves your site's files and your own routes, with parameters.",
+                {"HttpServer", "Serves your site's files and your own routes, with parameters. server.onFile(fn) can change "
+                               "each file (body or headers) before it is sent: caching headers, an injected script.",
                  "rx::net::HttpServer server(\"127.0.0.1\", 8090);\n"
                  "server.get(\"/api/hello/:name\", [](const rx::net::Request& req) {\n"
                  "    return rx::net::Response::json(json::object({{\"hello\", req.pathParam(\"name\")}}).dump());\n"

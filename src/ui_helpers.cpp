@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "reactx/hooks.hpp"
+#include "reactx/parse.hpp"
 #include "reactx/ui.hpp"
 
 namespace rx::ui {
@@ -61,7 +62,8 @@ Element input(InputProps p) {
                              {"onSubmit", std::move(p.onSubmit)},
                              {"placeholder", std::move(p.placeholder)},
                              {"label", std::move(p.label)},
-                             {"labelAbove", p.labelAbove}}),
+                             {"labelAbove", p.labelAbove},
+                             {"error", std::move(p.error)}}),
                    p.key);
 }
 
@@ -72,7 +74,8 @@ Element checkbox(CheckboxProps p) {
             if (toggle) toggle();
             onChange(next);
         };
-    return withKey(h(Checkbox, {{"label", std::move(p.label)}, {"checked", p.checked}, {"onToggle", std::move(toggle)}}),
+    return withKey(h(Checkbox, {{"label", std::move(p.label)}, {"checked", p.checked}, {"onToggle", std::move(toggle)},
+                                {"error", std::move(p.error)}}),
                    p.key);
 }
 
@@ -124,15 +127,63 @@ Element stack(StackProps p) {
                    p.key);
 }
 
-Element select(SelectProps p) {
+namespace {
+std::vector<Element> optionElements(std::vector<Option>& list) {
     std::vector<Element> options;
-    for (auto& o : p.options) {
+    for (auto& o : list) {
         std::string label = o.label.empty() ? o.value : o.label;
         options.push_back(h("ui-option", {{"key", o.value}, {"value", std::move(o.value)}, {"label", std::move(label)}}));
     }
+    return options;
+}
+}  // namespace
+
+Element select(SelectProps p) {
+    auto options = optionElements(p.options);
     return withKey(h(Select, {{"label", std::move(p.label)}, {"value", std::move(p.value)}, {"onChange", std::move(p.onChange)},
-                              {"labelAbove", p.labelAbove}},
+                              {"labelAbove", p.labelAbove}, {"error", std::move(p.error)}},
                      std::move(options)),
+                   p.key);
+}
+
+Element textarea(TextareaProps p) {
+    return withKey(h(Textarea, {{"value", std::move(p.value)},
+                                {"onChange", std::move(p.onChange)},
+                                {"placeholder", std::move(p.placeholder)},
+                                {"label", std::move(p.label)},
+                                {"rows", std::max(p.rows, 1)},
+                                {"error", std::move(p.error)}}),
+                   p.key);
+}
+
+Element radioGroup(RadioGroupProps p) {
+    auto options = optionElements(p.options);
+    return withKey(h(RadioGroup, {{"label", std::move(p.label)}, {"value", std::move(p.value)}, {"onChange", std::move(p.onChange)},
+                                  {"row", p.row}, {"error", std::move(p.error)}},
+                     std::move(options)),
+                   p.key);
+}
+
+Element slider(SliderProps p) {
+    int lo = std::min(p.min, p.max), hi = std::max(p.min, p.max);
+    // The props of a component hold std::function<void(int)> as an index handler.
+    std::function<void(int)> onChange = std::move(p.onChange);
+    return withKey(h(Slider, {{"label", std::move(p.label)},
+                              {"value", std::clamp(p.value, lo, hi)},
+                              {"min", lo},
+                              {"max", hi},
+                              {"step", std::max(p.step, 1)},
+                              {"onChange", InputHandler([onChange](const std::string& text) {
+                                   if (auto n = parseNumber<int>(text); n && onChange) onChange(*n);
+                               })},
+                              {"showValue", p.showValue}}),
+                   p.key);
+}
+
+Element progress(ProgressProps p) {
+    int max = std::max(p.max, 1);
+    return withKey(h(Progress, {{"value", std::clamp(p.value, 0, max)}, {"max", max}, {"label", std::move(p.label)},
+                                {"variant", variantName(p.variant)}}),
                    p.key);
 }
 

@@ -80,6 +80,7 @@
     #app .rx-btn { height: 40px; padding: 0 16px; font-weight: 600; }
     #app .rx-btn--primary { color: var(--on-accent); }
     #app .rx-input, #app .rx-select { background: var(--surface-2); color: var(--text); border-color: var(--border); }
+    #app .rx-input[aria-invalid="true"] { border-color: var(--rx-danger); }
     .mono { font-family: var(--mono); }
 
     /* ---- header ---- */
@@ -201,7 +202,7 @@
     .live { border: 1px solid var(--border); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); padding: 8px 20px 20px; }
     @media (max-width: 560px) { .live { padding: 4px 12px 14px; } .live-pane { min-height: 0; } }
     .live-pane { display: flex; flex-direction: column; gap: 12px; min-height: 380px; }
-    .live-form { max-width: 420px; }
+    .live-form { max-width: 460px; gap: 16px; }
     .live-form .rx-btn, .live-dialog .rx-btn { align-self: flex-start; }
     .live-dialog { justify-content: center; align-items: flex-start; }
     .live-note { margin: 0; color: var(--muted); font-size: 14px; }

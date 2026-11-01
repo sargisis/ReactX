@@ -94,6 +94,32 @@ Element WebTable(const Props&) {
                       .onSort = [setDesc, desc](int) { setDesc(!desc); }});
 }
 
+struct Feedback {
+    std::string text;
+    std::string mood = "ok";
+    int stars = 3;
+    bool operator==(const Feedback&) const = default;
+};
+Feedback sentFeedback;
+
+Element WebForm(const Props&) {
+    auto form = ui::useForm<Feedback>({.validate = [](const Feedback& f) {
+                                           ui::FormErrors e;
+                                           if (f.text.size() < 3) e["text"] = "Write a little more";
+                                           return e;
+                                       },
+                                       .onSubmit = [](const Feedback& f) { sentFeedback = f; }});
+    return h("div", {}, {
+        ui::textarea({.value = form.values.text, .onChange = form.set("text", &Feedback::text), .label = "Feedback", .rows = 3,
+                      .error = form.error("text")}),
+        ui::radioGroup({.label = "Mood", .value = form.values.mood, .options = {{"ok", "Fine"}, {"bad", "Bad"}},
+                        .onChange = form.set("mood", &Feedback::mood)}),
+        ui::slider({.label = "Stars", .value = form.values.stars, .min = 1, .max = 5, .onChange = form.set("stars", &Feedback::stars)}),
+        ui::progress({.value = form.values.stars, .max = 5, .label = "Rating"}),
+        ui::button({.label = "Send", .onClick = form.submit}),
+    });
+}
+
 Element Atoms(const Props&) {
     auto [size, setSize] = useState(std::string("m"));
     auto [asking, setAsking] = useState(true);
@@ -256,6 +282,22 @@ int main() {
     js("rxTest.keyClass('rx-table__row', 'Enter', 0)");
     CHECK(pickedRow == "bolt");
     CHECK(has("class=\"rx-table__row rx-table__row--click\" role=\"row\" tabindex=\"0\""));
+
+    std::cout << "forms: textarea, radios, slider, progress, errors\n";
+    mountDom(h(WebForm));
+    CHECK(has("<textarea class=\"rx-input rx-textarea\" placeholder rows=\"3\"></textarea>"));
+    CHECK(has("<fieldset class=\"rx-radios\"><legend>Mood</legend>"));
+    CHECK(has("type=\"range\"") && has("<span class=\"rx-slider__value\">3</span>"));
+    CHECK(has("aria-valuenow=\"3\"") && has("style=\"width: 60%\""));
+    CHECK(!has("rx-field__error"));
+    js("rxTest.clickText('Send')");
+    CHECK(has("<span class=\"rx-field__error\" role=\"alert\">Write a little more</span>"));
+    CHECK(has("aria-invalid=\"true\""));
+    js("rxTest.typeClass('rx-textarea', 'Lovely')");
+    CHECK(!has("rx-field__error"));
+    js("rxTest.toggleIn('rx-radio', 1)");  // the second radio
+    js("rxTest.clickText('Send')");
+    CHECK((sentFeedback == Feedback{.text = "Lovely", .mood = "bad", .stars = 3}));
 
     std::cout << (failures ? "FAILED: " + std::to_string(failures) : std::string("OK, all tests passed")) << '\n';
     return failures ? 1 : 0;

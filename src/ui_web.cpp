@@ -40,7 +40,24 @@ constexpr const char* kCss = R"css(
 .rx-btn--danger:hover:not(:disabled) { border-color: var(--rx-danger); }
 .rx-btn:disabled { opacity: .45; cursor: not-allowed; }
 
-.rx-field { display: flex; align-items: center; gap: 8px; }
+.rx-field { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.rx-field__error { flex-basis: 100%; margin: 0; color: var(--rx-danger); font-size: .85em; }
+.rx-input[aria-invalid="true"] { border-color: var(--rx-danger); }
+.rx-textarea { resize: vertical; line-height: 1.45; }
+.rx-radios { border: 0; margin: 0; padding: 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.rx-radios--row { flex-direction: row; flex-wrap: wrap; gap: 6px 18px; }
+.rx-radios > legend { padding: 0; margin-bottom: 4px; color: var(--rx-muted); }
+.rx-radios--row > legend { flex-basis: 100%; }
+.rx-radio { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.rx-radio input { width: 18px; height: 18px; margin: 0; accent-color: var(--rx-accent); }
+.rx-slider input { flex: 1; min-width: 8em; accent-color: var(--rx-accent); }
+.rx-slider__value { min-width: 3ch; text-align: right; font-variant-numeric: tabular-nums; }
+.rx-progress { display: flex; flex-direction: column; gap: 6px; }
+.rx-progress__head { display: flex; justify-content: space-between; gap: 12px; color: var(--rx-muted); font-size: .9em; }
+.rx-progress__track { height: 8px; border-radius: 999px; background: var(--rx-hover); overflow: hidden; }
+.rx-progress__bar { height: 100%; border-radius: inherit; background: var(--rx-accent); transition: width .25s ease; }
+.rx-progress--success .rx-progress__bar { background: var(--rx-success); }
+.rx-progress--danger .rx-progress__bar { background: var(--rx-danger); }
 .rx-field__label { color: var(--rx-muted); white-space: nowrap; }
 .rx-stack--row > .rx-field--input { flex: 1 1 10em; min-width: 0; }
 .rx-field--above { flex-direction: column; align-items: stretch; gap: 4px; }
@@ -162,6 +179,16 @@ void ensureStyles() {
     }
 }
 
+// A field with an error is marked for screen readers and drawn red; the message goes under it.
+rx::Element invalid(rx::Element field, const rx::Props& p) {
+    if (!p.get<std::string>("error").empty()) field.props.set("aria-invalid", "true");
+    return field;
+}
+void addError(std::vector<rx::Element>& parts, const rx::Props& p) {
+    std::string error = p.get<std::string>("error");
+    if (!error.empty()) parts.push_back(rx::h("span", {{"className", "rx-field__error"}, {"role", "alert"}}, {error}));
+}
+
 // Terminal color names (used by ui::Theme) as CSS colors. Hex and other CSS
 // values pass through; "white" and "" mean "keep the page default".
 std::string cssColor(const std::string& name) {
@@ -224,7 +251,7 @@ Element Input(const Props& p) {
 
     std::vector<Element> parts;
     if (!label.empty()) parts.push_back(h("span", {{"className", "rx-field__label"}}, {label}));
-    parts.push_back(h("input", {
+    parts.push_back(invalid(h("input", {
         {"className", "rx-input"},
         {"type", "text"},
         {"value", value},
@@ -234,17 +261,22 @@ Element Input(const Props& p) {
              if (e.key == "Enter" && onSubmit) onSubmit(value);
              if (e.key == "Escape" && onChange && !value.empty()) onChange(std::string{});
          }},
-    }));
+    }), p));
+    addError(parts, p);
     return h("label", {{"className", p.get<bool>("labelAbove") ? "rx-field rx-field--input rx-field--above" : "rx-field rx-field--input"}},
              std::move(parts));
 }
 
 Element Checkbox(const Props& p) {
     ensureStyles();
-    return h("label", {{"className", "rx-check"}}, {
-        h("input", {{"type", "checkbox"}, {"checked", p.get<bool>("checked")}, {"onChange", p.get<Callback>("onToggle")}}),
+    Element box = h("label", {{"className", "rx-check"}}, {
+        invalid(h("input", {{"type", "checkbox"}, {"checked", p.get<bool>("checked")}, {"onChange", p.get<Callback>("onToggle")}}), p),
         h("span", {}, {p.get<std::string>("label")}),
     });
+    if (p.get<std::string>("error").empty()) return box;
+    std::vector<Element> parts{std::move(box)};
+    addError(parts, p);
+    return h("div", {{"className", "rx-field rx-field--above"}}, std::move(parts));
 }
 
 Element Tabs(const Props& p) {
@@ -371,11 +403,79 @@ Element Select(const Props& p) {
     }
     std::vector<Element> parts;
     if (!label.empty()) parts.push_back(h("span", {{"className", "rx-field__label"}}, {label}));
-    parts.push_back(h("select", {{"className", "rx-input rx-select"},
-                                 {"value", p.get<std::string>("value")},
-                                 {"onChange", p.get<InputHandler>("onChange")}},
-                      std::move(options)));
+    parts.push_back(invalid(h("select", {{"className", "rx-input rx-select"},
+                                         {"value", p.get<std::string>("value")},
+                                         {"onChange", p.get<InputHandler>("onChange")}},
+                              std::move(options)), p));
+    addError(parts, p);
     return h("label", {{"className", p.get<bool>("labelAbove") ? "rx-field rx-field--above" : "rx-field"}}, std::move(parts));
+}
+
+Element Textarea(const Props& p) {
+    ensureStyles();
+    std::string label = p.get<std::string>("label");
+    std::vector<Element> parts;
+    if (!label.empty()) parts.push_back(h("span", {{"className", "rx-field__label"}}, {label}));
+    parts.push_back(invalid(h("textarea", {{"className", "rx-input rx-textarea"},
+                                           {"rows", p.get<int>("rows", 4)},
+                                           {"value", p.get<std::string>("value")},
+                                           {"placeholder", p.get<std::string>("placeholder")},
+                                           {"onInput", p.get<InputHandler>("onChange")}}),
+                            p));
+    addError(parts, p);
+    return h("label", {{"className", "rx-field rx-field--input rx-field--above"}}, std::move(parts));
+}
+
+Element RadioGroup(const Props& p) {
+    ensureStyles();
+    std::string name = "rx-radio-" + useId();  // one group: arrows move inside it
+    std::string value = p.get<std::string>("value");
+    auto onChange = p.get<InputHandler>("onChange");
+    std::string label = p.get<std::string>("label");
+    std::vector<Element> parts;
+    if (!label.empty()) parts.push_back(h("legend", {}, {label}));
+    for (const Element& o : p.children()) {
+        std::string v = o.props.get<std::string>("value");
+        parts.push_back(h("label", {{"key", v}, {"className", "rx-radio"}}, {
+            h("input", {{"type", "radio"}, {"name", name}, {"value", v}, {"checked", v == value},
+                        {"onChange", Callback([onChange, v] { if (onChange) onChange(v); })}}),
+            h("span", {}, {o.props.get<std::string>("label")}),
+        }));
+    }
+    addError(parts, p);
+    Element group = h("fieldset", {{"className", p.get<bool>("row") ? "rx-radios rx-radios--row" : "rx-radios"}}, std::move(parts));
+    if (!p.get<std::string>("error").empty()) group.props.set("aria-invalid", "true");
+    return group;
+}
+
+Element Slider(const Props& p) {
+    ensureStyles();
+    std::string label = p.get<std::string>("label");
+    int value = p.get<int>("value");
+    std::vector<Element> parts;
+    if (!label.empty()) parts.push_back(h("span", {{"className", "rx-field__label"}}, {label}));
+    parts.push_back(h("input", {{"type", "range"},
+                                {"min", p.get<int>("min")},
+                                {"max", p.get<int>("max", 100)},
+                                {"step", p.get<int>("step", 1)},
+                                {"value", value},
+                                {"aria-label", label},
+                                {"onInput", p.get<InputHandler>("onChange")}}));
+    if (p.get<bool>("showValue", true)) parts.push_back(h("span", {{"className", "rx-slider__value"}}, {std::to_string(value)}));
+    return h("label", {{"className", "rx-field rx-slider"}}, std::move(parts));
+}
+
+Element Progress(const Props& p) {
+    ensureStyles();
+    int value = p.get<int>("value"), max = std::max(p.get<int>("max", 100), 1);
+    int percent = value * 100 / max;
+    std::string label = p.get<std::string>("label");
+    return h("div", {{"className", "rx-progress rx-progress--" + p.get<std::string>("variant", "primary")}}, {
+        h("div", {{"className", "rx-progress__head"}}, {h("span", {}, {label}), h("span", {}, {std::to_string(percent) + "%"})}),
+        h("div", {{"className", "rx-progress__track"}, {"role", "progressbar"}, {"aria-label", label.empty() ? std::string("Progress") : label},
+                  {"aria-valuemin", "0"}, {"aria-valuemax", std::to_string(max)}, {"aria-valuenow", std::to_string(value)}},
+          {h("div", {{"className", "rx-progress__bar"}, {"style", "width: " + std::to_string(percent) + "%"}})}),
+    });
 }
 
 Element Tooltip(const Props& p) {

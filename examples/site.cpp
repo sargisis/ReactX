@@ -476,29 +476,46 @@ Element TableDemo(const Props&) {
     });
 }
 
+struct Order {
+    std::string name;
+    std::string size = "m";
+    int count = 1;
+    std::string note;
+    bool gift = false;
+    bool operator==(const Order&) const = default;
+};
+
+// ui::useForm with every kind of field; errors show after a field changed or a submit.
 Element FormDemo(const Props&) {
     bool en = useEnglish();
-    auto [name, setName] = useState(std::string{});
-    auto [size, setSize] = useState(std::string("m"));
-    auto [gift, setGift] = useState(false);
-    auto order = [en, name, size, gift] {
-        if (name.empty()) {
-            ui::toast({.text = tr(en, "Type a name first", "Сначала введите имя"), .variant = ui::Variant::Danger});
-            return;
-        }
-        ui::toast({.text = tr(en, "Ordered for ", "Заказ для ") + name + " · " + size + (gift ? tr(en, " · gift", " · подарок") : ""),
-                   .variant = ui::Variant::Success});
-    };
+    auto form = ui::useForm<Order>({.validate = [en](const Order& o) {
+                                        ui::FormErrors e;
+                                        if (o.name.size() < 2) e["name"] = tr(en, "At least two letters", "Хотя бы две буквы");
+                                        if (o.note.size() > 80) e["note"] = tr(en, "80 characters at most", "Не больше 80 символов");
+                                        return e;
+                                    },
+                                    .onSubmit = [en](const Order& o) {
+                                        ui::toast({.text = tr(en, "Ordered: ", "Заказ: ") + std::to_string(o.count) + " × " + o.size +
+                                                           tr(en, " for ", " для ") + o.name + (o.gift ? " 🎁" : ""),
+                                                   .variant = ui::Variant::Success});
+                                    }});
+    const Order& o = form.values;
+    int filled = (o.name.size() >= 2) + (!o.note.empty()) + 1;  // size and count always have a value
     return h("div", {{"className", "live-pane live-form"}}, {
-        ui::input({.value = name, .onChange = [setName](const std::string& t) { setName(t); },
-                   .onSubmit = [order](const std::string&) { order(); },
-                   .placeholder = "Ada Lovelace", .label = tr(en, "Name", "Имя"), .labelAbove = true}),
-        ui::select({.label = tr(en, "Size", "Размер"), .value = size,
-                    .options = {{"s", "S"}, {"m", "M"}, {"l", "L"}},
-                    .onChange = [setSize](const std::string& v) { setSize(v); }, .labelAbove = true}),
-        ui::checkbox({.label = tr(en, "Gift wrap", "Подарочная упаковка"), .checked = gift,
-                      .onChange = [setGift](bool on) { setGift(on); }}),
-        ui::button({.label = tr(en, "Order", "Заказать"), .onClick = order, .variant = ui::Variant::Primary}),
+        ui::input({.value = o.name, .onChange = form.set("name", &Order::name), .onSubmit = [submit = form.submit](const std::string&) { submit(); },
+                   .placeholder = "Ada Lovelace", .label = tr(en, "Name", "Имя"), .labelAbove = true, .error = form.error("name")}),
+        ui::radioGroup({.label = tr(en, "Size", "Размер"), .value = o.size, .options = {{"s", "S"}, {"m", "M"}, {"l", "L"}, {"xl", "XL"}},
+                        .onChange = form.set("size", &Order::size), .row = true}),
+        ui::slider({.label = tr(en, "How many", "Сколько"), .value = o.count, .min = 1, .max = 10, .onChange = form.set("count", &Order::count)}),
+        ui::textarea({.value = o.note, .onChange = form.set("note", &Order::note), .placeholder = tr(en, "Anything else?", "Что-нибудь ещё?"),
+                      .label = tr(en, "Note", "Комментарий"), .rows = 2, .error = form.error("note")}),
+        ui::checkbox({.label = tr(en, "Gift wrap", "Подарочная упаковка"), .checked = o.gift, .onChange = form.set("gift", &Order::gift)}),
+        ui::progress({.value = filled, .max = 3, .label = tr(en, "Filled in", "Заполнено"),
+                      .variant = filled == 3 ? ui::Variant::Success : ui::Variant::Primary}),
+        ui::stack({.direction = ui::Direction::Row, .gap = 1, .children = {
+            ui::button({.label = tr(en, "Order", "Заказать"), .onClick = form.submit, .variant = ui::Variant::Primary}),
+            ui::button({.label = tr(en, "Clear", "Очистить"), .onClick = form.reset}),
+        }}),
     });
 }
 
@@ -527,7 +544,7 @@ Element LiveDemos(const Props&) {
     bool en = useEnglish();
     return h("div", {{"className", "live"}}, {
         ui::tabs({.tabs = {{tr(en, "Table · 100,000 rows", "Таблица · 100 000 строк"), {h(TableDemo)}},
-                           {tr(en, "Form", "Форма"), {h(FormDemo)}},
+                           {tr(en, "Form · useForm", "Форма · useForm"), {h(FormDemo)}},
                            {tr(en, "Dialog and toast", "Диалог и уведомление"), {h(DialogDemo)}}}}),
     });
 }

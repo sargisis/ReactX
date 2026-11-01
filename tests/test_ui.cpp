@@ -267,6 +267,93 @@ TEST(table_with_a_virtual_list_draws_only_rows_on_screen) {
     CHECK(!contains(s.text(), "row 0 ") && contains(s.text(), "Double"));  // the header stays
 }
 
+struct Signup {
+    std::string name;
+    std::string plan = "free";
+    int seats = 1;
+    bool agree = false;
+    bool operator==(const Signup&) const = default;
+};
+
+Signup sent;
+int sends = 0;
+
+Element SignupForm(const Props&) {
+    auto form = ui::useForm<Signup>({.validate = [](const Signup& s) {
+                                         ui::FormErrors e;
+                                         if (s.name.empty()) e["name"] = "Required";
+                                         if (!s.agree) e["agree"] = "Please agree";
+                                         return e;
+                                     },
+                                     .onSubmit = [](const Signup& s) { sent = s; ++sends; }});
+    return h("box", {}, {
+        ui::input({.value = form.values.name, .onChange = form.set("name", &Signup::name), .label = "Name",
+                   .error = form.error("name")}),
+        ui::radioGroup({.label = "Plan", .value = form.values.plan, .options = {{"free", "Free"}, {"pro", "Pro"}},
+                        .onChange = form.set("plan", &Signup::plan), .row = true}),
+        ui::slider({.label = "Seats", .value = form.values.seats, .min = 1, .max = 10, .onChange = form.set("seats", &Signup::seats)}),
+        ui::checkbox({.label = "Agree", .checked = form.values.agree, .onChange = form.set("agree", &Signup::agree),
+                      .error = form.error("agree")}),
+        ui::progress({.value = form.values.seats, .max = 10, .label = "Used"}),
+        ui::button({.label = "Send", .onClick = form.submit}),
+    });
+}
+
+TEST(form_shows_errors_after_submit_and_sends_valid_values) {
+    sends = 0;
+    Screen s(h(SignupForm), 50, 16);
+    CHECK(!contains(s.text(), "Required"));  // nothing touched, nothing tried: no errors yet
+    CHECK(contains(s.text(), "(•) Free") && contains(s.text(), "( ) Pro"));
+    CHECK(contains(s.text(), "Used") && contains(s.text(), "10%"));
+    // Focus order: name, Free, Pro, slider, agree, send.
+    for (int i = 0; i < 5; ++i) s.press("Tab");
+    s.press("Enter");  // Send with errors
+    CHECK(sends == 0 && contains(s.text(), "✗ Required") && contains(s.text(), "✗ Please agree"));
+    s.press("Tab");    // back to the name
+    s.type("Ann");
+    CHECK(!contains(s.text(), "Required") && contains(s.text(), "Please agree"));
+    s.press("Tab");    // Free
+    s.press("Tab");    // Pro
+    s.press("Enter");
+    CHECK(contains(s.text(), "(•) Pro"));
+    s.press("Tab");    // the slider
+    s.press("Right");
+    s.press("Right");
+    CHECK(contains(s.text(), "30%"));
+    s.press("Tab");    // agree
+    s.press("Enter");
+    s.press("Tab");    // Send
+    s.press("Enter");
+    CHECK((sends == 1 && sent == Signup{.name = "Ann", .plan = "pro", .seats = 3, .agree = true}));
+}
+
+TEST(form_reset_and_error_only_after_touch) {
+    ui::Form<Signup> captured;  // what the component's useForm returned last
+    static ui::Form<Signup>* out = nullptr;
+    out = &captured;
+    struct Holder {
+        static Element Render(const Props&) {
+            *out = ui::useForm<Signup>({.initial = {.name = "x"}, .validate = [](const Signup& v) {
+                                            ui::FormErrors e;
+                                            if (v.name.size() < 2) e["name"] = "Too short";
+                                            return e;
+                                        }});
+            return h("text", {}, {out->values.name});
+        }
+    };
+    Screen s(h(Holder::Render), 20, 3);
+    CHECK(!captured.valid() && captured.error("name").empty());  // invalid, but not touched yet
+    captured.set("name", &Signup::name)(std::string("y"));
+    s.root.flush();
+    CHECK(captured.error("name") == "Too short" && contains(s.text(), "y"));
+    captured.set("name", &Signup::name)(std::string("yes"));
+    s.root.flush();
+    CHECK(captured.valid() && captured.error("name").empty());
+    captured.reset();
+    s.root.flush();
+    CHECK(captured.values.name == "x" && captured.error("name").empty());
+}
+
 struct BigLogProps {
     int count = 0;
     bool follow = false;

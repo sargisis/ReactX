@@ -10,12 +10,15 @@
 #include <chrono>
 #include <cstdint>
 #include <functional>
+#include <map>
+#include <set>
 #include <optional>
 #include <string>
 #include <vector>
 
 #include "reactx/context.hpp"
 #include "reactx/element.hpp"
+#include "reactx/hooks.hpp"
 #include "reactx/store.hpp"
 
 namespace rx::ui {
@@ -83,6 +86,10 @@ Element Select(const Props& props);
 Element Tooltip(const Props& props);
 Element Confirm(const Props& props);
 Element Toaster(const Props& props);
+Element Textarea(const Props& props);    // value, onChange, placeholder, label, rows, error
+Element RadioGroup(const Props& props);  // label, value, onChange, row, error, children: ui-option elements
+Element Slider(const Props& props);      // label, value, min, max, step, onChange (int), showValue
+Element Progress(const Props& props);    // value, max, label, variant
 
 // ---- typed helpers ----
 // Every field has a default, so you only name the ones you need (and GCC's
@@ -106,6 +113,7 @@ struct InputProps {
     std::string placeholder{};
     std::string label{};
     bool labelAbove = false;  // the label on its own line above the field: forms line up
+    std::string error{};      // shown under the field, which is marked invalid ("" = none)
     std::string key{};
 };
 Element input(InputProps props);
@@ -115,6 +123,7 @@ struct CheckboxProps {
     bool checked = false;
     Callback onToggle{};                     // the box was clicked
     std::function<void(bool)> onChange{};    // ... with the new state: [setOn](bool on) { setOn(on); }
+    std::string error{};                     // shown under the box ("You must agree")
     std::string key{};
 };
 Element checkbox(CheckboxProps props);
@@ -205,9 +214,151 @@ struct SelectProps {
     std::vector<Option> options{};
     InputHandler onChange{};  // gets the chosen option's value
     bool labelAbove = false;  // like ui::input
+    std::string error{};
     std::string key{};
 };
 Element select(SelectProps props);
+
+// ---- more form fields ----
+
+// Several lines of text. In a terminal it is one line for now (v0.17 brings
+// editing several lines there); Enter submits nothing, so a newline is typed.
+struct TextareaProps {
+    std::string value{};
+    InputHandler onChange{};
+    std::string placeholder{};
+    std::string label{};
+    int rows = 4;             // the height in lines
+    std::string error{};
+    std::string key{};
+};
+Element textarea(TextareaProps props);
+
+// One of a few options, all visible (a select shows only the chosen one):
+//   ui::radioGroup({.label = "Plan", .value = plan, .options = {{"free", "Free"}, {"pro", "Pro"}},
+//                   .onChange = [setPlan](const std::string& v) { setPlan(v); }})
+// Browser: native radio buttons (arrows move between them); terminal: (•) / ( ),
+// Up / Down or a click.
+struct RadioGroupProps {
+    std::string label{};
+    std::string value{};
+    std::vector<Option> options{};
+    InputHandler onChange{};
+    bool row = false;         // the options side by side
+    std::string error{};
+    std::string key{};
+};
+Element radioGroup(RadioGroupProps props);
+
+// A number picked by dragging (browser) or Left / Right (terminal).
+struct SliderProps {
+    std::string label{};
+    int value = 0;
+    int min = 0;
+    int max = 100;
+    int step = 1;
+    std::function<void(int)> onChange{};
+    bool showValue = true;    // the number next to it
+    std::string key{};
+};
+Element slider(SliderProps props);
+
+// How far something got: value of max (an upload, steps of a wizard).
+struct ProgressProps {
+    int value = 0;
+    int max = 100;
+    std::string label{};      // "Uploading" — the percentage is added
+    Variant variant = Variant::Primary;
+    std::string key{};
+};
+Element progress(ProgressProps props);
+
+// ---- forms ----
+// The values of a form in your own struct, checked by your function; each
+// field's error shows once the user left that field changed, or tried to submit.
+//   struct Signup { std::string name, email; bool agree = false; };
+//   auto form = ui::useForm<Signup>({.validate = [](const Signup& s) {
+//                                        ui::FormErrors e;
+//                                        if (s.name.empty()) e["name"] = "Required";
+//                                        if (!s.email.contains('@')) e["email"] = "Not an email";
+//                                        return e;
+//                                    },
+//                                    .onSubmit = [](const Signup& s) { send(s); }});
+//   ui::input({.value = form.values.name, .onChange = form.set("name", &Signup::name), .label = "Name",
+//              .error = form.error("name")})
+//   ui::button({.label = "Sign up", .onClick = form.submit})
+using FormErrors = std::map<std::string, std::string>;  // field name -> message
+
+template <class T>
+struct FormOptions {
+    T initial{};
+    std::function<FormErrors(const T&)> validate{};
+    std::function<void(const T&)> onSubmit{};  // called by submit() when there are no errors
+};
+
+template <class T>
+struct Form {
+    T values{};
+    FormErrors errors{};      // all of them, shown or not
+    bool submitted = false;   // submit() was tried: every error shows
+    Callback submit{};        // checks; calls onSubmit if valid
+    Callback reset{};         // back to `initial`, no errors shown
+    std::function<void(T)> setValues{};  // replace every value (loaded from a server)
+
+    bool valid() const { return errors.empty(); }
+    // The message to show for a field: after it was changed or a submit was tried.
+    std::string error(const std::string& name) const {
+        auto it = errors.find(name);
+        if (it == errors.end() || (!submitted && !touched_.contains(name))) return {};
+        return it->second;
+    }
+    // An onChange for a field: writes it and marks it changed.
+    template <class V>
+    std::function<void(const V&)> set(std::string name, V T::* field) const {
+        return [update = update_, name = std::move(name), field](const V& v) {
+            update([&](State& s) {
+                s.values.*field = v;
+                s.touched.insert(name);
+            });
+        };
+    }
+
+    // ---- inside ----
+    struct State {
+        T values{};
+        std::set<std::string> touched{};
+        bool submitted = false;
+    };
+    std::set<std::string> touched_{};
+    std::function<void(const std::function<void(State&)>&)> update_{};
+};
+
+template <class T>
+Form<T> useForm(FormOptions<T> options = {}) {
+    using State = typename Form<T>::State;
+    auto [state, setState] = useState(State{options.initial});
+    Form<T> form;
+    form.values = state.values;
+    form.errors = options.validate ? options.validate(state.values) : FormErrors{};
+    form.submitted = state.submitted;
+    form.touched_ = state.touched;
+    form.update_ = [setState](const std::function<void(State&)>& change) {
+        setState([&change](State s) {
+            change(s);
+            return s;
+        });
+    };
+    form.submit = [setState, values = state.values, validate = options.validate, onSubmit = options.onSubmit] {
+        setState([](State s) {
+            s.submitted = true;
+            return s;
+        });
+        if ((!validate || validate(values).empty()) && onSubmit) onSubmit(values);
+    };
+    form.reset = [setState, initial = options.initial] { setState(State{initial}); };
+    form.setValues = [setState](T values) { setState(State{std::move(values)}); };
+    return form;
+}
 
 struct TooltipProps {
     std::string text{};

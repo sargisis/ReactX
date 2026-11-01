@@ -33,6 +33,15 @@ Element Button(const Props& p) {
              {label});
 }
 
+namespace {
+// The field and, if there is an error, the message under it in the danger color.
+Element withError(Element field, const Props& p, const Theme& t) {
+    std::string error = p.get<std::string>("error");
+    if (error.empty()) return field;
+    return h("box", {{"growInRow", 1}}, {std::move(field), h("text", {{"color", t.danger}}, {"✗ " + error})});
+}
+}  // namespace
+
 Element Input(const Props& p) {
     const Theme& t = useTheme();
     std::string value = p.get<std::string>("value");
@@ -44,7 +53,7 @@ Element Input(const Props& p) {
         {"flexGrow", 1},
         {"value", value},
         {"placeholder", p.get<std::string>("placeholder")},
-        {"color", t.text},
+        {"color", p.get<std::string>("error").empty() ? t.text : t.danger},
         {"onInput", onChange},
         {"onKey", [onChange, onSubmit, value](const KeyEvent& e) {
              if (e.key == "Enter" && onSubmit) onSubmit(value);
@@ -52,22 +61,22 @@ Element Input(const Props& p) {
          }},
     });
     // growInRow: takes the free room in a row (a search box next to buttons), not in a column.
-    if (label.empty()) return h("box", {{"direction", "row"}, {"growInRow", 1}}, {std::move(field)});
+    if (label.empty()) return withError(h("box", {{"direction", "row"}, {"growInRow", 1}}, {std::move(field)}), p, t);
     if (p.get<bool>("labelAbove"))
-        return h("box", {{"growInRow", 1}}, {h("text", {{"color", t.muted}, {"wrap", false}}, {label}), std::move(field)});
-    return h("box", {{"direction", "row"}, {"gap", 1}, {"growInRow", 1}}, {
+        return withError(h("box", {{"growInRow", 1}}, {h("text", {{"color", t.muted}, {"wrap", false}}, {label}), std::move(field)}), p, t);
+    return withError(h("box", {{"direction", "row"}, {"gap", 1}, {"growInRow", 1}}, {
         h("text", {{"color", t.muted}, {"wrap", false}}, {label}),
         std::move(field),
-    });
+    }), p, t);
 }
 
 Element Checkbox(const Props& p) {
     const Theme& t = useTheme();
     bool checked = p.get<bool>("checked");
-    return h("box", {{"direction", "row"}, {"gap", 1}, {"focusable", true}, {"onClick", p.get<Callback>("onToggle")}}, {
+    return withError(h("box", {{"direction", "row"}, {"gap", 1}, {"focusable", true}, {"onClick", p.get<Callback>("onToggle")}}, {
         h("text", {{"color", checked ? t.accent : t.muted}, {"wrap", false}}, {checked ? "[x]" : "[ ]"}),
         h("text", {{"color", t.text}}, {p.get<std::string>("label")}),
-    });
+    }), p, t);
 }
 
 Element Tabs(const Props& p) {
@@ -200,11 +209,97 @@ Element Select(const Props& p) {
                                    else if (e.key == "Left") pick(current - 1);
                                }}},
                       {h("text", {{"color", t.accent}, {"wrap", false}}, {"‹ " + shown + " ›"})});
-    if (label.empty()) return field;
-    return h("box", {{"direction", p.get<bool>("labelAbove") ? "column" : "row"}, {"gap", p.get<bool>("labelAbove") ? 0 : 1}}, {
+    if (label.empty()) return withError(std::move(field), p, t);
+    return withError(h("box", {{"direction", p.get<bool>("labelAbove") ? "column" : "row"}, {"gap", p.get<bool>("labelAbove") ? 0 : 1}}, {
         h("text", {{"color", t.muted}, {"wrap", false}}, {label}),
         std::move(field),
-    });
+    }), p, t);
+}
+
+// One line for now: the terminal's input edits a single line (v0.17 brings more).
+Element Textarea(const Props& p) {
+    Props one = p;
+    one.set("labelAbove", true);
+    return Input(one);
+}
+
+Element RadioGroup(const Props& p) {
+    const Theme& t = useTheme();
+    std::string value = p.get<std::string>("value");
+    auto onChange = p.get<InputHandler>("onChange");
+    std::vector<std::string> values;
+    for (const Element& o : p.children()) values.push_back(o.props.get<std::string>("value"));
+    auto pick = [onChange, values](int i) {
+        int n = static_cast<int>(values.size());
+        if (onChange && n > 0) onChange(values[static_cast<std::size_t>(std::clamp(i, 0, n - 1))]);
+    };
+    std::vector<Element> items;
+    std::string label = p.get<std::string>("label");
+    if (!label.empty()) items.push_back(h("text", {{"color", t.muted}, {"wrap", false}}, {label}));
+    std::vector<Element> options;
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        bool on = values[i] == value;
+        int index = static_cast<int>(i);
+        options.push_back(h("box", {{"key", values[i]}, {"direction", "row"}, {"gap", 1}, {"focusable", true},
+                                    {"onClick", [pick, index] { pick(index); }},
+                                    {"onKey", [pick, index](const KeyEvent& e) {
+                                         if (e.key == "Down") pick(index + 1);
+                                         else if (e.key == "Up") pick(index - 1);
+                                     }}},
+                            {h("text", {{"color", on ? t.accent : t.muted}, {"wrap", false}}, {on ? "(•)" : "( )"}),
+                             h("text", {{"color", t.text}, {"bold", on}}, {p.children()[i].props.get<std::string>("label")})}));
+    }
+    items.push_back(h("box", {{"direction", p.get<bool>("row") ? "row" : "column"}, {"gap", p.get<bool>("row") ? 2 : 0}},
+                      std::move(options)));
+    return withError(h("box", {}, std::move(items)), p, t);
+}
+
+Element Slider(const Props& p) {
+    const Theme& t = useTheme();
+    int value = p.get<int>("value"), lo = p.get<int>("min"), hi = std::max(p.get<int>("max", 100), lo + 1);
+    int step = std::max(p.get<int>("step", 1), 1);
+    auto onChange = p.get<InputHandler>("onChange");
+    auto to = [onChange, lo, hi](int v) {
+        if (onChange) onChange(std::to_string(std::clamp(v, lo, hi)));
+    };
+    constexpr int kWidth = 20;
+    int filled = (value - lo) * kWidth / (hi - lo);
+    std::string bar;
+    for (int i = 0; i <= kWidth; ++i) bar += i < filled ? "━" : i == filled ? "●" : "─";  // kWidth + 1 cells
+    std::vector<Element> parts;
+    std::string label = p.get<std::string>("label");
+    if (!label.empty()) parts.push_back(h("text", {{"color", t.muted}, {"wrap", false}}, {label}));
+    parts.push_back(h("box", {{"focusable", true},
+                              {"onKey", [to, value, step, lo, hi](const KeyEvent& e) {
+                                   if (e.key == "Right") to(value + step);
+                                   else if (e.key == "Left") to(value - step);
+                                   else if (e.key == "Home") to(lo);
+                                   else if (e.key == "End") to(hi);
+                               }},
+                              {"onPointerDown", [to, lo, hi](const PointerEvent& e) {  // a click on the bar jumps there
+                                   to(lo + static_cast<int>(e.localX) * (hi - lo) / kWidth);
+                               }}},
+                      {h("text", {{"color", t.accent}, {"wrap", false}}, {bar})}));
+    if (p.get<bool>("showValue", true)) parts.push_back(h("text", {{"color", t.text}, {"wrap", false}}, {std::to_string(value)}));
+    return h("box", {{"direction", "row"}, {"gap", 1}}, std::move(parts));
+}
+
+Element Progress(const Props& p) {
+    const Theme& t = useTheme();
+    int value = p.get<int>("value"), max = std::max(p.get<int>("max", 100), 1);
+    int percent = value * 100 / max;
+    std::string variant = p.get<std::string>("variant", "primary");
+    const std::string& color = variant == "success" ? t.success : variant == "danger" ? t.danger : t.accent;
+    constexpr int kWidth = 24;
+    int filled = value * kWidth / max;
+    std::string bar;
+    for (int i = 0; i < kWidth; ++i) bar += i < filled ? "█" : "░";
+    std::vector<Element> parts;
+    std::string label = p.get<std::string>("label");
+    if (!label.empty()) parts.push_back(h("text", {{"color", t.muted}, {"wrap", false}}, {label}));
+    parts.push_back(h("text", {{"color", color}, {"wrap", false}}, {bar}));
+    parts.push_back(h("text", {{"color", t.text}, {"wrap", false}}, {std::to_string(percent) + "%"}));
+    return h("box", {{"direction", "row"}, {"gap", 1}}, std::move(parts));
 }
 
 // The text shows under the children while the mouse is over them.

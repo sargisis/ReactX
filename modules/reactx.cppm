@@ -209,6 +209,18 @@ using rx::ui::TableColumn;
 using rx::ui::TableRow;
 using rx::ui::TableProps;
 using rx::ui::table;
+using rx::ui::TextareaProps;
+using rx::ui::textarea;
+using rx::ui::RadioGroupProps;
+using rx::ui::radioGroup;
+using rx::ui::SliderProps;
+using rx::ui::slider;
+using rx::ui::ProgressProps;
+using rx::ui::progress;
+using rx::ui::FormErrors;
+using rx::ui::FormOptions;
+using rx::ui::Form;
+using rx::ui::useForm;
 
 using rx::ui::button;
 using rx::ui::input;

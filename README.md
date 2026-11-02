@@ -316,7 +316,7 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 | `stack` | `direction` (`Column`, `Row`), `gap` (cells / 8px steps), `align`, `justify` (`Between`, …), `wrap`, `children`: layout without CSS |
 | `text` | `text`, `muted`: a paragraph |
 
-Theme (`ui::Theme`): `accent`, `text`, `muted`, `success`, `warning`, `danger`, `surface`. In the browser the theme becomes CSS variables (`--rx-accent`, …), terminal color names map to a palette, CSS colors (`"#ff6600"`) work too; style them yourself through the classes `rx-btn`, `rx-btn--primary`, `rx-input`, `rx-tab--active`, `rx-modal__dialog`, `rx-item--selected`. Every component also exists as a `Props` function: `h(ui::Button, {{"label", "OK"}})`.
+Theme (`ui::Theme`): `accent`, `text`, `muted`, `success`, `warning`, `danger`, `surface`. In the browser the theme becomes CSS variables (`--rx-accent`, …); each terminal color name has a light and a dark shade (the page's `prefers-color-scheme`) that keep text at 4.5:1 contrast (WCAG AA, Lighthouse), CSS colors (`"#ff6600"`) are used as they are. `ui::card({.title, .children, .level = 2})`: the title's heading level (`<h3>` by default; 2 for cards right under the page's `<h1>`). An app is mounted into `<main id="app">`, the page's main landmark; style them yourself through the classes `rx-btn`, `rx-btn--primary`, `rx-input`, `rx-tab--active`, `rx-modal__dialog`, `rx-item--selected`. Every component also exists as a `Props` function: `h(ui::Button, {{"label", "OK"}})`.
 
 Demos: `./build/debug/ui_demo` (terminal) and `web_ui_demo.html` (browser).
 
@@ -325,7 +325,7 @@ Demos: `./build/debug/ui_demo` (terminal) and `web_ui_demo.html` (browser).
 <details>
 <summary><b>In the browser (WebAssembly)</b></summary>
 
-The [`DomRenderer`](include/reactx/dom.hpp) backend renders into the real DOM: tags are plain HTML, styling is plain CSS. `mountDom(h(App))` mounts the app into `<div id="app">`.
+The [`DomRenderer`](include/reactx/dom.hpp) backend renders into the real DOM: tags are plain HTML, styling is plain CSS. `mountDom(h(App))` mounts the app into `<main id="app">` of the page (`<div id="app">` in shells before v0.21).
 
 | Prop / event | In the browser |
 |---|---|

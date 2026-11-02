@@ -137,6 +137,7 @@ Element App(const Props&) {
     return h(kBox, {{"className", "kanban"}}, {
 #ifdef __EMSCRIPTEN__
         h("style", {}, {kCss}),
+        h("h1", {}, {"Kanban"}),
 #endif
         h(kText, {{"className", "hint"}, {"dim", true}},
           {dragging ? "drop it on a column" : "drag a card, or Tab to a card and use ← →"}),

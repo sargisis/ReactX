@@ -25,7 +25,9 @@ namespace rx::ui {
 
 // ---- theme ----
 
-// Colors are terminal color names (see terminal.hpp).
+// Colors are terminal color names (see terminal.hpp). In the browser each
+// name has a light and a dark shade that keep text readable (WCAG AA 4.5:1);
+// "#rrggbb" is used as is.
 struct Theme {
     std::string accent = "cyan";    // primary buttons, active tab, checked boxes
     std::string text = "white";
@@ -186,6 +188,9 @@ struct CardProps {
     std::string title{};
     std::vector<Element> children{};
     std::string key{};
+    // (v0.21.0+) The title's heading level in the browser (<h3>): 2 for cards
+    // right under the page's <h1>, so no level is skipped (screen readers, Lighthouse).
+    int level = 3;
 };
 Element card(CardProps props);
 

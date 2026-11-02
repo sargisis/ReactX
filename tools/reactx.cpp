@@ -464,7 +464,7 @@ Element App(const AppProps&) {
 }
 )cpp";
 
-constexpr std::string_view kWebMain = R"cpp(// {{name}}: puts the app into the page (<div id="app">). The components are in app.cpp.
+constexpr std::string_view kWebMain = R"cpp(// {{name}}: puts the app into the page (<main id="app">). The components are in app.cpp.
 #include "app.hpp"
 #include "reactx/dom.hpp"
 

@@ -388,7 +388,7 @@ inline const std::vector<Page>& pagesEn() {
         {
             "browser", "Browser apps", "WebAssembly, the DOM and CSS.",
             {
-                {"mountDom", "Puts your app into <div id=\"app\"> of the page, replacing what it showed (a loading text, prerendered HTML). "
+                {"mountDom", "Puts your app into the page's <main id=\"app\"> (<div id=\"app\"> in older shells), replacing what it showed (a loading text, prerendered HTML). "
                              "Mounting again into the same container unmounts the old app first (its timers and sockets stop).",
                  "int main() { mountDom(h(App)); }"},
                 {"Prerender", "List routes in reactx.json and the page shows before the .wasm arrives: reactx build runs the same "
@@ -496,7 +496,9 @@ inline const std::vector<Page>& pagesEn() {
                  "                .onChange = setSortFn}),\n"
                  "    ui::tooltip({.text = \"Asks first\", .children = {ui::button({.label = \"Clear\"})}}),\n"
                  "}})"},
-                {"Theme", "ui::themeProvider passes colors to every ui component below it.",
+                {"Theme", "ui::themeProvider passes colors to every ui component below it. In the browser each color name "
+                          "has a light and a dark shade (prefers-color-scheme) with text at 4.5:1 contrast (WCAG AA); "
+                          "\"#rrggbb\" is used as it is. ui::card's .level sets its title's heading level (h3 by default).",
                  "ui::themeProvider(ui::Theme{.accent = \"magenta\"}, {h(App)})"},
             },
         },

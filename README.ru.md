@@ -304,7 +304,7 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 | `stack` | `direction` (`Column`, `Row`), `gap` (клетки / шаги по 8px), `align`, `justify` (`Between`, …), `wrap`, `children`: раскладка без CSS |
 | `text` | `text`, `muted`: абзац |
 
-Тема (`ui::Theme`): `accent`, `text`, `muted`, `success`, `warning`, `danger`, `surface`. В браузере тема превращается в CSS-переменные (`--rx-accent`, …), имена цветов терминала переводятся в палитру, можно передавать и CSS-цвета (`"#ff6600"`); свои стили — по классам `rx-btn`, `rx-btn--primary`, `rx-input`, `rx-tab--active`, `rx-modal__dialog`, `rx-item--selected`. Каждый компонент есть и как функция с `Props`: `h(ui::Button, {{"label", "OK"}})`.
+Тема (`ui::Theme`): `accent`, `text`, `muted`, `success`, `warning`, `danger`, `surface`. В браузере тема превращается в CSS-переменные (`--rx-accent`, …); у каждого имени цвета терминала есть светлый и тёмный оттенок (по `prefers-color-scheme` страницы) с контрастом текста 4.5:1 (WCAG AA, Lighthouse), CSS-цвета (`"#ff6600"`) используются как есть. `ui::card({.title, .children, .level = 2})` — уровень заголовка (по умолчанию `<h3>`; 2 для карточек сразу под `<h1>` страницы). Приложение монтируется в `<main id="app">` — главный ориентир страницы; свои стили — по классам `rx-btn`, `rx-btn--primary`, `rx-input`, `rx-tab--active`, `rx-modal__dialog`, `rx-item--selected`. Каждый компонент есть и как функция с `Props`: `h(ui::Button, {{"label", "OK"}})`.
 
 Демо: `./build/debug/ui_demo` (терминал) и `web_ui_demo.html` (браузер).
 
@@ -313,7 +313,7 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 <details>
 <summary><b>В браузере (WebAssembly)</b></summary>
 
-Бэкенд [`DomRenderer`](include/reactx/dom.hpp) рисует в настоящий DOM: теги — обычный HTML, оформление — обычный CSS. `mountDom(h(App))` монтирует приложение в `<div id="app">`.
+Бэкенд [`DomRenderer`](include/reactx/dom.hpp) рисует в настоящий DOM: теги — обычный HTML, оформление — обычный CSS. `mountDom(h(App))` монтирует приложение в `<main id="app">` страницы (`<div id="app">` в шаблонах до v0.21).
 
 | Пропс / событие | В браузере |
 |---|---|

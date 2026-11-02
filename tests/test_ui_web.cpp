@@ -129,6 +129,7 @@ Element Atoms(const Props&) {
                       ui::stack({.direction = ui::Direction::Row, .gap = 2, .justify = ui::Justify::Between,
                                  .children = {ui::text({.text = "one"}), ui::text({.text = "two", .muted = true})}}),
                   }}),
+        ui::card({.title = "Totals", .level = 2}),
         ui::select({.label = "Size", .value = size, .options = {{"", "Any"}, {"s", "Small"}, {"m", "Medium"}, {"l"}},
                     .onChange = [setSize](const std::string& v) { setSize(v); }}),
         ui::tooltip({.text = "Saves the file", .children = {h("button", {{"id", "save"}}, {"Save"})}}),
@@ -155,10 +156,10 @@ int main() {
     CHECK(js("String(document.getElementById('rx-ui-styles').textContent.includes('.rx-btn--primary'))") == "true");
 
     std::cout << "theme becomes CSS variables\n";
-    CHECK(has("<div class=\"rx-theme\" style=\"--rx-accent: #0891b2; --rx-danger: #dc2626; --rx-success: #16a34a; "
-              "--rx-warning: #ca8a04; --rx-muted: #6b7280;\">"));
+    // Only the accent: the default danger/success/... stay in the stylesheet (light and dark).
+    CHECK(has("<div class=\"rx-theme\" style=\"--rx-accent: var(--rx-c-cyan);\">"));
     js("rxTest.clickText('Magenta')");
-    CHECK(has("--rx-accent: #c026d3"));
+    CHECK(has("--rx-accent: var(--rx-c-magenta)"));
 
     std::cout << "buttons\n";
     CHECK(has("<button class=\"rx-btn rx-btn--primary\" type=\"button\">Save</button>"));
@@ -225,6 +226,7 @@ int main() {
     std::cout << "card, stack, text\n";
     mountDom(h(Atoms));  // replaces the app above
     CHECK(has("<section aria-label=\"Stats\" class=\"rx-card\"><h3 class=\"rx-card__title\">Stats</h3>"));
+    CHECK(has("<section aria-label=\"Totals\" class=\"rx-card\"><h2 class=\"rx-card__title\">Totals</h2></section>"));
     CHECK(has("flex-direction: row; gap: 16px; align-items: stretch; justify-content: space-between"));
     CHECK(has("<p class=\"rx-text\">one</p><p class=\"rx-text rx-text--muted\">two</p>"));
 

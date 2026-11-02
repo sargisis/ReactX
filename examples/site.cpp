@@ -316,7 +316,7 @@ Element CodeBlock(const CodeProps& p) {
                           }}},
               {tr(en, "copy", "копировать")}),
         }),
-        h("pre", {}, {h("code", {}, tokens)}),
+        h("pre", {{"tabindex", "0"}}, {h("code", {}, tokens)}),  // reachable by keyboard when it scrolls
     });
 }
 

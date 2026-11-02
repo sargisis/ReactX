@@ -110,7 +110,7 @@ Element App(const Props&) {
         ui::card({.title = "ReactX", .children = {
             ui::text({.text = "A React-like UI framework in C++26. This page is WebAssembly."}),
             ui::text({.text = "The same rx::ui code also runs in a terminal.", .muted = true}),
-        }}),
+        }, .level = 2}),
         ui::stack({.direction = ui::Direction::Row, .children = {
             ui::button({.label = "Say hi", .onClick = [] { ui::toast({.text = "Hi from rx::ui", .variant = ui::Variant::Primary}); },
                         .variant = ui::Variant::Primary}),

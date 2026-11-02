@@ -21,13 +21,13 @@
     try { const t = localStorage.getItem("rx-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
   </script>
   <style>
-    /* ---- tokens ---- */
+    /* ---- tokens ---- (text colors keep 4.5:1 on every background: WCAG AA, axe / Lighthouse) */
     :root {
       --bg: #faf8f4; --surface: #ffffff; --surface-2: #f2efe8; --border: #e4dfd4; --border-strong: #cfc8b8;
-      --text: #1b1a17; --muted: #6b675e; --faint: #9a958a;
-      --accent: #b45309; --accent-soft: rgb(180 83 9 / 0.1); --on-accent: #ffffff;
+      --text: #1b1a17; --muted: #5f5b53; --faint: #6f6a61;
+      --accent: #a64b07; --accent-soft: rgb(166 75 7 / 0.1); --on-accent: #ffffff;
       --ok: #15803d; --code-bg: #f4f1ea;
-      --tok-kw: #a626a4; --tok-type: #0e7490; --tok-str: #15803d; --tok-num: #b45309; --tok-com: #9a958a; --tok-fn: #1d4ed8; --tok-pp: #be123c;
+      --tok-kw: #a626a4; --tok-type: #0e7490; --tok-str: #13733a; --tok-num: #a64b07; --tok-com: #6f6a61; --tok-fn: #1d4ed8; --tok-pp: #be123c;
       --shadow: 0 1px 2px rgb(27 26 23 / 0.06), 0 8px 24px rgb(27 26 23 / 0.06);
       --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
       --sans: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -36,20 +36,20 @@
     }
     :root[data-theme="dark"] {
       --bg: #0d0f12; --surface: #14171c; --surface-2: #1a1e24; --border: #252a32; --border-strong: #353b45;
-      --text: #ebe7df; --muted: #9a978f; --faint: #6c6a64;
+      --text: #ebe7df; --muted: #a8a59d; --faint: #8a877f;
       --accent: #f5a524; --accent-soft: rgb(245 165 36 / 0.12); --on-accent: #0d0f12;
       --ok: #4ade80; --code-bg: #0a0c0f;
-      --tok-kw: #c792ea; --tok-type: #7fdbca; --tok-str: #a5d6a7; --tok-num: #f5a524; --tok-com: #5f6670; --tok-fn: #82aaff; --tok-pp: #ff8a80;
+      --tok-kw: #c792ea; --tok-type: #7fdbca; --tok-str: #a5d6a7; --tok-num: #f5a524; --tok-com: #848b95; --tok-fn: #82aaff; --tok-pp: #ff8a80;
       --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px rgb(0 0 0 / 0.35);
       color-scheme: dark;
     }
     @media (prefers-color-scheme: dark) {
       :root:not([data-theme="light"]) {
         --bg: #0d0f12; --surface: #14171c; --surface-2: #1a1e24; --border: #252a32; --border-strong: #353b45;
-        --text: #ebe7df; --muted: #9a978f; --faint: #6c6a64;
+        --text: #ebe7df; --muted: #a8a59d; --faint: #8a877f;
         --accent: #f5a524; --accent-soft: rgb(245 165 36 / 0.12); --on-accent: #0d0f12;
         --ok: #4ade80; --code-bg: #0a0c0f;
-        --tok-kw: #c792ea; --tok-type: #7fdbca; --tok-str: #a5d6a7; --tok-num: #f5a524; --tok-com: #5f6670; --tok-fn: #82aaff; --tok-pp: #ff8a80;
+        --tok-kw: #c792ea; --tok-type: #7fdbca; --tok-str: #a5d6a7; --tok-num: #f5a524; --tok-com: #848b95; --tok-fn: #82aaff; --tok-pp: #ff8a80;
         --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px rgb(0 0 0 / 0.35);
         color-scheme: dark;
       }
@@ -111,6 +111,7 @@
            border: 1px solid transparent; background: none; cursor: pointer; }
     .hit b { font: 600 14.5px var(--sans); }
     .hit small { font: 12px var(--sans); color: var(--faint); }
+    .hit--on small { color: var(--muted); }  /* faint isn't 4.5:1 on the highlight */
     .hit span { grid-column: 1 / -1; font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .hit:hover, .hit--on { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
     .hits-empty { margin: 8px 4px; color: var(--faint); font-size: 14px; }
@@ -261,7 +262,7 @@
     .menu-btn { display: none; }
     .article { min-width: 0; }
     .crumbs { font: 500 13px var(--sans); color: var(--faint); margin-bottom: 10px; }
-    .crumbs a { text-decoration: none; color: var(--muted); }
+    .crumbs a { text-decoration: underline; text-underline-offset: 3px; color: var(--muted); }
     .crumbs a:hover { color: var(--accent); }
     .article h1 { font: 800 clamp(30px, 4.2vw, 42px)/1.18 var(--sans); letter-spacing: -0.035em; margin: 0 0 12px; color: var(--text); }
     .article .lead { font-size: 18px; color: var(--muted); margin: 0 0 10px; line-height: 1.55; }
@@ -320,7 +321,7 @@
     #rx-fail { position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 2000; padding: 10px 14px; border-radius: 10px;
                background: #7f1d1d; color: #fff; font: 13.5px/1.4 var(--sans); box-shadow: var(--shadow); }
     .footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-    .footer a { color: var(--muted); text-decoration: none; }
+    .footer a { color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
     .footer a:hover { color: var(--accent); }
   </style>
 </head>

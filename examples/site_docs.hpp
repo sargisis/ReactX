@@ -438,7 +438,7 @@ inline const std::vector<Page>& pages() {
         {
             "browser", "Браузер", "WebAssembly, DOM, CSS.",
             {
-                {"mountDom", "Монтирует приложение в <div id=\"app\"> страницы (заменяя то, что там было: текст загрузки, пререндер) "
+                {"mountDom", "Монтирует приложение в <main id=\"app\"> страницы (<div id=\"app\"> в старых шаблонах) (заменяя то, что там было: текст загрузки, пререндер) "
                              "и живёт после main(). Повторный mountDom в тот же контейнер сначала размонтирует старое приложение "
                              "(его таймеры и сокеты останавливаются).",
                  "int main() { mountDom(h(App)); }"},
@@ -547,7 +547,9 @@ inline const std::vector<Page>& pages() {
                  "                .onChange = setSortFn}),\n"
                  "    ui::tooltip({.text = \"Спросит заранее\", .children = {ui::button({.label = \"Очистить\"})}}),\n"
                  "}})"},
-                {"Тема", "ui::themeProvider передаёт ui::Theme через контекст; в браузере она превращается в CSS-переменные.",
+                {"Тема", "ui::themeProvider передаёт ui::Theme через контекст; в браузере она превращается в CSS-переменные. "
+                         "У каждого имени цвета есть светлый и тёмный оттенок (prefers-color-scheme) с контрастом текста 4.5:1 "
+                         "(WCAG AA); \"#rrggbb\" используется как есть. .level у ui::card задаёт уровень заголовка (по умолчанию h3).",
                  "ui::themeProvider(ui::Theme{.accent = \"magenta\"}, {h(App)})"},
             },
         },

@@ -50,15 +50,20 @@ int prerender(const Element& app, const std::string& args) {
         std::fputs(("reactx prerender: can't read " + parts[0] + "\n").c_str(), stderr);
         return 1;
     }
-    // The built page is minified: <div id=app></div>, <base href=/repo/ >.
-    std::size_t at = page->find("<div id=app></div>");
-    std::size_t len = std::string_view("<div id=app></div>").size();
-    if (at == std::string::npos) {
-        at = page->find("<div id=\"app\"></div>");
-        len = std::string_view("<div id=\"app\"></div>").size();
+    // The built page is minified: <main id=app></main>, <base href=/repo/ >.
+    // Shells from before v0.21 have a <div> there.
+    std::size_t at = std::string::npos, len = 0;
+    std::string_view tag;  // kept: the prerendered page has the same container
+    for (std::string_view empty : {"<main id=app></main>", "<main id=\"app\"></main>", "<div id=app></div>",
+                                   "<div id=\"app\"></div>"}) {
+        if (at = page->find(empty); at != std::string::npos) {
+            len = empty.size();
+            tag = empty.starts_with("<main") ? "main" : "div";
+            break;
+        }
     }
     if (at == std::string::npos) {
-        std::fputs("reactx prerender: no empty <div id=\"app\"></div> in the page\n", stderr);
+        std::fputs("reactx prerender: no empty <main id=\"app\"></main> (or <div>) in the page\n", stderr);
         return 1;
     }
     if (auto b = page->find("<base href="); b != std::string::npos) {
@@ -72,7 +77,7 @@ int prerender(const Element& app, const std::string& args) {
         router::reset(route);
         std::string html = renderToString(app);
         std::string out = *page;
-        out.replace(at, len, "<div id=app>" + html + "</div>");
+        out.replace(at, len, "<" + std::string(tag) + " id=app>" + html + "</" + std::string(tag) + ">");
         if (auto head = out.find("</head>"); head != std::string::npos && !detail::prerenderHead().empty() &&
                                               out.find("id=\"rx-ui-styles\"") == std::string::npos)
             out.insert(head, detail::prerenderHead());

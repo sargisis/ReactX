@@ -16,14 +16,26 @@ namespace {
 
 // ---- stylesheet ----
 
+// Text colors keep 4.5:1 (WCAG AA) on white and on dark surfaces, and so does
+// the --rx-on-accent text of a button. The terminal color names a Theme uses
+// ("cyan", "bright-red") are --rx-c-* variables with a light and a dark value.
 constexpr const char* kCss = R"css(
 :root {
-  --rx-accent: #2563eb; --rx-danger: #dc2626; --rx-success: #16a34a; --rx-warning: #ca8a04;
+  --rx-c-black: #111827; --rx-c-red: #b91c1c; --rx-c-green: #15803d; --rx-c-yellow: #a16207; --rx-c-blue: #2563eb;
+  --rx-c-magenta: #a21caf; --rx-c-cyan: #0e7490; --rx-c-gray: #6b7280; --rx-c-bright-red: #dc2626;
+  --rx-c-bright-green: #166534; --rx-c-bright-yellow: #854d0e; --rx-c-bright-blue: #1d4ed8;
+  --rx-c-bright-magenta: #86198f; --rx-c-bright-cyan: #155e75;
+  --rx-accent: #2563eb; --rx-danger: #dc2626; --rx-success: #15803d; --rx-warning: #ca8a04;
   --rx-muted: #6b7280; --rx-border: #d1d5db; --rx-surface: #ffffff; --rx-hover: rgb(0 0 0 / 0.04);
   --rx-on-accent: #ffffff; --rx-radius: 10px;
 }
 @media (prefers-color-scheme: dark) {
-  :root { --rx-border: #374151; --rx-surface: #1f2430; --rx-muted: #9ca3af; --rx-hover: rgb(255 255 255 / 0.06); }
+  :root { --rx-c-black: #e5e7eb; --rx-c-red: #f87171; --rx-c-green: #4ade80; --rx-c-yellow: #facc15; --rx-c-blue: #60a5fa;
+          --rx-c-magenta: #e879f9; --rx-c-cyan: #22d3ee; --rx-c-gray: #9ca3af; --rx-c-bright-red: #fca5a5;
+          --rx-c-bright-green: #86efac; --rx-c-bright-yellow: #fde047; --rx-c-bright-blue: #93c5fd;
+          --rx-c-bright-magenta: #f0abfc; --rx-c-bright-cyan: #67e8f9;
+          --rx-accent: #60a5fa; --rx-danger: #f87171; --rx-success: #4ade80; --rx-on-accent: #0b1220;
+          --rx-border: #374151; --rx-surface: #1f2430; --rx-muted: #9ca3af; --rx-hover: rgb(255 255 255 / 0.06); }
 }
 .rx-theme { display: contents; }
 
@@ -194,17 +206,17 @@ void addError(std::vector<rx::Element>& parts, const rx::Props& p) {
 
 // Terminal color names (used by ui::Theme) as CSS colors. Hex and other CSS
 // values pass through; "white" and "" mean "keep the page default".
+// A Theme color for CSS: a terminal color name becomes its --rx-c-* variable
+// (light and dark values in the stylesheet), anything else ("#ff8800") is used as is.
 std::string cssColor(const std::string& name) {
-    static const std::pair<const char*, const char*> palette[] = {
-        {"black", "#111827"},         {"red", "#dc2626"},          {"green", "#16a34a"},
-        {"yellow", "#ca8a04"},        {"blue", "#2563eb"},         {"magenta", "#c026d3"},
-        {"cyan", "#0891b2"},          {"gray", "#6b7280"},         {"grey", "#6b7280"},
-        {"bright-red", "#ef4444"},    {"bright-green", "#22c55e"}, {"bright-yellow", "#eab308"},
-        {"bright-blue", "#3b82f6"},   {"bright-magenta", "#d946ef"}, {"bright-cyan", "#06b6d4"},
+    static constexpr std::string_view palette[] = {
+        "black", "red", "green", "yellow", "blue", "magenta", "cyan", "gray",
+        "bright-red", "bright-green", "bright-yellow", "bright-blue", "bright-magenta", "bright-cyan",
     };
     if (name.empty() || name == "white" || name == "bright-white") return {};
-    for (auto [n, css] : palette)
-        if (name == n) return css;
+    if (name == "grey") return "var(--rx-c-gray)";
+    for (std::string_view n : palette)
+        if (name == n) return "var(--rx-c-" + name + ")";
     return name;
 }
 
@@ -217,15 +229,19 @@ namespace rx::ui {
 Element themeProvider(Theme theme, std::vector<Element> children) {
     ensureStyles();
     std::string vars;
-    auto add = [&](const char* var, const std::string& value) {
+    // Only the colors the app changed: the defaults stay in the stylesheet,
+    // which has a light and a dark version of each.
+    const Theme defaults;
+    auto add = [&](const char* var, const std::string& value, const std::string& standard) {
+        if (value == standard) return;
         if (auto css = cssColor(value); !css.empty()) vars += std::string(var) + ": " + css + "; ";
     };
-    add("--rx-accent", theme.accent);
-    add("--rx-danger", theme.danger);
-    add("--rx-success", theme.success);
-    add("--rx-warning", theme.warning);
-    add("--rx-muted", theme.muted);
-    add("--rx-surface", theme.surface);
+    add("--rx-accent", theme.accent, {});  // always: Theme's accent ("cyan") differs from the stylesheet's
+    add("--rx-danger", theme.danger, defaults.danger);
+    add("--rx-success", theme.success, defaults.success);
+    add("--rx-warning", theme.warning, defaults.warning);
+    add("--rx-muted", theme.muted, defaults.muted);
+    add("--rx-surface", theme.surface, defaults.surface);
     if (!vars.empty()) vars.pop_back();
     return ThemeContext.provide(std::move(theme), {h("div", {{"className", "rx-theme"}, {"style", vars}}, std::move(children))});
 }
@@ -379,7 +395,8 @@ Element Card(const Props& p) {
     ensureStyles();
     std::string title = p.get<std::string>("title");
     std::vector<Element> parts;
-    if (!title.empty()) parts.push_back(h("h3", {{"className", "rx-card__title"}}, {title}));
+    std::string tag = "h" + std::to_string(p.get<int>("level", 3));
+    if (!title.empty()) parts.push_back(h(tag, {{"className", "rx-card__title"}}, {title}));
     for (const Element& child : p.children()) parts.push_back(child);
     return h("section", {{"className", "rx-card"}, {"aria-label", title}}, std::move(parts));
 }

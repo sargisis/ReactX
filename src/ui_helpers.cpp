@@ -118,7 +118,7 @@ Element text(TextProps p) {
 }
 
 Element card(CardProps p) {
-    return withKey(h(Card, {{"title", std::move(p.title)}}, std::move(p.children)), p.key);
+    return withKey(h(Card, {{"title", std::move(p.title)}, {"level", std::clamp(p.level, 1, 6)}}, std::move(p.children)), p.key);
 }
 
 Element stack(StackProps p) {

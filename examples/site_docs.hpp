@@ -495,9 +495,11 @@ inline const std::vector<Page>& pages() {
                 {"Компоненты", "button, input, checkbox, select, tabs, modal, confirm, list и listItem, tooltip, card, stack и text. "
                                "Один и тот же код работает в терминале и в браузере. Свойства — назначенные инициализаторы C++20. "
                                "В формах .labelAbove = true ставит подпись поля или списка на отдельную строку, и поля выравниваются; "
-                               ".onChange у checkbox получает новое состояние.",
+                               ".onChange у checkbox получает новое состояние. .type = ui::InputType::Password скрывает "
+                               "набранное (точки в терминале); Email, Number, Tel и Url выбирают клавиатуру телефона.",
                  "ui::button({.label = \"Сохранить\", .onClick = save, .variant = ui::Variant::Primary})\n"
                  "ui::input({.value = name, .onChange = setNameFn, .onSubmit = addFn, .label = \"Имя\", .labelAbove = true})\n"
+                 "ui::input({.value = pass, .onChange = setPassFn, .label = \"Пароль\", .type = ui::InputType::Password})\n"
                  "ui::checkbox({.label = \"Согласен\", .checked = on, .onChange = [setOn](bool v) { setOn(v); }})\n"
                  "ui::modal({.title = \"Удалить?\", .open = asking, .onClose = closeFn, .children = {...}})"},
                 {"Длинные списки", "ui::useVirtualList рисует только строки на экране: 100 000 строк стоят как 40, в обоих бэкендах. "
@@ -523,7 +525,7 @@ inline const std::vector<Page>& pages() {
                  "           .label = \"Имя\", .error = form.error(\"name\")})\n"
                  "ui::button({.label = \"Зарегистрироваться\", .onClick = form.submit})"},
                 {"Ещё поля", "textarea — несколько строк (и в терминале), radioGroup — когда все варианты должны быть "
-                             "на виду, slider — число в диапазоне, progress — сколько уже сделано.",
+                             "на виду (одна остановка Tab, выбор стрелками — и в терминале), slider — число в диапазоне, progress — сколько уже сделано.",
                  "ui::textarea({.value = note, .onChange = setNoteFn, .label = \"Комментарий\", .rows = 3})\n"
                  "ui::radioGroup({.label = \"Тариф\", .value = plan, .options = {{\"free\", \"Free\"}, {\"pro\", \"Pro\"}},\n"
                  "                .onChange = setPlanFn, .direction = ui::Direction::Row})\n"
@@ -578,12 +580,17 @@ inline const std::vector<Page>& pages() {
                  "}"},
                 {"Guards и редиректы", "Маршрут с .allow = false пропускается, а с .redirect — уводит туда (заменяя запись "
                                        "в истории). router::redirect уводит сразу. .allow — обычный bool, его считают там, "
-                                       "где вызывают routes(), поэтому маршруты следуют за состоянием.",
+                                       "где вызывают routes(), поэтому маршруты следуют за состоянием. "
+                                       "router::redirectedFrom() — путь, с которого guard увёл пользователя: страница "
+                                       "входа возвращает его туда после входа.",
                  "router::routes({\n"
                  "    {\"/\", router::redirect(\"/inbox\")},\n"
                  "    {.path = \"/admin/*\", .element = h(Admin), .allow = user.isAdmin, .redirect = \"/login\"},\n"
                  "    {\"*\", h(NotFound)},\n"
-                 "})"},
+                 "})\n"
+                 "// в обработчике страницы входа, после входа:\n"
+                 "std::string from = router::redirectedFrom();\n"
+                 "router::navigate(from.empty() ? \"/\" : from, /*replace=*/true);"},
                 {"Ссылки и переходы", "link — ссылка без перезагрузки (Ctrl+клик — новая вкладка), на текущем пути получает "
                                       ".activeClassName (\"active\"); navigate и back — из кода. useParams() — все параметры "
                                       "маршрута, currentPath() — путь с query (не хук), href(path) — URL с базовым путём.",

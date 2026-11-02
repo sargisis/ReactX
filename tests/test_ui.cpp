@@ -4,6 +4,7 @@
 #include <functional>
 #include <thread>
 #include <iostream>
+#include <ranges>
 #include <string>
 #include <vector>
 
@@ -49,6 +50,22 @@ struct Screen {
     void press(const std::string& k) { renderer.handleKey(root, key(k)); }
     void type(const std::string& s) {
         for (char c : s) press(std::string(1, c));
+    }
+    // A mouse click on the first place showing this text (ASCII labels).
+    void click(std::string_view label) {
+        std::string frame = text();
+        int y = 0;
+        for (auto part : std::views::split(frame, '\n')) {
+            std::string_view line(part.begin(), part.end());
+            if (auto at = line.find(label); at != std::string_view::npos) {
+                int x = static_cast<int>(at + label.size() / 2);
+                renderer.handleMouse(root, MouseInput{.action = MouseInput::Action::Down, .x = x, .y = y});
+                renderer.handleMouse(root, MouseInput{.action = MouseInput::Action::Up, .x = x, .y = y});
+                root.flush();
+                return;
+            }
+            ++y;
+        }
     }
 };
 
@@ -306,16 +323,15 @@ TEST(form_shows_errors_after_submit_and_sends_valid_values) {
     CHECK(!contains(s.text(), "Required"));  // nothing touched, nothing tried: no errors yet
     CHECK(contains(s.text(), "(•) Free") && contains(s.text(), "( ) Pro"));
     CHECK(contains(s.text(), "Used") && contains(s.text(), "10%"));
-    // Focus order: name, Free, Pro, slider, agree, send.
-    for (int i = 0; i < 5; ++i) s.press("Tab");
+    // Focus order: name, the plan (one stop, like the browser), slider, agree, send.
+    for (int i = 0; i < 4; ++i) s.press("Tab");
     s.press("Enter");  // Send with errors
     CHECK(sends == 0 && contains(s.text(), "✗ Required") && contains(s.text(), "✗ Please agree"));
     s.press("Tab");    // back to the name
     s.type("Ann");
     CHECK(!contains(s.text(), "Required") && contains(s.text(), "Please agree"));
-    s.press("Tab");    // Free
-    s.press("Tab");    // Pro
-    s.press("Enter");
+    s.press("Tab");    // the plan: Free is checked
+    s.press("Right");  // the arrows pick
     CHECK(contains(s.text(), "(•) Pro"));
     s.press("Tab");    // the slider
     s.press("Right");
@@ -326,6 +342,85 @@ TEST(form_shows_errors_after_submit_and_sends_valid_values) {
     s.press("Tab");    // Send
     s.press("Enter");
     CHECK((sends == 1 && sent == Signup{.name = "Ann", .plan = "pro", .seats = 3, .agree = true}));
+}
+
+Element Sizes(const Props&) {
+    auto [size, setSize] = useState(std::string{"m"});
+    auto [n, setN] = useState(5);
+    return h("box", {}, {
+        ui::radioGroup({.label = "Size", .value = size, .options = {{"s", "Small"}, {"m", "Medium"}, {"l", "Large"}},
+                        .onChange = [setSize](const std::string& v) { setSize(v); }}),
+        ui::slider({.label = "N", .value = n, .min = 1, .max = 10, .onChange = [setN](int v) { setN(v); },
+                    .error = n > 8 ? "Too many" : ""}),
+        ui::text({.text = "size=" + size + " n=" + std::to_string(n)}),
+    });
+}
+
+TEST(radio_group_arrows_pick_and_the_focus_follows) {
+    Screen s(h(Sizes), 40, 12);
+    // The group has the focus (the first stop): Medium, the checked option.
+    s.press("Down");
+    CHECK(contains(s.text(), "size=l") && contains(s.text(), "(•) Large"));
+    s.press("Down");  // past the end: around to the first
+    CHECK(contains(s.text(), "size=s"));
+    s.press("Up");
+    s.press("Up");
+    CHECK(contains(s.text(), "size=m"));
+    s.press("Left");
+    CHECK(contains(s.text(), "size=s"));
+    s.press("Tab");  // one stop: Tab leaves the group for the slider
+    s.press("Right");
+    CHECK(contains(s.text(), "size=s n=6"));
+    s.click("Large");  // a click picks too
+    CHECK(contains(s.text(), "size=l"));
+    s.press("Down");   // ... and the focus went with it
+    CHECK(contains(s.text(), "size=s"));
+}
+
+TEST(slider_shows_its_error) {
+    Screen s(h(Sizes), 40, 12);
+    CHECK(!contains(s.text(), "Too many"));
+    s.press("Tab");  // from the group to the slider
+    for (int i = 0; i < 4; ++i) s.press("Right");
+    CHECK(contains(s.text(), "n=9") && contains(s.text(), "✗ Too many"));
+}
+
+TEST(progress_keeps_its_label_and_percentage_when_narrow) {
+    Screen s(h("box", {{"width", 24}}, {ui::progress({.value = 4, .max = 100, .label = "Today 9/200"})}), 40, 4);
+    CHECK(contains(s.text(), "Today 9/200") && contains(s.text(), "4%"));
+}
+
+Element Login(const Props&) {
+    auto [user, setUser] = useState(std::string{});
+    auto [pass, setPass] = useState(std::string{});
+    auto [note, setNote] = useState(std::string{});
+    return h("box", {}, {
+        ui::input({.value = user, .onChange = [setUser](const std::string& v) { setUser(v); }, .label = "User"}),
+        ui::input({.value = pass, .onChange = [setPass](const std::string& v) { setPass(v); }, .label = "Password",
+                   .labelAbove = true, .type = ui::InputType::Password}),
+        ui::textarea({.value = note, .onChange = [setNote](const std::string& v) { setNote(v); }, .label = "Note", .rows = 2}),
+        ui::text({.text = "got " + pass + "|" + note}),
+    });
+}
+
+TEST(password_input_shows_dots) {
+    Screen s(h(Login), 40, 12);
+    s.press("Tab");  // the password field
+    s.type("se");
+    s.press("Left");
+    s.type("cr");    // typed at the cursor: "s" + "cr" + "e"
+    CHECK(contains(s.text(), "got scre|"));
+    CHECK(contains(s.text(), "••••") && !contains(s.text(), "scre\n") && !contains(s.text(), "Password scre"));
+}
+
+TEST(a_click_on_the_label_focuses_the_field) {
+    Screen s(h(Login), 40, 12);
+    s.click("Note");
+    s.type("hi");
+    CHECK(contains(s.text(), "got |hi"));
+    s.click("User");
+    s.type("ann");
+    CHECK(contains(s.text(), "User ann"));
 }
 
 TEST(form_reset_and_error_only_after_touch) {

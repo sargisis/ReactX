@@ -108,6 +108,10 @@ struct ButtonProps {
 };
 Element button(ButtonProps props);
 
+// What a ui::input holds. Password: dots in the terminal, a password field in
+// the browser; the others pick the phone's keyboard (and browser checks).
+enum class InputType { Text, Password, Email, Number, Search, Tel, Url };
+
 struct InputProps {
     std::string value{};
     InputHandler onChange{};
@@ -117,6 +121,7 @@ struct InputProps {
     bool labelAbove = false;  // the label on its own line above the field: forms line up
     bool disabled = false;    // shown, not editable, skipped by Tab
     std::string error{};      // shown under the field, which is marked invalid ("" = none)
+    InputType type = InputType::Text;
     std::string key{};
 };
 Element input(InputProps props);
@@ -272,6 +277,7 @@ struct SliderProps {
     std::function<void(int)> onChange{};
     bool showValue = true;    // the number next to it
     bool disabled = false;
+    std::string error{};      // shown under the slider, which is marked invalid ("" = none)
     std::string key{};
 };
 Element slider(SliderProps props);

@@ -313,6 +313,15 @@ int main() {
     CHECK(has("rx-check rx-check--disabled") && has("<fieldset class=\"rx-radios\" .disabled>"));
     CHECK(has("type=\"range\"") && has(".disabled"));
 
+    std::cout << "input types and a slider's error\n";
+    mountDom(h("div", {}, {
+        ui::input({.value = "s3cret", .label = "Password", .type = ui::InputType::Password}),
+        ui::input({.value = "a@b.c", .type = ui::InputType::Email}),
+        ui::slider({.label = "Seats", .value = 9, .error = "Too many"}),
+    }));
+    CHECK(has("type=\"password\"") && has("type=\"email\""));
+    CHECK(has("aria-invalid=\"true\"") && has("<span class=\"rx-field__error\" role=\"alert\">Too many</span>"));
+
     std::cout << (failures ? "FAILED: " + std::to_string(failures) : std::string("OK, all tests passed")) << '\n';
     return failures ? 1 : 0;
 }

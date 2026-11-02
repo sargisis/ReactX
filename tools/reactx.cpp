@@ -563,7 +563,7 @@ RX_TEST(quit_calls_on_quit) {
 )cpp";
 
 constexpr std::string_view kStyle = R"css(:root { color-scheme: light dark; font: 16px/1.5 system-ui, sans-serif; }
-body { margin: 0; }
+body { margin: 0; background: Canvas; color: CanvasText; }  /* explicit: contrast checkers read the page's own colors */
 #app { max-width: 720px; margin: 0 auto; padding: 24px 16px; }
 .nav { display: flex; gap: 12px; margin-bottom: 24px; }
 .nav a { color: inherit; opacity: .7; text-decoration: none; }

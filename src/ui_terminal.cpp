@@ -5,6 +5,7 @@
 
 #include "reactx/hooks.hpp"
 #include "reactx/store.hpp"
+#include "utf8.hpp"
 
 // rx::ui for the terminal backend (box/text/button/input tags, Yoga layout).
 // The typed helpers (ui::button(...)) are in ui_helpers.cpp.
@@ -48,14 +49,23 @@ Element Input(const Props& p) {
     auto onChange = p.get<InputHandler>("onChange");
     auto onSubmit = p.get<InputHandler>("onSubmit");
     std::string label = p.get<std::string>("label");
+    std::string type = p.get<std::string>("type");
+    auto fieldRef = useNodeRef();
 
     // Disabled: the value as dim text, which Tab skips and keys don't change.
+    std::string shown = value;
+    if (type == "password") {
+        shown.clear();
+        for (std::size_t i = 0; i < rx::detail::utf8Glyphs(value).size(); ++i) shown += "•";
+    }
     Element field = p.get<bool>("disabled")
         ? h("text", {{"flexGrow", 1}, {"color", t.muted}, {"dim", true}, {"underline", true}, {"wrap", false}},
-            {value.empty() ? p.get<std::string>("placeholder") : value})
+            {value.empty() ? p.get<std::string>("placeholder") : shown})
         : h("input", {
+              {"ref", fieldRef},
               {"flexGrow", 1},
               {"value", value},
+              {"type", type},
               {"placeholder", p.get<std::string>("placeholder")},
               {"color", p.get<std::string>("error").empty() ? t.text : t.danger},
               {"onInput", onChange},
@@ -64,12 +74,14 @@ Element Input(const Props& p) {
                    if (e.key == "Escape" && onChange && !value.empty()) onChange(std::string{});
                }},
           });
+    // A click on the label focuses the field, like <label> in the browser.
+    Element caption = h("text", {{"color", t.muted}, {"wrap", false}, {"onClick", Callback([fieldRef] { fieldRef.focus(); })}}, {label});
     // growInRow: takes the free room in a row (a search box next to buttons), not in a column.
     if (label.empty()) return withError(h("box", {{"direction", "row"}, {"growInRow", 1}}, {std::move(field)}), p, t);
     if (p.get<bool>("labelAbove"))
-        return withError(h("box", {{"growInRow", 1}}, {h("text", {{"color", t.muted}, {"wrap", false}}, {label}), std::move(field)}), p, t);
+        return withError(h("box", {{"growInRow", 1}}, {std::move(caption), std::move(field)}), p, t);
     return withError(h("box", {{"direction", "row"}, {"gap", 1}, {"growInRow", 1}}, {
-        h("text", {{"color", t.muted}, {"wrap", false}}, {label}),
+        std::move(caption),
         std::move(field),
     }), p, t);
 }
@@ -236,10 +248,12 @@ Element Textarea(const Props& p) {
     const Theme& t = useTheme();
     std::string label = p.get<std::string>("label");
     std::string value = p.get<std::string>("value");
+    auto fieldRef = useNodeRef();
     Element field = p.get<bool>("disabled")
         ? h("box", {{"height", p.get<int>("rows", 4)}, {"overflow", "hidden"}},
             {h("text", {{"color", t.muted}, {"dim", true}}, {value.empty() ? p.get<std::string>("placeholder") : value})})
         : h("textarea", {
+              {"ref", fieldRef},
               {"value", value},
               {"placeholder", p.get<std::string>("placeholder")},
               {"rows", p.get<int>("rows", 4)},
@@ -247,7 +261,8 @@ Element Textarea(const Props& p) {
               {"onInput", p.get<InputHandler>("onChange")},
           });
     std::vector<Element> parts;
-    if (!label.empty()) parts.push_back(h("text", {{"color", t.muted}, {"wrap", false}}, {label}));
+    if (!label.empty())  // a click on the label focuses the field
+        parts.push_back(h("text", {{"color", t.muted}, {"wrap", false}, {"onClick", Callback([fieldRef] { fieldRef.focus(); })}}, {label}));
     parts.push_back(std::move(field));
     return withError(h("box", {{"growInRow", 1}}, std::move(parts)), p, t);
 }
@@ -258,29 +273,46 @@ Element RadioGroup(const Props& p) {
     auto onChange = p.get<InputHandler>("onChange");
     std::vector<std::string> values;
     for (const Element& o : p.children()) values.push_back(o.props.get<std::string>("value"));
-    auto pick = [onChange, values](int i) {
-        int n = static_cast<int>(values.size());
-        if (onChange && n > 0) onChange(values[static_cast<std::size_t>(std::clamp(i, 0, n - 1))]);
+    const int n = static_cast<int>(values.size());
+    auto found = std::ranges::find(values, value);
+    // Like the browser: the group is one Tab stop (the checked option, else the
+    // first), and the arrows pick the next or previous option; the focus follows.
+    const int checked = found == values.end() ? -1 : static_cast<int>(found - values.begin());
+    const int stop = checked < 0 ? 0 : checked;
+    auto stopRef = useNodeRef();
+    bool& moved = useRef(false);  // an arrow picked: focus the new option once it is drawn
+    useEffect([&moved, stopRef] {
+        if (moved) stopRef.focus();
+        moved = false;
+    });
+    auto pick = [onChange, values, n, &moved](int i) {
+        if (!onChange || n == 0) return;
+        onChange(values[static_cast<std::size_t>((i % n + n) % n)]);  // past the end: around, as in a browser
+        moved = true;
     };
     std::vector<Element> items;
     std::string label = p.get<std::string>("label");
     bool off = p.get<bool>("disabled");
     if (!label.empty()) items.push_back(h("text", {{"color", t.muted}, {"wrap", false}}, {label}));
     std::vector<Element> options;
-    for (std::size_t i = 0; i < values.size(); ++i) {
-        bool on = values[i] == value;
-        int index = static_cast<int>(i);
-        Element option = h("box", {{"key", values[i]}, {"direction", "row"}, {"gap", 1}},
+    for (int i = 0; i < n; ++i) {
+        const auto& v = values[static_cast<std::size_t>(i)];
+        bool on = i == checked;
+        Element option = h("box", {{"key", v}, {"direction", "row"}, {"gap", 1}},
                            {h("text", {{"color", on && !off ? t.accent : t.muted}, {"dim", off}, {"wrap", false}}, {on ? "(•)" : "( )"}),
                             h("text", {{"color", off ? t.muted : t.text}, {"dim", off}, {"bold", on}},
-                              {p.children()[i].props.get<std::string>("label")})});
+                              {p.children()[static_cast<std::size_t>(i)].props.get<std::string>("label")})});
         if (!off) {
-            option.props.set("focusable", true);
-            option.props.set("onClick", Callback([pick, index] { pick(index); }));
-            option.props.set("onKey", KeyHandler([pick, index](const KeyEvent& e) {
-                                 if (e.key == "Down") pick(index + 1);
-                                 else if (e.key == "Up") pick(index - 1);
-                             }));
+            option.props.set("onClick", Callback([pick, i] { pick(i); }));
+            if (i == stop) {
+                option.props.set("focusable", true);
+                option.props.set("arrowKeys", true);
+                option.props.set("ref", stopRef);
+                option.props.set("onKey", KeyHandler([pick, i](const KeyEvent& e) {
+                                     if (e.key == "Down" || e.key == "Right") pick(i + 1);
+                                     else if (e.key == "Up" || e.key == "Left") pick(i - 1);
+                                 }));
+            }
         }
         options.push_back(std::move(option));
     }
@@ -320,7 +352,7 @@ Element Slider(const Props& p) {
     }
     parts.push_back(std::move(track));
     if (p.get<bool>("showValue", true)) parts.push_back(h("text", {{"color", t.text}, {"wrap", false}}, {std::to_string(value)}));
-    return h("box", {{"direction", "row"}, {"gap", 1}}, std::move(parts));
+    return withError(h("box", {{"direction", "row"}, {"gap", 1}}, std::move(parts)), p, t);
 }
 
 Element Progress(const Props& p) {
@@ -335,9 +367,10 @@ Element Progress(const Props& p) {
     for (int i = 0; i < kWidth; ++i) bar += i < filled ? "█" : "░";
     std::vector<Element> parts;
     std::string label = p.get<std::string>("label");
-    if (!label.empty()) parts.push_back(h("text", {{"color", t.muted}, {"wrap", false}}, {label}));
-    parts.push_back(h("text", {{"color", color}, {"wrap", false}}, {bar}));
-    parts.push_back(h("text", {{"color", t.text}, {"wrap", false}}, {std::to_string(percent) + "%"}));
+    // In a narrow row the bar gets shorter; the label and the percentage stay whole.
+    if (!label.empty()) parts.push_back(h("text", {{"color", t.muted}, {"wrap", false}, {"flexShrink", 0}}, {label}));
+    parts.push_back(h("text", {{"color", color}, {"wrap", false}, {"flexShrink", 1}}, {bar}));
+    parts.push_back(h("text", {{"color", t.text}, {"wrap", false}, {"flexShrink", 0}}, {std::to_string(percent) + "%"}));
     return h("box", {{"direction", "row"}, {"gap", 1}}, std::move(parts));
 }
 

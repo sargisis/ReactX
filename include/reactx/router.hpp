@@ -77,6 +77,10 @@ void navigate(const std::string& path, bool replace = false);
 void back();
 // The current path with the query ("/todos/7?tab=info"); not a hook.
 std::string currentPath();
+// The path with the query a guard's .redirect turned the user away from
+// ("/tickets/2" on the way to "/login"), so a login page can go back there
+// after logging in; "" if there was none, and again after any other navigation.
+std::string redirectedFrom();
 // Clears the history and goes to `path` (tests, terminal apps).
 void reset(const std::string& path = "/");
 

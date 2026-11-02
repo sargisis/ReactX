@@ -231,6 +231,27 @@ TEST(a_guard_redirects_or_skips_the_route) {
     CHECK(has(r, "\"404 /beta\""));  // not allowed, no redirect: the next route
 }
 
+TEST(a_guard_remembers_where_the_user_was_going) {
+    loggedIn = false;
+    router::reset("/teams/a/settings/profile?tab=2");
+    CHECK(router::redirectedFrom().empty());
+    TextRenderer r;
+    Root root(r);
+    root.render(h(Guarded));
+    root.flush();
+    CHECK(router::currentPath() == "/login");
+    CHECK(router::redirectedFrom() == "/teams/a/settings/profile?tab=2");  // the login page goes back there
+    loggedIn = true;
+    root.render(h(Guarded));  // the routes see the new .allow
+    router::navigate(router::redirectedFrom());
+    root.flush();
+    CHECK(has(r, "\"profile of a\"") && router::redirectedFrom().empty());  // any navigation forgets it
+
+    router::navigate("/");  // router::redirect isn't a guard: nothing to remember
+    root.flush();
+    CHECK(router::currentPath() == "/inbox" && router::redirectedFrom().empty());
+}
+
 TEST(redirect_goes_on_and_replaces_the_entry) {
     router::reset("/");
     TextRenderer r;

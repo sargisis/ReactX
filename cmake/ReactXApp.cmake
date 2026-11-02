@@ -69,12 +69,21 @@ function(reactx_add_app target)
   target_link_options(${target} PRIVATE "-Wl,-Map=${CMAKE_BINARY_DIR}/${target}.link.map")
   set_property(TARGET ${target} APPEND PROPERTY LINK_DEPENDS ${shell})
 
-  set(steps COMMAND ${CMAKE_COMMAND} -E copy ${dist}/index.html ${dist}/404.html)
+  add_custom_command(TARGET ${target} POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy ${dist}/index.html ${dist}/404.html VERBATIM)
   if(APP_PUBLIC)
+    # The PUBLIC folder is copied whenever one of its files changes, not only
+    # when the program is linked again (a CSS edit alone reaches dist too).
     get_filename_component(public ${APP_PUBLIC} ABSOLUTE BASE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
-    list(APPEND steps COMMAND ${CMAKE_COMMAND} -E copy_directory ${public} ${dist})
+    file(GLOB_RECURSE public_files CONFIGURE_DEPENDS ${public}/*)
+    set(stamp ${CMAKE_CURRENT_BINARY_DIR}/${target}_public.stamp)
+    add_custom_command(OUTPUT ${stamp}
+      COMMAND ${CMAKE_COMMAND} -E copy_directory ${public} ${dist}
+      COMMAND ${CMAKE_COMMAND} -E touch ${stamp}
+      DEPENDS ${public_files} ${target}   # and after every link: dist may have been emptied
+      COMMENT "Copying ${APP_PUBLIC} into dist"
+      VERBATIM)
+    add_custom_target(${target}_public ALL DEPENDS ${stamp})
   endif()
-  add_custom_command(TARGET ${target} POST_BUILD ${steps} VERBATIM)
 
   # Routes to prerender: the argument, else reactx.json next to CMakeLists.txt.
   set(routes ${APP_PRERENDER})

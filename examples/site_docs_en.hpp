@@ -448,9 +448,11 @@ inline const std::vector<Page>& pagesEn() {
                 {"Components", "button, input, checkbox, select, tabs, modal, confirm, list and listItem, tooltip, card, stack "
                                "and text. The same code works in the terminal and in the browser. In forms, .labelAbove = true "
                                "puts the label of an input or select on its own line, so the fields line up; a checkbox's "
-                               ".onChange gets the new state.",
+                               ".onChange gets the new state. .type = ui::InputType::Password hides what is typed (dots "
+                               "in a terminal); Email, Number, Tel and Url pick the phone's keyboard.",
                  "ui::button({.label = \"Save\", .onClick = save, .variant = ui::Variant::Primary})\n"
                  "ui::input({.value = name, .onChange = setNameFn, .onSubmit = addFn, .label = \"Name\", .labelAbove = true})\n"
+                 "ui::input({.value = pass, .onChange = setPassFn, .label = \"Password\", .type = ui::InputType::Password})\n"
                  "ui::checkbox({.label = \"Agree\", .checked = on, .onChange = [setOn](bool v) { setOn(v); }})\n"
                  "ui::modal({.title = \"Delete?\", .open = asking, .onClose = closeFn, .children = {...}})"},
                 {"Long lists", "ui::useVirtualList draws only the rows on screen: 100,000 rows cost what 40 do, in both backends. "
@@ -476,7 +478,8 @@ inline const std::vector<Page>& pagesEn() {
                  "           .label = \"Name\", .error = form.error(\"name\")})\n"
                  "ui::button({.label = \"Sign up\", .onClick = form.submit})"},
                 {"More fields", "textarea for several lines (in a terminal too), radioGroup when every option "
-                                "should be visible, slider for a number in a range, progress for how far something got.",
+                                "should be visible (one Tab stop; the arrows pick, in a terminal too), slider for a number "
+                                "in a range, progress for how far something got.",
                  "ui::textarea({.value = note, .onChange = setNoteFn, .label = \"Note\", .rows = 3})\n"
                  "ui::radioGroup({.label = \"Plan\", .value = plan, .options = {{\"free\", \"Free\"}, {\"pro\", \"Pro\"}},\n"
                  "                .onChange = setPlanFn, .direction = ui::Direction::Row})\n"
@@ -530,12 +533,17 @@ inline const std::vector<Page>& pagesEn() {
                  "}"},
                 {"Guards and redirects", "A route with .allow = false is skipped, or with .redirect goes there instead "
                                          "(replacing the history entry). router::redirect sends on at once. .allow is a "
-                                         "bool computed where routes() is called, so the routes follow your state.",
+                                         "bool computed where routes() is called, so the routes follow your state. "
+                                         "router::redirectedFrom() is the path a guard turned away: the login page goes "
+                                         "back there after logging in.",
                  "router::routes({\n"
                  "    {\"/\", router::redirect(\"/inbox\")},\n"
                  "    {.path = \"/admin/*\", .element = h(Admin), .allow = user.isAdmin, .redirect = \"/login\"},\n"
                  "    {\"*\", h(NotFound)},\n"
-                 "})"},
+                 "})\n"
+                 "// in the login page's handler, after logging in:\n"
+                 "std::string from = router::redirectedFrom();\n"
+                 "router::navigate(from.empty() ? \"/\" : from, /*replace=*/true);"},
                 {"Links", "link changes the page without reloading (Ctrl+click still opens a new tab) and gets "
                           ".activeClassName (\"active\") on the current path; navigate and back do it from code. "
                           "useParams() gives every route parameter, currentPath() the path with the query (not a hook), "

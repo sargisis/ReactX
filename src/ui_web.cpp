@@ -124,7 +124,7 @@ constexpr const char* kCss = R"css(
 .rx-item--selected { color: var(--rx-accent); font-weight: 600; }
 .rx-item__detail { color: var(--rx-muted); font-weight: normal; white-space: nowrap; }
 
-.rx-text { margin: 0; }
+.rx-text { margin: 0; white-space: pre-line; }
 .rx-text--muted { color: var(--rx-muted); }
 
 .rx-card { border: 1px solid var(--rx-border); border-radius: 14px; padding: 16px 18px; background: var(--rx-surface);
@@ -272,7 +272,7 @@ Element Input(const Props& p) {
     if (!label.empty()) parts.push_back(h("span", {{"className", "rx-field__label"}}, {label}));
     parts.push_back(invalid(h("input", {
         {"className", "rx-input"},
-        {"type", "text"},
+        {"type", p.get<std::string>("type", "text")},
         {"value", value},
         {"placeholder", p.get<std::string>("placeholder")},
         {"onInput", onChange},
@@ -475,15 +475,16 @@ Element Slider(const Props& p) {
     int value = p.get<int>("value");
     std::vector<Element> parts;
     if (!label.empty()) parts.push_back(h("span", {{"className", "rx-field__label"}}, {label}));
-    parts.push_back(h("input", {{"type", "range"},
-                                {"min", p.get<int>("min")},
-                                {"max", p.get<int>("max", 100)},
-                                {"step", p.get<int>("step", 1)},
-                                {"value", value},
-                                {"aria-label", label},
-                                {"disabled", p.get<bool>("disabled")},
-                                {"onInput", p.get<InputHandler>("onChange")}}));
+    parts.push_back(invalid(h("input", {{"type", "range"},
+                                        {"min", p.get<int>("min")},
+                                        {"max", p.get<int>("max", 100)},
+                                        {"step", p.get<int>("step", 1)},
+                                        {"value", value},
+                                        {"aria-label", label},
+                                        {"onInput", p.get<InputHandler>("onChange")}}),
+                            p));
     if (p.get<bool>("showValue", true)) parts.push_back(h("span", {{"className", "rx-slider__value"}}, {std::to_string(value)}));
+    addError(parts, p);
     return h("label", {{"className", "rx-field rx-slider"}}, std::move(parts));
 }
 

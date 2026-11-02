@@ -27,6 +27,8 @@ namespace {
 struct Store {
     std::string base;  // "/ReactX" on GitHub Pages, "" at the root of a domain
     std::string path = "/";
+    std::string from;         // where a guard turned the user away (redirectedFrom)
+    std::string pendingFrom;  // ... set by the guard's redirect, taken by the next setPath
     std::vector<std::string> history{"/"};  // terminal only; the browser keeps its own
     std::vector<std::pair<int, std::function<void()>>> listeners;
     int nextId = 0;
@@ -122,6 +124,7 @@ void setPath(std::string path) {
     Store& s = store();
     if (path == s.path) return;
     s.path = std::move(path);
+    s.from = std::exchange(s.pendingFrom, {});  // any other navigation forgets it
     auto listeners = s.listeners;  // a listener may unsubscribe
     for (auto& [id, fn] : listeners) fn();
 #ifdef __EMSCRIPTEN__
@@ -159,8 +162,13 @@ void useLocationUpdates() {
 
 Element Redirect(const Props& p) {
     std::string to = p.get<std::string>("to");
+    std::string from = p.get<std::string>("from");  // a guard's redirect: the path it turned away
     // After the commit: navigating re-renders, which can't happen while rendering.
-    useEffect([to] { navigate(to, true); }, deps(to));
+    useEffect([to, from] {
+        store().pendingFrom = from;
+        navigate(to, true);
+        store().pendingFrom.clear();  // navigate() did nothing (already there)
+    }, deps(to, from));
     return fragment({});
 }
 
@@ -176,7 +184,7 @@ Element Routes(const Props& p) {
         if (!route.props.get<bool>("allow", true)) {
             std::string to = route.props.get<std::string>("redirect");
             if (to.empty()) continue;  // a guard without a redirect: the next route
-            return h(Redirect, {{"to", to}});
+            return h(Redirect, {{"to", to}, {"from", store().path}});
         }
         // Inside a "/*" route the nested routes() see the part under it.
         bool star = pattern == "*" || pattern.ends_with("/*");
@@ -255,6 +263,8 @@ void navigate(const std::string& path, bool replace) {
 #endif
     setPath(path);
 }
+
+std::string redirectedFrom() { return store().from; }
 
 void back() {
     start();

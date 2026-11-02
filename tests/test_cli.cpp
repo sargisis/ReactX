@@ -418,6 +418,11 @@ void endToEnd(const fs::path& tmp) {
     CHECK(!contains(read(web / "build/web/dist/index.html"), "__reactx"));
     CHECK(!contains(read(web / "build/web/dist/404.html"), "__reactx"));
 
+    std::cout << "e2e: a CSS edit alone reaches dist\n";
+    std::ofstream(web / "public/style.css", std::ios::app) << "\n.css-probe { color: red; }\n";
+    CHECK(reactx({"build"}, web).code == 0);
+    CHECK(contains(read(web / "build/web/dist/style.css"), ".css-probe"));
+
     std::cout << "e2e: build reports the .wasm size and what makes it big\n";
     CHECK(contains(wb.out, "index.wasm: ") && !contains(wb.out, "reactx: size:"));  // a fresh project is lean
     CHECK(contains(wb.out, "biggest parts: ") && contains(wb.out, "ReactX reconciler.cpp"));

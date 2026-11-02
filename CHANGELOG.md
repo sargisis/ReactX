@@ -6,6 +6,27 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Added
+
+- `ui::input` `.type`: `ui::InputType::Password` shows dots in a terminal and is a password field in the browser; `Email`, `Number`, `Search`, `Tel` and `Url` pick the phone's keyboard.
+- `ui::slider` `.error`, like every other form field.
+- `router::redirectedFrom()`: the path (with its query) a guard's `.redirect` turned the user away from, so a login page can go back there; `""` again after any other navigation.
+- The terminal prop `arrowKeys=true`: while the node is focused, Up/Down go to its `onKey` instead of moving the focus.
+- Docs: how to build your own server next to a web app (a native CMake target), and which place `testing::Screen::click` picks.
+
+### Changed
+
+- `ui::radioGroup` in a terminal is one Tab stop, like in the browser: the checked option takes the focus and the arrows (Up/Down/Left/Right) pick the next or previous one, going around at the ends.
+- A click on a `ui::input` / `ui::textarea` label in a terminal focuses the field, like `<label>` in the browser.
+- `ui::text` keeps the line breaks of its text in the browser (as in a terminal).
+
+### Fixed
+
+- `reactx build` / `reactx dev` copy a changed file of `public/` (a CSS edit) into `dist` even when no C++ changed; before, `dist` kept the old file until the program was linked again.
+- The arrows did nothing in a terminal `ui::radioGroup` (documented as "Up / Down"): the terminal took Up/Down for moving the focus first.
+- New projects: the page has its own background and text color (`Canvas` / `CanvasText`), so contrast checkers (Lighthouse, axe) see the dark theme's background — the `rx::ui` labels failed color-contrast in dark mode before.
+- `ui::progress` in a narrow terminal row cut off the label or the percentage; now the bar gets shorter.
+
 ## [0.21.0] — 2026-11-02
 
 The last release before 1.0: a security review of `HttpServer`, an accessible website and `rx::ui` (axe-core: 0 violations, light and dark, desktop and phone), complete docs in both languages and a frozen public API (`api/reactx.api`). A MINOR release because `HttpServer` now refuses unknown `Host` names and cross-site `Origin`s.

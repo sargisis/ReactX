@@ -593,7 +593,7 @@ void TerminalRenderer::setProp(NodeHandle h, std::string_view name, const PropVa
 void TerminalRenderer::propChanged(NodeHandle h, std::string_view name) {
     // Props that only change how a node is drawn don't touch the layout.
     static constexpr std::string_view drawOnly[] = {"color", "bg", "bold", "dim", "underline", "title",
-                                                    "focusable", "trapFocus", "opaque", "scrollIntoView", "followEnd", "key"};
+                                                    "focusable", "arrowKeys", "trapFocus", "opaque", "scrollIntoView", "followEnd", "key"};
     if (std::ranges::contains(drawOnly, name) || name.starts_with("on")) return;
     layout_->changed(*this, h);
     if (name == "position")  // fixed nodes leave their parent's layout
@@ -1091,6 +1091,10 @@ bool TerminalRenderer::handleKeyNow(Root& root, const KeyEvent& key) {
         if (handled || focused_ != target) return true;
     }
     if (key.ctrl || key.alt) return bubbleKey(root, key);  // no default action
+    // arrowKeys=true: the focused node uses Up / Down itself (a radio group);
+    // they reach its onKey instead of moving the focus.
+    if ((key.key == "Up" || key.key == "Down") && f && !f->isText && flag(f->props, "arrowKeys"))
+        return bubbleKey(root, key);
     if ((key.key == "Tab" && !key.shift) || key.key == "Down") {
         focusNext();
         return true;
@@ -1285,6 +1289,17 @@ void TerminalRenderer::drawField(NodeHandle h, const Rect& content, const Rect& 
         return;
     }
     std::size_t cur = cursorIn(h, value);
+    if (!multiline && prop(n->props, "type") == "password") {  // drawn as one • per character; edited as typed
+        std::size_t before = 0, count = 0;
+        for (const detail::Glyph& g : detail::utf8Glyphs(value)) {
+            if (static_cast<std::size_t>(g.text.data() - value.data()) < cur) ++before;
+            ++count;
+        }
+        std::string masked;
+        for (std::size_t i = 0; i < count; ++i) masked += "•";
+        value = std::move(masked);
+        cur = before * std::string_view("•").size();
+    }
     Edit& e = edits_[h];
     Style caret = field;
     caret.reverse = !field.reverse;

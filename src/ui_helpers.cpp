@@ -56,6 +56,21 @@ Element button(ButtonProps p) {
                    p.key);
 }
 
+namespace {
+const char* inputTypeName(InputType t) {
+    switch (t) {
+        case InputType::Password: return "password";
+        case InputType::Email: return "email";
+        case InputType::Number: return "number";
+        case InputType::Search: return "search";
+        case InputType::Tel: return "tel";
+        case InputType::Url: return "url";
+        case InputType::Text: break;
+    }
+    return "text";
+}
+}  // namespace
+
 Element input(InputProps p) {
     return withKey(h(Input, {{"value", std::move(p.value)},
                              {"onChange", std::move(p.onChange)},
@@ -64,7 +79,8 @@ Element input(InputProps p) {
                              {"label", std::move(p.label)},
                              {"labelAbove", p.labelAbove},
                              {"disabled", p.disabled},
-                             {"error", std::move(p.error)}}),
+                             {"error", std::move(p.error)},
+                             {"type", inputTypeName(p.type)}}),
                    p.key);
 }
 
@@ -183,7 +199,8 @@ Element slider(SliderProps p) {
                                    if (auto n = parseNumber<int>(text); n && onChange) onChange(*n);
                                })},
                               {"showValue", p.showValue},
-                              {"disabled", p.disabled}}),
+                              {"disabled", p.disabled},
+                              {"error", std::move(p.error)}}),
                    p.key);
 }
 

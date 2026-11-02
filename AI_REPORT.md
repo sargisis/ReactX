@@ -905,3 +905,99 @@ G5 (llms.txt). Затем доделано и остальное: G6 (`.labelAbo
 `insertBefore` рядом с соседом, без `removeChild`: сортировка 2000 строк как на чистом JS), сверка 10 000 компонентов
 на кадр — `ui::useVirtualList` (рисуются только видимые строки; logs: 66 % → 2,6 % CPU, без мерцания благодаря
 `followEnd`; в браузере 100 000 строк — ~40 в DOM). Плюс `reactx upgrade` и ежедневное напоминание о новом релизе.
+
+---
+
+## Сводный отчёт #10 — Claude (claude-opus-5-5), 2026-11-02, ReactX v0.21.0
+
+Раунд «новичок по одному llms.txt» перед 1.0: CLI v0.21.0 из релиза, проекты в `~/Desktop/reactx-trials/`, только
+`llms.txt` + `AGENTS.md` проекта; исходники ReactX — только после того, как проблема воспроизведена. Браузер —
+безголовый Brave через CDP (+ axe-core 4.10.3), терминал — pty + pyte, тесты — `reactx test`.
+
+Проекты:
+1. **helpdesk** (веб + свой C++ сервер) — вход (`useForm`, `fetch`, сессия в `storageRead/Write`), защищённые вложенные
+   маршруты (`/tickets/*` с `.allow` / `.redirect`, внутри `/`, `/new`, `/:id`), `ui::table` с сортировкой, поиском
+   (`useDebounce`) и фильтром (`ui::select`), форма заявки (`input`, `textarea`, `radioGroup`, `slider`, проверка
+   полей), карточка заявки с `ui::confirm`, `ui::toast`, `useTitle`, живые обновления по `useWebSocket` (вторая
+   вкладка видит новую заявку сразу). Сервер: `HttpServer` с REST, токеном в `Authorization`, WebSocket-рассылкой и
+   `serveDirectory`. 5 тестов на `testing::Screen` + `setLocalFetch`. `reactx dev --proxy` с WebSocket через прокси.
+2. **journal** (терминал) — дневник: список записей (`ui::list .scroll`), поиск, `textarea` с эмодзи, кириллицей и
+   китайским, настроение (`radioGroup` в ряд), энергия (`slider`), счётчик слов (`progress`), Ctrl+S/N/D/Q через
+   `useKeyboard`, удаление через `ui::confirm`, файл `~/.journal.json` из `main`.
+
+Итог: оба приложения собрались почти с первого раза, всё главное работает в обоих бэкендах. Защита маршрутов,
+вложенные маршруты, `useForm`, таблица (на телефоне прокручивается внутри себя, страница не уезжает), WebSocket и
+переподключение, сессия после перезагрузки, тесты. Сервер отвечает 403 на чужой `Host` и чужой `Origin`, не отдаёт
+dot-файлы. axe: 0 нарушений в светлой теме. Четыре раза «баг» оказывался моим скриптом (клик по ячейке вместо кнопки,
+поиск текста «Title» при подписи «Title ▲», позиция в символах вместо колонок, плейсхолдер скрыт у поля в фокусе) —
+в отчёт не вошли.
+
+### Баги
+
+**F1. [P1][bug] `reactx build` не копирует изменённые файлы `public/`.** Правка `public/style.css` без правки C++:
+«ninja: no work to do», в `build/web/dist/style.css` остаётся старая версия — стиль не доходит до сайта. Причина:
+`copy_directory` висит на `POST_BUILD` цели (`cmake/ReactXApp.cmake:77`), а цель не пересобирается.
+
+**F2. [P1][bug] Стрелки в терминале не меняют `ui::radioGroup`.** llms.txt и README: «(•) with Up / Down». На деле
+Up/Down только двигают фокус (а Left/Right ничего не делают): `TerminalRenderer::handleKeyNow` обрабатывает Up/Down
+как переход фокуса раньше `onKey` элемента (`src/terminal_renderer.cpp:1094`), исключение есть только у textarea.
+Кроме того, каждый вариант — отдельная остановка Tab (в браузере группа — одна остановка, стрелки выбирают).
+
+**F3. [P1][gap] У `ui::input` нет пароля.** `InputProps` без `type`: форма входа на `ui::` показывает пароль открытым
+текстом (в браузере и в терминале). Нет и `email` / `number` (мобильная клавиатура).
+
+**F4. [P2][bug] llms.txt: «Every field takes `.error`» — у `ui::slider` его нет** (ошибка компиляции «field designator
+'error' does not refer to any field in type 'SliderProps'»).
+
+**F5. [P2][bug] Тёмная тема нового проекта не проходит проверку контраста.** В шаблоне CSS у `body` нет фона
+(`color-scheme: light dark` и только), поэтому axe/Lighthouse считают фон белым, а подписи `rx::ui` в тёмной теме
+светло-серые: 4–6 нарушений color-contrast на каждой странице с формой. С `body { background: Canvas; color:
+CanvasText; }` — 0.
+
+**F6. [P2][bug] `ui::progress` в узкой колонке обрезает «%».** Подпись, полоса (24 клетки) и процент сжимаются
+поровну; в колонке шириной 30 видно «Today 9/200 ░░░ 4» без «%». Полоса должна сжиматься первой (то же у `slider`).
+
+### Пробелы и неудобства
+
+**G1. [P2][gap] Клик по подписи поля в терминале не ставит фокус в поле** (в браузере `<label>` это делает). В тестах
+`s.click("Title")` не фокусирует поле — приходится кликать по плейсхолдеру.
+
+**G2. [P2][gap] `.redirect` защищённого маршрута теряет, куда шёл пользователь.** `/tickets/2` → `/login` → после входа
+приложение не знает, что вернуть на `/tickets/2`. Нужен способ узнать исходный путь (например, `?next=` или
+`router::redirectedFrom()`).
+
+**G3. [P2][docs] Как собрать свой сервер в веб-проекте?** llms.txt говорит только «keep it in its own CMake target».
+Пришлось угадать: `if(NOT EMSCRIPTEN) add_executable(x server/main.cpp) target_link_libraries(x PRIVATE
+reactx::reactx) endif()` и отдельный `cmake -S . -B build/server`; `reactx build --native` его не собирает.
+
+**G4. [P2][gap] `ui::text` в браузере склеивает строки** — текст из `textarea` («Since Monday,\nevery morning.»)
+показывается одной строкой (в терминале переносы сохраняются).
+
+**G5. [P2][dx] `testing::Screen::click(text)` берёт первое совпадение** — `click("Log in")` попадает в заголовок
+карточки «Log in», а не в кнопку; помогает `click("[ Log in ]")`. Это описано, но не очевидно; стоит упомянуть в
+llms.txt.
+
+**G6. [P2][size] helpdesk — 304 КБ .wasm (128 КБ gzip)**, из них `src/pages.cpp` 24 %. Стоит посмотреть, что из
+`useForm` / `table` / `std::ranges` раздувает код приложения.
+
+### Что понравилось
+
+- Защита маршрута одной строкой: `{.path = "/tickets/*", .element = ..., .allow = loggedIn, .redirect = "/login"}`.
+- `useForm` с проверкой и `.error` на полях: форма заявки — 30 строк, ошибки появляются в нужный момент.
+- `testing::Screen` + `setLocalFetch`: тесты входа и формы без сервера и браузера, 5 тестов за секунды.
+- WebSocket сквозь `reactx dev --proxy` без настройки; «live» во второй вкладке сразу.
+- Эмодзи, кириллица и китайский в терминальном textarea — рамки на месте, курсор правильный.
+
+### Приоритет на исправление (v0.22 / 1.0-rc)
+
+F1, F2, F3 → F4, F5, F6 → G1, G2, G3, G4, G5 (документация) → G6.
+
+**Статус (2026-11-02, после отчёта #10):** исправлено в `[Unreleased]` — F1 (`public/` копируется отдельным шагом,
+который зависит от его файлов и от сборки программы; e2e-проверка «правка CSS доходит до dist»), F2 (терминальный
+проп `arrowKeys`: ↑ ↓ идут в `onKey` элемента; `ui::radioGroup` — одна остановка Tab, стрелки во все стороны по кругу,
+фокус следует за выбором), F3 (`ui::InputType` и `InputProps::type`: точки в терминале, `type="password"` в браузере,
+плюс Email/Number/Search/Tel/Url), F4 (`SliderProps::error`), F5 (шаблон: `body { background: Canvas; color:
+CanvasText; }` — axe в тёмной теме: 4 нарушения → 0), F6 (у `ui::progress` сжимается только полоса), G1 (клик по
+подписи `input` / `textarea` ставит фокус), G2 (`router::redirectedFrom()`), G3 и G5 (llms.txt), G4 (`white-space:
+pre-line` у `ui::text`). Проверено на helpdesk и journal с локальным ReactX (браузер и pty). `.wasm`: счётчик без
+изменений (97 022 Б), сайт +2,9 КБ (+1 КБ gzip). Осталось: G6 (размер helpdesk).

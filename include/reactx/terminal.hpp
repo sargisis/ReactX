@@ -74,6 +74,8 @@ std::vector<TerminalInput> decodeInput(std::string_view bytes);
 //   opaque (bool): clear what is drawn under the box (modals)
 //   trapFocus (bool): while such a node exists, Tab stays inside the last one;
 //                     focus returns to where it was when it goes away
+//   arrowKeys (bool): when focused, Up / Down go to its onKey instead of
+//                     moving the focus (Left / Right always do)
 // Look: border (bool), title, color, bg, bold, dim, underline.
 // Colors: black red green yellow blue magenta cyan white gray, bright-<color>.
 //

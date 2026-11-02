@@ -306,7 +306,7 @@ std::string httpGet(int port, const std::string& path) {
         ::close(fd);
         return {};
     }
-    std::string req = "GET " + path + " HTTP/1.1\r\nHost: x\r\n\r\n";
+    std::string req = "GET " + path + " HTTP/1.1\r\nHost: localhost\r\n\r\n";
     ::send(fd, req.data(), req.size(), MSG_NOSIGNAL);
     std::string raw;
     char buf[8192];
@@ -327,7 +327,7 @@ std::string webSocketEcho(int port, const std::string& path) {
     ::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout);
     std::string got;
     if (::connect(fd, reinterpret_cast<sockaddr*>(&addr), sizeof addr) == 0) {
-        std::string req = "GET " + path + " HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+        std::string req = "GET " + path + " HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
                           "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n" +
                           rx::detail::ws::encode(rx::detail::ws::Text, "hi", true);
         ::send(fd, req.data(), req.size(), MSG_NOSIGNAL);

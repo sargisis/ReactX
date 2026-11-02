@@ -5,7 +5,7 @@
 #   docker run --rm -it -u "$(id -u):$(id -g)" -v "$PWD:/app" -w /app -p 8090:8090 reactx
 #   reactx new my-app && cd my-app && reactx dev --host 0.0.0.0
 #
-# The same image is the dev container (.devcontainer/devcontainer.json).
+# The same image is the dev container (.devcontainer/ in projects from reactx new).
 
 ARG GCC_VERSION=16
 

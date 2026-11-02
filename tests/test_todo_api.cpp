@@ -54,7 +54,7 @@ Reply call(int port, const std::string& method, const std::string& path, const s
     addr.sin_port = htons(static_cast<std::uint16_t>(port));
     ::inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
     ::connect(fd, reinterpret_cast<sockaddr*>(&addr), sizeof addr);
-    std::string req = method + " " + path + " HTTP/1.1\r\nHost: x\r\nContent-Length: " + std::to_string(body.size()) +
+    std::string req = method + " " + path + " HTTP/1.1\r\nHost: localhost\r\nContent-Length: " + std::to_string(body.size()) +
                       "\r\n\r\n" + body;
     ::send(fd, req.data(), req.size(), MSG_NOSIGNAL);
     std::string raw;

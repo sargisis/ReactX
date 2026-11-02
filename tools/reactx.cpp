@@ -1,7 +1,7 @@
 // reactx — the ReactX command line tool (C++26).
 //
 //   reactx new <name> [--terminal] [--local]   create a project
-//   reactx dev [--port N] [--host H] [--proxy [PREFIX=]URL] [--native]
+//   reactx dev [--port N] [--host H] [--allow-host NAME] [--proxy [PREFIX=]URL] [--native]
 //                                              build, serve, rebuild on changes
 //   reactx build [--native]                    build (web: build/web/dist)
 //   reactx test [name]                         build and run tests/*.cpp
@@ -1220,6 +1220,7 @@ int cmdDev(const std::vector<std::string>& args) {
     bool native = isTerminal(manifest);
     int port = 8090;
     std::string host = "127.0.0.1";
+    std::vector<std::string> allowedHosts;
     std::map<std::string, rx::net::Upstream> proxies;  // reactx.json first, --proxy overrides
     if (manifest.web && manifest.web->proxy)
         for (const auto& [prefix, url] : *manifest.web->proxy) proxies.insert(proxyRule(prefix, url));
@@ -1230,6 +1231,8 @@ int cmdDev(const std::vector<std::string>& args) {
             port = *parsed;
         } else if (args[i] == "--host" && i + 1 < args.size()) {
             host = args[++i];
+        } else if (args[i] == "--allow-host" && i + 1 < args.size()) {
+            allowedHosts.push_back(args[++i]);
         } else if (args[i] == "--proxy" && i + 1 < args.size()) {
             std::string_view rule = args[++i];
             auto eq = rule.find('=');
@@ -1256,6 +1259,10 @@ int cmdDev(const std::vector<std::string>& args) {
     if (!base.ends_with('/')) base += '/';
 
     rx::net::HttpServer server(host, port);
+    // GitHub Codespaces opens the page as https://<name>-8090.app.github.dev.
+    if (const char* domain = std::getenv("GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN"); domain && *domain)
+        allowedHosts.push_back("." + std::string(domain));
+    server.allowHosts(allowedHosts);
     rx::net::Handler versionHandler = [&version](const rx::net::Request&) {
         auto r = rx::net::Response::text(std::to_string(version.load()));
         r.headers.emplace_back("Cache-Control", "no-store");
@@ -1590,6 +1597,7 @@ int usage(std::FILE* out, int code) {
            "  reactx new <name> [--terminal] [--local]   create a project (web by default)\n"
            "  reactx dev [--port N] [--native]           build, serve, rebuild and reload on changes\n"
            "      [--host 0.0.0.0]                       listen on all interfaces (Docker, phone on Wi-Fi)\n"
+           "      [--allow-host NAME]                    answer to NAME too (besides localhost and IP addresses)\n"
            "      [--proxy [PREFIX=]URL]                 forward PREFIX (default /api) to a backend\n"
            "  reactx build [--native]                    build (web: build/web/dist; --native: GCC, main without mountDom)\n"
            "  reactx test [name]                         build and run the tests in tests/*.cpp\n"
@@ -1616,10 +1624,12 @@ std::string_view commandHelp(std::string_view command) {
                "  --terminal   a terminal app (TerminalApp) instead of a web app\n"
                "  --local      use the ReactX sources this CLI was built from (for working on ReactX)\n";
     if (command == "dev")
-        return "reactx dev [--port N] [--host H] [--proxy [PREFIX=]URL]... [--native]\n\n"
+        return "reactx dev [--port N] [--host H] [--allow-host NAME]... [--proxy [PREFIX=]URL]... [--native]\n\n"
                "Builds the web app, serves it and rebuilds + reloads the page on every save.\n\n"
                "  --port N                 port of the dev server (8090)\n"
                "  --host H                 address to listen on (127.0.0.1; 0.0.0.0 for containers and other devices)\n"
+               "  --allow-host NAME        a host name to answer to besides localhost and IP addresses\n"
+               "                           (mypc.local, .example.test for it and its subdomains); others get 403\n"
                "  --proxy [PREFIX=]URL     forward PREFIX (/api) to a backend: --proxy http://127.0.0.1:5000\n"
                "                           (or \"web\": {\"proxy\": {\"/api\": \"http://...\"}} in reactx.json)\n"
                "  --native                 build and run the native (terminal) version instead\n";

@@ -6,6 +6,23 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Changed
+
+- `HttpServer` (and `reactx dev`, `reactx_serve`) answers only to `localhost`, `*.localhost` and IP addresses; other `Host` names get 403, so a site that points its DNS name at `127.0.0.1` can't read your dev server (DNS rebinding). Add names with `server.allowHosts({...})` / `reactx dev --allow-host NAME`; `reactx dev` allows the GitHub Codespaces domain itself.
+- WebSocket upgrades and requests other than GET/HEAD/OPTIONS whose `Origin` is another site get 403 (CSRF, cross-site WebSocket hijacking). Pages on `localhost` at any port still work.
+- Dot files (`/.env`, `/.git/...`) aren't served from `serveDirectory`; `/.well-known/` still is.
+
+### Added
+
+- `HttpServer::allowHosts`, `setRequestTimeout` (30 s by default) and `setMaxConnections` (512 by default); `--allow-host` in `reactx dev` and `reactx_serve`.
+
+### Fixed
+
+- Security review of `HttpServer`: a client sending a byte every few seconds held a thread forever (now 408 after the request timeout); every connection got a thread with no limit (now 503 over the limit); a client that stopped reading blocked a response or a WebSocket broadcast forever (now dropped after 10 s); a body shorter than its `Content-Length` reached the handler (now 400).
+- Request heads with control characters (a bare LF in the target or a header could add a header when proxied), a space before a header's colon, folded headers, two different `Host` or `Content-Length` values, `Transfer-Encoding` (501) or over 100 headers (431) are refused.
+- A symlink inside the served folder could lead outside it through `/x` → `x.html` or `index.html` (now 403).
+- CR and LF in response header values are dropped (response splitting), and request paths are printed in the log with control characters escaped (an ANSI escape in a URL reached the terminal).
+
 ## [0.20.0] — 2026-11-02
 
 The API audit before 1.0: every form field takes `.disabled`, `ui::list` takes `.children` like every other component, `ui::radioGroup` lays out with `.direction` like `ui::stack`, and the docs say what the public API is and how it will change: never by renaming in place — old names keep working until 2.0. A MINOR release for the new fields; apps update without changes.

@@ -661,7 +661,15 @@ inline const std::vector<Page>& pages() {
                  "server.proxy(\"/api\", *rx::net::parseUpstream(\"http://127.0.0.1:5000\"));\n\n"
                  "auto reply = rx::net::forward(req, {.host = \"127.0.0.1\", .port = 5000});\n"
                  "if (!reply) std::println(\"{}: {}\", reply.error().status, reply.error().message);"},
-                {"Важно", "Сервер рассчитан на разработку на своём компьютере: нет HTTPS и защиты от перегрузки.", ""},
+                {"Безопасность", "Отвечает только на localhost, *.localhost и IP-адреса (чужой сайт, направивший своё имя на "
+                                 "127.0.0.1, получит 403: DNS rebinding); другие имена — allowHosts или reactx dev --allow-host. "
+                                 "WebSocket и POST/PUT/PATCH/DELETE со страницы другого сайта (по Origin) получают 403. Файлы "
+                                 "с точкой (.env, .git) и симлинки за пределы папки не отдаются. Запрос должен прийти за 30 с, "
+                                 "не больше 512 соединений сразу.",
+                 "server.allowHosts({\"mypc.local\", \".example.test\"});   // \".x\": x и поддомены, \"*\": любые\n"
+                 "server.setRequestTimeout(std::chrono::seconds(10));\n"
+                 "server.setMaxConnections(128);"},
+                {"Важно", "Сервер рассчитан на разработку на своём компьютере: нет HTTPS и keep-alive.", ""},
             },
         },
         {

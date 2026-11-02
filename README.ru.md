@@ -458,10 +458,15 @@ server.run();   // до Ctrl+C
 ```
 
 ```sh
-./build/debug/reactx_serve [ПАПКА] [--port 8090] [--host 127.0.0.1] [--spa] [--base /ReactX/] [--not-found 404.html] [--quiet]
+./build/debug/reactx_serve [ПАПКА] [--port 8090] [--host 127.0.0.1] [--allow-host ИМЯ] [--spa] [--base /ReactX/] [--not-found 404.html] [--quiet]
 ```
 
-Отдаёт файлы с правильными типами (`.wasm` → `application/wasm`), не выпускает за пределы папки (`/../секрет` → 403), `--spa` отдаёт `index.html` для путей роутера, `--base` и `--not-found` повторяют GitHub Pages. Это сервер для разработки (`127.0.0.1`), не для открытого интернета: нет HTTPS, keep-alive и защиты от перегрузки.
+Отдаёт файлы с правильными типами (`.wasm` → `application/wasm`), не выпускает за пределы папки (`/../секрет` → 403), `--spa` отдаёт `index.html` для путей роутера, `--base` и `--not-found` повторяют GitHub Pages. Это сервер для разработки (`127.0.0.1`), не для открытого интернета: нет HTTPS и keep-alive. Но от того, что может сделать с ним веб-страница или локальный клиент, он защищён:
+
+- Отвечает только на `localhost`, `*.localhost` и IP-адреса: сайт, направивший своё DNS-имя на `127.0.0.1`, получит 403, а не ваши файлы и API (DNS rebinding). Другие имена: `server.allowHosts({"mypc.local", ".example.test"})` (`"*"` — любые), `reactx dev --allow-host ИМЯ`; домен GitHub Codespaces `reactx dev` разрешает сам.
+- WebSocket и запросы кроме GET/HEAD/OPTIONS, чей `Origin` — другой сайт, получают 403 (CSRF); страницы с `localhost` на любом порту проходят.
+- Файлы с точкой (`/.env`, `/.git/…`; `/.well-known/` отдаётся) и симлинки, ведущие за пределы папки, не отдаются.
+- Запрос должен прийти за 30 с (`setRequestTimeout`), не больше 512 соединений сразу (`setMaxConnections`), клиент, переставший читать, отключается через 10 с; управляющие символы в строке запроса и заголовках, тела с `Transfer-Encoding` (501) и тела короче `Content-Length` отклоняются.
 
 **WebSocket**: `server.webSocket(path, {.onOpen, .onMessage, .onClose})`; `server.webSockets(path)` — открытые соединения для рассылки. Обработчики работают в потоке соединения (общие данные — под мьютексом); `ws->send(text)` и `ws->close()` можно вызывать из любого потока.
 

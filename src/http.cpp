@@ -18,6 +18,7 @@
 #include <cctype>
 #include <cerrno>
 #include <charconv>
+#include <chrono>
 #include <cstring>
 #include <format>
 #include <fstream>
@@ -35,6 +36,8 @@ namespace {
 
 constexpr std::size_t kMaxHead = 64 * 1024;
 constexpr std::size_t kMaxBody = 10 * 1024 * 1024;
+constexpr std::size_t kMaxHeaders = 100;
+constexpr timeval kSendTimeout{.tv_sec = 10, .tv_usec = 0};  // a client that stops reading
 
 std::string lower(std::string_view s) {
     std::string out(s);
@@ -46,6 +49,54 @@ std::string_view trim(std::string_view s) {
     while (!s.empty() && (s.front() == ' ' || s.front() == '\t')) s.remove_prefix(1);
     while (!s.empty() && (s.back() == ' ' || s.back() == '\t')) s.remove_suffix(1);
     return s;
+}
+
+// A token character (RFC 9110 5.6.2): what header names are made of.
+bool tokenChar(char c) {
+    return std::isalnum(static_cast<unsigned char>(c)) || std::string_view("!#$%&'*+-.^_`|~").contains(c);
+}
+
+// CR, LF, NUL and the other control characters (a tab is allowed in values).
+bool hasControl(std::string_view s, bool tabAllowed = false) {
+    return std::ranges::any_of(s, [tabAllowed](char c) {
+        auto u = static_cast<unsigned char>(c);
+        return (u < 0x20 && !(tabAllowed && c == '\t')) || u == 0x7F;
+    });
+}
+
+// For the log: control characters (an ANSI escape in a URL) as \xNN.
+std::string printable(std::string_view s) {
+    std::string out;
+    for (char c : s) {
+        if (hasControl(std::string_view(&c, 1))) out += std::format("\\x{:02X}", static_cast<unsigned char>(c));
+        else out += c;
+    }
+    return out;
+}
+
+// Without CR, LF and NUL: a value can't start a new header (response splitting).
+std::string oneLine(std::string_view s) {
+    std::string out;
+    for (char c : s)
+        if (c != '\r' && c != '\n' && c != '\0') out += c;
+    return out;
+}
+
+// "localhost:8090" -> "localhost", "[::1]:8090" -> "::1"; lower case, no trailing dot.
+std::string hostName(std::string_view hostPort) {
+    std::string_view name = hostPort;
+    if (name.starts_with('[')) {
+        name = name.substr(1, name.find(']') - 1);
+    } else if (auto colon = name.rfind(':'); colon != std::string_view::npos) {
+        name = name.substr(0, colon);
+    }
+    while (name.ends_with('.')) name.remove_suffix(1);
+    return lower(name);
+}
+
+bool ipAddress(const std::string& name) {
+    in6_addr addr{};
+    return ::inet_pton(AF_INET, name.c_str(), &addr) == 1 || ::inet_pton(AF_INET6, name.c_str(), &addr) == 1;
 }
 
 const char* reason(int status) {
@@ -66,6 +117,7 @@ const char* reason(int status) {
         case 403: return "Forbidden";
         case 404: return "Not Found";
         case 405: return "Method Not Allowed";
+        case 408: return "Request Timeout";
         case 409: return "Conflict";
         case 410: return "Gone";
         case 413: return "Payload Too Large";
@@ -161,9 +213,11 @@ std::expected<Request, HttpError> parseRequestHead(std::string_view head) {
     if (lineEnd == std::string_view::npos) return badRequest("no request line");
     std::string_view line = head.substr(0, lineEnd);
 
+    if (hasControl(line)) return badRequest("a control character in the request line");
     auto sp1 = line.find(' ');
     auto sp2 = line.rfind(' ');
     if (sp1 == std::string_view::npos || sp2 == sp1) return badRequest("request line is not \"METHOD target HTTP/1.x\"");
+    if (line.substr(sp1 + 1, sp2 - sp1 - 1).contains(' ')) return badRequest("a space in the target");
     Request req;
     req.method = std::string(line.substr(0, sp1));
     std::string_view target = line.substr(sp1 + 1, sp2 - sp1 - 1);
@@ -180,15 +234,30 @@ std::expected<Request, HttpError> parseRequestHead(std::string_view head) {
     if (req.path.find('\0') != std::string::npos) return badRequest("NUL in path");
 
     std::string_view rest = head.substr(lineEnd + 2);
+    std::size_t count = 0;
     while (!rest.empty()) {
         auto end = rest.find("\r\n");
         std::string_view h = rest.substr(0, end);
         rest = end == std::string_view::npos ? std::string_view{} : rest.substr(end + 2);
         if (h.empty()) break;
+        if (++count > kMaxHeaders) return std::unexpected(HttpError{431, "over 100 headers"});
         auto colon = h.find(':');
         if (colon == std::string_view::npos || colon == 0) return badRequest("bad header line");
-        req.headers.insert_or_assign(lower(trim(h.substr(0, colon))), std::string(trim(h.substr(colon + 1))));
+        // No space before the colon, no folded lines (RFC 9112 5.1, 5.2): a proxy
+        // behind us could read such a header differently.
+        if (!std::ranges::all_of(h.substr(0, colon), tokenChar)) return badRequest("bad header name");
+        std::string_view value = trim(h.substr(colon + 1));
+        if (hasControl(value, /*tabAllowed=*/true)) return badRequest("a control character in a header");
+        std::string name = lower(h.substr(0, colon));
+        if (auto old = req.headers.find(name); old != req.headers.end() && old->second != value &&
+                                               (name == "host" || name == "content-length"))
+            return badRequest("two different " + name + " headers");
+        req.headers.insert_or_assign(std::move(name), std::string(value));
     }
+    // Chunked request bodies aren't read: refuse them rather than take the
+    // chunks for the next request or pass them on to a proxied server.
+    if (req.headers.contains("transfer-encoding"))
+        return std::unexpected(HttpError{501, "Transfer-Encoding in a request isn't supported, send Content-Length"});
     return req;
 }
 
@@ -205,8 +274,9 @@ std::expected<std::size_t, HttpError> bodyLength(const Request& req, std::size_t
 
 std::string serializeResponse(const Response& r, bool headOnly) {
     std::string out = std::format("HTTP/1.1 {} {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n",
-                                  r.status, reason(r.status), r.contentType, r.body.size());
-    for (const auto& [name, value] : r.headers) std::format_to(std::back_inserter(out), "{}: {}\r\n", name, value);
+                                  r.status, reason(r.status), oneLine(r.contentType), r.body.size());
+    for (const auto& [name, value] : r.headers)
+        std::format_to(std::back_inserter(out), "{}: {}\r\n", oneLine(name), oneLine(value));
     out += "\r\n";
     if (!headOnly) out += r.body;
     return out;
@@ -527,14 +597,31 @@ void HttpServer::run() {
         if (::poll(&p, 1, 200) <= 0) continue;  // wake up regularly to check stop()
         int fd = ::accept(listenFd_, nullptr, nullptr);
         if (fd < 0) continue;
-        timeval timeout{.tv_sec = 5, .tv_usec = 0};
+        // One recv() waits at most 5 s (and the whole request requestTimeout_),
+        // one send() 10 s: a client can't hold a thread by going quiet.
+        auto wait = std::min<std::chrono::milliseconds>(requestTimeout_, std::chrono::seconds(5));
+        timeval timeout{.tv_sec = static_cast<time_t>(wait.count() / 1000),
+                        .tv_usec = static_cast<suseconds_t>(wait.count() % 1000 * 1000)};
         ::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout);
+        ::setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &kSendTimeout, sizeof kSendTimeout);
+        if (active_.load() >= maxConnections_) {  // a thread per connection: don't let a flood make thousands
+            sendAll(fd, serializeResponse(Response::text("too many connections\n", 503)));
+            ::shutdown(fd, SHUT_WR);
+            ::close(fd);
+            continue;
+        }
         ++active_;
-        std::thread([this, fd] {
-            serveConnection(fd);
+        try {
+            std::thread([this, fd] {
+                serveConnection(fd);
+                --active_;
+                active_.notify_all();
+            }).detach();
+        } catch (const std::system_error&) {  // out of threads
+            ::close(fd);
             --active_;
             active_.notify_all();
-        }).detach();
+        }
     }
     for (int n = active_.load(); n != 0; n = active_.load()) active_.wait(n);  // C++20 atomic wait
 }
@@ -547,8 +634,22 @@ void HttpServer::serveConnection(int fd) {
     bool headOnly = false;
     std::string method = "-", path = "-";
 
-    while ((headEnd = data.find("\r\n\r\n")) == std::string::npos && data.size() <= kMaxHead) {
+    // The whole request (head and body) must arrive by the deadline: a client
+    // sending a byte every few seconds would hold the thread forever otherwise.
+    auto deadline = std::chrono::steady_clock::now() + requestTimeout_;
+    bool late = false;
+    auto receive = [&]() -> ssize_t {
+        if (std::chrono::steady_clock::now() >= deadline) {
+            late = true;
+            return 0;
+        }
         ssize_t n = ::recv(fd, buf, sizeof buf, 0);
+        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) late = true;
+        return n;
+    };
+
+    while ((headEnd = data.find("\r\n\r\n")) == std::string::npos && data.size() <= kMaxHead) {
+        ssize_t n = receive();
         if (n <= 0) break;
         data.append(buf, static_cast<std::size_t>(n));
     }
@@ -559,6 +660,7 @@ void HttpServer::serveConnection(int fd) {
     }
     if (headEnd == std::string::npos) {
         response = data.size() > kMaxHead ? Response::text("request head too large\n", 431)
+                   : late                 ? Response::text("request timeout\n", 408)
                                           : Response::text("bad request\n", 400);
     } else if (auto req = parseRequestHead(std::string_view(data).substr(0, headEnd + 4)); !req) {
         response = Response::text(req.error().message + "\n", req.error().status);
@@ -566,31 +668,40 @@ void HttpServer::serveConnection(int fd) {
         method = req->method;
         path = req->path;
         headOnly = req->method == "HEAD";
-        if (lower(req->header("upgrade")) == "websocket") {  // the connection becomes a WebSocket
-            if (auto route = wsRoutes_.find(req->path); route != wsRoutes_.end()) {
-                serveWebSocket(fd, std::move(*req), data.substr(headEnd + 4), route->second);
-                return;
-            }
-            for (const auto& [prefix, upstream] : proxies_)
-                if (prefix == "/" || req->path == prefix || req->path.starts_with(prefix + "/")) {
-                    tunnel(fd, upstream, data);
+        if (auto refusal = refused(*req)) {
+            response = std::move(*refusal);
+        } else {
+            if (lower(req->header("upgrade")) == "websocket") {  // the connection becomes a WebSocket
+                if (auto route = wsRoutes_.find(req->path); route != wsRoutes_.end()) {
+                    serveWebSocket(fd, std::move(*req), data.substr(headEnd + 4), route->second);
                     return;
                 }
-        }
-        if (auto length = bodyLength(*req, kMaxBody); !length) {
-            response = Response::text(length.error().message + "\n", length.error().status);
-        } else {
-            req->body = data.substr(headEnd + 4);
-            while (req->body.size() < *length) {
-                ssize_t n = ::recv(fd, buf, sizeof buf, 0);
-                if (n <= 0) break;
-                req->body.append(buf, static_cast<std::size_t>(n));
+                for (const auto& [prefix, upstream] : proxies_)
+                    if (prefix == "/" || req->path == prefix || req->path.starts_with(prefix + "/")) {
+                        tunnel(fd, upstream, data);
+                        return;
+                    }
             }
-            req->body.resize(std::min(req->body.size(), *length));
-            try {
-                response = handle(*req);
-            } catch (const std::exception& e) {
-                response = Response::text(std::string("server error: ") + e.what() + "\n", 500);
+            if (auto length = bodyLength(*req, kMaxBody); !length) {
+                response = Response::text(length.error().message + "\n", length.error().status);
+            } else {
+                req->body = data.substr(headEnd + 4);
+                while (req->body.size() < *length) {
+                    ssize_t n = receive();
+                    if (n <= 0) break;
+                    req->body.append(buf, static_cast<std::size_t>(n));
+                }
+                if (req->body.size() < *length) {  // never hand a handler half a body
+                    response = late ? Response::text("request timeout\n", 408)
+                                    : Response::text("the body is shorter than Content-Length\n", 400);
+                } else {
+                    req->body.resize(*length);
+                    try {
+                        response = handle(*req);
+                    } catch (const std::exception& e) {
+                        response = Response::text(std::string("server error: ") + e.what() + "\n", 500);
+                    }
+                }
             }
         }
     }
@@ -601,7 +712,7 @@ void HttpServer::serveConnection(int fd) {
 
     if (logging_) {
         std::scoped_lock lock(logMutex);
-        std::println("{} {} {} {}", method, path, response.status, response.body.size());
+        std::println("{} {} {} {}", printable(method), printable(path), response.status, response.body.size());
         std::fflush(stdout);
     }
 }
@@ -610,7 +721,13 @@ void HttpServer::serveConnection(int fd) {
 
 bool WebSocket::sendFrame(std::uint8_t opcode, std::string_view payload) {
     std::scoped_lock lock(mutex_);
-    return fd_ >= 0 && sendAll(fd_, detail::ws::encode(static_cast<detail::ws::Opcode>(opcode), payload, false));
+    if (fd_ < 0) return false;
+    if (sendAll(fd_, detail::ws::encode(static_cast<detail::ws::Opcode>(opcode), payload, false))) return true;
+    // Gone, or stopped reading (the send timed out): drop it, or every
+    // broadcast would wait on it. The connection's thread sees the shutdown.
+    open_ = false;
+    ::shutdown(fd_, SHUT_RDWR);
+    return false;
 }
 
 bool WebSocket::send(std::string_view text) { return open_.load() && sendFrame(detail::ws::Text, text); }
@@ -631,7 +748,7 @@ void WebSocket::shut() {
 void HttpServer::serveWebSocket(int fd, Request req, std::string rest, const WebSocketHandlers& handlers) {
     std::string path = req.path;
     std::string key = req.header("sec-websocket-key");
-    if (key.empty() || req.header("sec-websocket-version") != "13") {
+    if (req.method != "GET" || key.empty() || req.header("sec-websocket-version") != "13") {
         sendAll(fd, serializeResponse(Response::text("bad WebSocket handshake\n", 400), false));
         ::close(fd);
         return;
@@ -651,7 +768,7 @@ void HttpServer::serveWebSocket(int fd, Request req, std::string rest, const Web
     auto log = [&](std::string_view what) {
         if (!logging_) return;
         std::scoped_lock lock(logMutex);
-        std::println("WS {} {} #{}", path, what, ws->id());
+        std::println("WS {} {} #{}", printable(path), printable(what), ws->id());
         std::fflush(stdout);
     };
     // A handler that throws closes its connection (1011), not the server.
@@ -727,6 +844,8 @@ void HttpServer::tunnel(int fd, const Upstream& up, std::string_view raw) {
     auto addr = resolve(up.host);
     if (!addr) return fail(502, addr.error());
     Socket upstream(::socket(AF_INET, SOCK_STREAM, 0));
+    if (upstream.fd >= 0)  // Linux: bounds connect() too
+        ::setsockopt(upstream.fd, SOL_SOCKET, SO_SNDTIMEO, &kSendTimeout, sizeof kSendTimeout);
     sockaddr_in to{};
     to.sin_family = AF_INET;
     to.sin_port = htons(static_cast<std::uint16_t>(up.port));
@@ -758,7 +877,40 @@ void HttpServer::tunnel(int fd, const Upstream& up, std::string_view raw) {
     ::close(fd);
 }
 
+bool HttpServer::hostAllowed(std::string_view name) const {
+    std::string host = hostName(name);
+    if (host.empty()) return false;
+    if (host == "localhost" || host.ends_with(".localhost") || ipAddress(host)) return true;
+    return std::ranges::any_of(allowedHosts_, [&](const std::string& allowed) {
+        std::string a = lower(allowed);
+        if (a == "*" || a == host) return true;
+        return a.starts_with('.') && (host.ends_with(a) || host == std::string_view(a).substr(1));
+    });
+}
+
+std::optional<Response> HttpServer::refused(const Request& req) const {
+    // DNS rebinding: evil.example resolves to 127.0.0.1, and its page reads this
+    // server as its own origin. Only the Host header shows that.
+    if (std::string host = req.header("host"); !host.empty() && !hostAllowed(host))
+        return Response::text("blocked host \"" + oneLine(host) +
+                                  "\": add it with HttpServer::allowHosts (reactx dev --allow-host NAME)\n",
+                              403);
+    // A page on another site may send these (CSRF, cross-site WebSocket), and
+    // the browser shows us where it is from.
+    bool safe = (req.method == "GET" || req.method == "HEAD" || req.method == "OPTIONS") &&
+                lower(req.header("upgrade")) != "websocket";
+    if (std::string origin = req.header("origin"); !safe && !origin.empty()) {
+        auto scheme = origin.find("://");
+        if (scheme == std::string::npos || !hostAllowed(std::string_view(origin).substr(scheme + 3)))
+            return Response::text("cross-site request from " + oneLine(origin) +
+                                      " refused: add its host with HttpServer::allowHosts\n",
+                                  403);
+    }
+    return std::nullopt;
+}
+
 Response HttpServer::handle(const Request& req) const {
+    if (auto refusal = refused(req)) return std::move(*refusal);
     std::string method = req.method == "HEAD" ? "GET" : req.method;
     if (auto it = routes_.find({method, req.path}); it != routes_.end()) return it->second(req);
 
@@ -812,6 +964,11 @@ std::optional<Response> HttpServer::serveFile(const Request& req) const {
         urlPath = urlPath.substr(prefix_.size());
         if (urlPath.empty()) urlPath = "/";
     }
+    // Dot files and folders (.env, .git) are a project's secrets, not its site.
+    for (const auto& part : fs::path(urlPath)) {
+        const std::string& name = part.native();
+        if (name.size() > 1 && name.starts_with('.') && name != ".." && name != ".well-known") return std::nullopt;
+    }
     std::error_code ec;
     fs::path target = fs::weakly_canonical(root_ / fs::path(urlPath).relative_path(), ec);
     if (ec || !inside(root_, target)) return Response::text("forbidden\n", 403);  // "../" tricks
@@ -832,12 +989,15 @@ std::optional<Response> HttpServer::serveFile(const Request& req) const {
         if (!fs::is_regular_file(target, ec)) return std::nullopt;
     }
 
+    // index.html, x.html or 200.html may be a symlink too: where does it lead?
+    if (fs::path real = fs::canonical(target, ec); ec || !inside(root_, real)) return Response::text("forbidden\n", 403);
     auto body = readFile(target);
     if (!body) return Response::text("forbidden\n", 403);
     Response r;
     r.body = std::move(*body);
     r.contentType = mimeType(target.extension().string());
     r.headers.emplace_back("Cache-Control", "no-cache");
+    r.headers.emplace_back("X-Content-Type-Options", "nosniff");
     if (onFile_) onFile_(target, r);
     return r;
 }

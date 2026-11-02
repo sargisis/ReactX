@@ -1,6 +1,7 @@
 // Tests for rx::net::HttpServer: parsing helpers and real requests over TCP.
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <poll.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -496,6 +497,183 @@ TEST(forward_rejects_garbage_and_times_out) {
     OneShotServer silent("");
     auto slow = forward({.method = "GET", .path = "/"}, {"127.0.0.1", silent.port, ""}, 1);
     CHECK(!slow && slow.error().status == 504);
+}
+
+
+// ---- security (a dev server still meets hostile pages and clients) ----
+
+// Connects to 127.0.0.1:port; -1 on failure.
+int connectTo(int port) {
+    int fd = ::socket(AF_INET, SOCK_STREAM, 0);
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(static_cast<std::uint16_t>(port));
+    ::inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
+    if (::connect(fd, reinterpret_cast<sockaddr*>(&addr), sizeof addr) != 0) {
+        ::close(fd);
+        return -1;
+    }
+    return fd;
+}
+
+std::string readAll(int fd) {
+    std::string reply;
+    char buf[4096];
+    for (ssize_t n; (n = ::recv(fd, buf, sizeof buf, 0)) > 0;) reply.append(buf, static_cast<std::size_t>(n));
+    return reply;
+}
+
+Request withHeaders(std::string method, std::string path, std::vector<std::pair<std::string, std::string>> headers) {
+    Request req{.method = std::move(method), .path = std::move(path)};
+    for (auto& [name, value] : headers) req.headers.insert_or_assign(std::move(name), std::move(value));
+    return req;
+}
+
+TEST(heads_that_could_smuggle_or_inject_are_refused) {
+    auto status = [](std::string_view head) {
+        auto req = parseRequestHead(head);
+        return req ? 200 : req.error().status;
+    };
+    CHECK(status("GET / HTTP/1.1\r\nHost: localhost\r\nX: a\tb\r\n\r\n") == 200);
+    CHECK(status("GET /a\nX-Evil: 1 HTTP/1.1\r\n\r\n") == 400);           // a bare LF reaching a proxied server
+    CHECK(status("GET /a b HTTP/1.1\r\n\r\n") == 400);                     // a space in the target
+    CHECK(status("GET / HTTP/1.1\r\nX: a\rb\r\n\r\n") == 400);             // a bare CR in a value
+    CHECK(status("GET / HTTP/1.1\r\nX: a\x01" "b\r\n\r\n") == 400);
+    CHECK(status("GET / HTTP/1.1\r\nContent-Length : 5\r\n\r\n") == 400);  // a space before the colon
+    CHECK(status("GET / HTTP/1.1\r\nX: a\r\n folded\r\n\r\n") == 400);     // obs-fold
+    CHECK(status("GET / HTTP/1.1\r\nX(y): a\r\n\r\n") == 400);
+    CHECK(status("POST / HTTP/1.1\r\nContent-Length: 1\r\nContent-Length: 2\r\n\r\n") == 400);
+    CHECK(status("POST / HTTP/1.1\r\nContent-Length: 2\r\nContent-Length: 2\r\n\r\n") == 200);
+    CHECK(status("GET / HTTP/1.1\r\nHost: a\r\nHost: b\r\n\r\n") == 400);
+    CHECK(status("POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n") == 501);
+    std::string many = "GET / HTTP/1.1\r\n";
+    for (int i = 0; i < 101; ++i) many += "X" + std::to_string(i) + ": y\r\n";
+    CHECK(status(many + "\r\n") == 431);
+}
+
+TEST(response_headers_cant_be_split) {
+    Response r = Response::text("x");
+    r.headers.emplace_back("Location", "/a\r\nSet-Cookie: session=evil");
+    r.contentType = "text/plain\r\nX-Evil: 1";
+    std::string out = serializeResponse(r);
+    CHECK(!out.contains("\r\nSet-Cookie"));
+    CHECK(!out.contains("\r\nX-Evil"));
+    CHECK(out.contains("Location: /aSet-Cookie: session=evil\r\n"));
+}
+
+TEST(only_local_hosts_are_answered) {  // DNS rebinding
+    HttpServer s;
+    s.get("/api", [](const Request&) { return Response::text("data"); });
+    auto status = [&](std::string host) { return s.handle(withHeaders("GET", "/api", {{"host", host}})).status; };
+    CHECK(status("localhost:8090") == 200);
+    CHECK(status("LocalHost.") == 200);
+    CHECK(status("app.localhost:8090") == 200);
+    CHECK(status("127.0.0.1:8090") == 200);
+    CHECK(status("192.168.1.20:8090") == 200);  // a phone on the Wi-Fi
+    CHECK(status("[::1]:8090") == 200);
+    CHECK(status("evil.example:8090") == 403);
+    CHECK(status("localhost.evil.example") == 403);
+    CHECK(s.handle(withHeaders("GET", "/api", {})).status == 200);  // HTTP/1.0, no Host
+    s.allowHosts({"api", ".example.com"});
+    CHECK(status("api:8000") == 200);
+    CHECK(status("example.com") == 200);
+    CHECK(status("app.example.com") == 200);
+    CHECK(status("badexample.com") == 403);
+    s.allowHosts({"*"});
+    CHECK(status("anything.test") == 200);
+}
+
+TEST(cross_site_requests_are_refused) {  // CSRF, cross-site WebSocket hijacking
+    Running r([](HttpServer& s) {
+        s.post("/api", [](const Request&) { return Response::text("done"); });
+        s.get("/api", [](const Request&) { return Response::text("read"); });
+        s.webSocket("/ws", {});
+    });
+    auto post = [&](std::string origin) {
+        return r.server.handle(withHeaders("POST", "/api", {{"host", "localhost"}, {"origin", origin}})).status;
+    };
+    CHECK(post("http://localhost:5173") == 200);  // another local port: fine
+    CHECK(post("https://evil.example") == 403);
+    CHECK(post("null") == 403);
+    CHECK(r.server.handle(withHeaders("GET", "/api", {{"origin", "https://evil.example"}})).status == 200);
+
+    auto upgrade = [&](std::string origin) {
+        int fd = connectTo(r.port());
+        std::string req = "GET /ws HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                          "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\nOrigin: " +
+                          origin + "\r\n\r\n";
+        ::send(fd, req.data(), req.size(), MSG_NOSIGNAL);
+        char buf[64] = {};
+        ::recv(fd, buf, 12, MSG_WAITALL);
+        ::close(fd);
+        return std::string(buf, 12);
+    };
+    CHECK(upgrade("http://localhost:3000") == "HTTP/1.1 101");
+    CHECK(upgrade("https://evil.example") == "HTTP/1.1 403");
+}
+
+TEST(no_dot_files_and_no_symlinks_out_of_the_root) {
+    Site site;
+    site.write(".env", "SECRET=1");
+    site.write(".git/config", "[core]");
+    site.write(".well-known/security.txt", "Contact: x");
+    fs::create_symlink(site.root.parent_path() / "reactx_http_secret.txt", site.root / "sub" / "leak.html");
+    fs::create_symlink(site.root / "sub" / "page.html", site.root / "inside.html");
+    Running r([&](HttpServer& s) { s.serveDirectory(site.root, /*spaFallback=*/true); });
+    CHECK(request(r.port(), "GET", "/.env").status == 404);
+    CHECK(request(r.port(), "GET", "/.git/config").status == 404);
+    CHECK(request(r.port(), "GET", "/sub/%2eenv").status == 404);
+    CHECK(request(r.port(), "GET", "/.well-known/security.txt").status == 200);
+    CHECK(request(r.port(), "GET", "/sub/leak").status == 403);  // "/x" -> x.html, a symlink out
+    CHECK(request(r.port(), "GET", "/sub/leak.html").status == 403);
+    CHECK(request(r.port(), "GET", "/inside.html").body == "<p>sub</p>");  // symlinks inside are fine
+    CHECK(!request(r.port(), "GET", "//etc/passwd").body.contains("root:"));  // index.html at most
+    CHECK(request(r.port(), "GET", "/app.js").hasHeader("X-Content-Type-Options: nosniff"));
+}
+
+TEST(slow_and_cut_off_requests) {
+    bool called = false;
+    Running r([&](HttpServer& s) {
+        s.setRequestTimeout(std::chrono::milliseconds(400));
+        s.post("/api", [&](const Request&) {
+            called = true;
+            return Response::text("ok");
+        });
+    });
+    // Slowloris: a byte at a time, never finishing the head.
+    int fd = connectTo(r.port());
+    auto start = std::chrono::steady_clock::now();
+    std::string reply;
+    for (char c : std::string("GET / HTTP/1.1\r\nHost: localhost\r\nX: aaaaaaaaaaaaaaaaaaaaaaaa")) {
+        if (::send(fd, &c, 1, MSG_NOSIGNAL) <= 0) break;
+        pollfd p{.fd = fd, .events = POLLIN, .revents = 0};
+        if (::poll(&p, 1, 100) > 0) break;  // the server answered
+    }
+    reply = readAll(fd);
+    ::close(fd);
+    CHECK(reply.starts_with("HTTP/1.1 408"));
+    CHECK(std::chrono::steady_clock::now() - start < std::chrono::seconds(3));
+
+    // A body shorter than its Content-Length never reaches the handler.
+    fd = connectTo(r.port());
+    std::string cut = "POST /api HTTP/1.1\r\nHost: localhost\r\nContent-Length: 10\r\n\r\nabc";
+    ::send(fd, cut.data(), cut.size(), MSG_NOSIGNAL);
+    ::shutdown(fd, SHUT_WR);
+    reply = readAll(fd);
+    ::close(fd);
+    CHECK(reply.starts_with("HTTP/1.1 400"));
+    CHECK(!called);
+}
+
+TEST(connections_are_limited) {
+    Running r([](HttpServer& s) { s.setMaxConnections(2); });
+    int a = connectTo(r.port()), b = connectTo(r.port());
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));  // both accepted, waiting for a head
+    CHECK(rawRequest(r.port(), "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n").starts_with("HTTP/1.1 503"));
+    ::close(a);
+    ::close(b);
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    CHECK(request(r.port(), "GET", "/").status == 404);  // served again
 }
 
 }  // namespace

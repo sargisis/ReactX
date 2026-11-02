@@ -470,10 +470,15 @@ server.run();   // until Ctrl+C
 ```
 
 ```sh
-./build/debug/reactx_serve [DIR] [--port 8090] [--host 127.0.0.1] [--spa] [--base /ReactX/] [--not-found 404.html] [--quiet]
+./build/debug/reactx_serve [DIR] [--port 8090] [--host 127.0.0.1] [--allow-host NAME] [--spa] [--base /ReactX/] [--not-found 404.html] [--quiet]
 ```
 
-It serves files with the right types (`.wasm` → `application/wasm`), never outside the folder (`/../secret` → 403); `--spa` answers router paths with `index.html`, `--base` and `--not-found` mimic GitHub Pages. It is a development server (`127.0.0.1`), not for the open internet: no HTTPS, keep-alive or overload protection.
+It serves files with the right types (`.wasm` → `application/wasm`), never outside the folder (`/../secret` → 403); `--spa` answers router paths with `index.html`, `--base` and `--not-found` mimic GitHub Pages. It is a development server (`127.0.0.1`), not for the open internet: no HTTPS or keep-alive. It still guards against what a web page or a local client can do to it:
+
+- It answers only to `localhost`, `*.localhost` and IP addresses: a site that points its DNS name at `127.0.0.1` gets 403, not your files and API (DNS rebinding). Other names: `server.allowHosts({"mypc.local", ".example.test"})` (`"*"` for any), `reactx dev --allow-host NAME`; `reactx dev` allows the GitHub Codespaces domain itself.
+- WebSocket upgrades and requests other than GET/HEAD/OPTIONS whose `Origin` is another site get 403 (CSRF); pages on `localhost` at any port are fine.
+- Dot files (`/.env`, `/.git/…`; `/.well-known/` is served) and symlinks that lead out of the folder aren't served.
+- A request must arrive in 30 s (`setRequestTimeout`), 512 connections at a time (`setMaxConnections`), a client that stops reading is dropped after 10 s; control characters in the request line or headers, `Transfer-Encoding` bodies (501) and bodies shorter than their `Content-Length` are refused.
 
 **WebSockets**: `server.webSocket(path, {.onOpen, .onMessage, .onClose})`; `server.webSockets(path)` lists the open connections to broadcast to. The handlers run on the connection's thread (guard shared data with a mutex); `ws->send(text)` and `ws->close()` work from any thread.
 

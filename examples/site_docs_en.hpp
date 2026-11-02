@@ -599,7 +599,15 @@ inline const std::vector<Page>& pagesEn() {
                  "}});"},
                 {"Proxy", "server.proxy forwards a prefix to another server, WebSockets too (this is what reactx dev --proxy uses).",
                  "server.proxy(\"/api\", *rx::net::parseUpstream(\"http://127.0.0.1:5000\"));"},
-                {"Important", "It is a server for development on your machine: no HTTPS, no protection against heavy load. "
+                {"Security", "It answers only to localhost, *.localhost and IP addresses (another site that points its "
+                             "name at 127.0.0.1 gets 403: DNS rebinding); add names with allowHosts or reactx dev --allow-host. "
+                             "WebSockets and POST/PUT/PATCH/DELETE from another site's page (its Origin) get 403. Dot files "
+                             "(.env, .git) and symlinks out of the folder aren't served. A request must arrive in 30 s, at most "
+                             "512 connections at a time.",
+                 "server.allowHosts({\"mypc.local\", \".example.test\"});   // \".x\": x and its subdomains, \"*\": any\n"
+                 "server.setRequestTimeout(std::chrono::seconds(10));\n"
+                 "server.setMaxConnections(128);"},
+                {"Important", "It is a server for development on your machine: no HTTPS, no keep-alive. "
                               "Don't put it on the open internet.", ""},
             },
         },

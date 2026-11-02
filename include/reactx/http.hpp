@@ -13,11 +13,20 @@
 //   server.run();     // until stop() or Ctrl+C
 //
 // Each connection gets its own thread and is closed after one response.
-// Meant for local development, not for the open internet.
+// Meant for local development, not for the open internet. Still, it defends
+// itself against what a web page or a local client can do to a dev server:
+// - only requests for localhost, *.localhost or an IP address are answered
+//   (DNS rebinding); allowHosts() adds names;
+// - WebSocket upgrades and requests other than GET/HEAD/OPTIONS from a page on
+//   another site (its Origin) are refused (403);
+// - dot files ("/.env", "/.git/...") aren't served, nor files that a symlink
+//   leads outside the root to;
+// - a request must arrive in 30 s (setRequestTimeout), at most 512 connections
+//   at a time (setMaxConnections), a client that stops reading is dropped.
 
 #include <atomic>
+#include <chrono>
 #include <cstddef>
-#include <atomic>
 #include <cstdint>
 #include <expected>
 #include <filesystem>
@@ -189,6 +198,18 @@ public:
     // Print one line per request ("GET /app.wasm 200 145765").
     void setLogging(bool on) { logging_ = on; }
 
+    // Host names to answer to besides localhost, *.localhost and IP addresses:
+    // "myapp.test", ".example.com" (it and its subdomains), "*" (any; only
+    // behind something else that checks the Host). Other names get 403, so a
+    // site that rebinds its DNS name to 127.0.0.1 can't read this server.
+    // Origins of cross-site requests are checked against the same list.
+    // Set these before start().
+    void allowHosts(std::vector<std::string> names) { allowedHosts_ = std::move(names); }
+    // How long a client may take to send a request's head and body (408 after).
+    void setRequestTimeout(std::chrono::milliseconds timeout) { requestTimeout_ = timeout; }
+    // Connections served at a time (WebSockets included); more get 503.
+    void setMaxConnections(int count) { maxConnections_ = count; }
+
     // Bind + listen. tryStart() returns the reason on failure ("port in use");
     // start() throws std::runtime_error with it.
     std::expected<void, std::string> tryStart();
@@ -204,6 +225,8 @@ public:
 
 private:
     void serveConnection(int fd);
+    bool hostAllowed(std::string_view name) const;
+    std::optional<Response> refused(const Request& request) const;  // Host / Origin checks
     std::optional<Response> serveFile(const Request& request) const;
 
     std::string host_;
@@ -212,6 +235,9 @@ private:
     std::atomic<bool> running_{false};
     std::atomic<int> active_{0};  // connections being served
     bool logging_ = false;
+    std::vector<std::string> allowedHosts_;
+    std::chrono::milliseconds requestTimeout_{30'000};
+    int maxConnections_ = 512;
     std::map<std::pair<std::string, std::string>, Handler> routes_;
     std::filesystem::path root_;
     bool spaFallback_ = false;
@@ -230,7 +256,10 @@ private:
 // Content type for a file extension (".wasm" -> "application/wasm").
 std::string mimeType(std::string_view extension);
 // Parses the head of an HTTP request ("GET /x?a=1 HTTP/1.1\r\nHost: ...\r\n\r\n").
-// A malformed request gives HttpError{400, what is wrong}.
+// A malformed request gives HttpError{400, what is wrong}: control characters,
+// a header name that isn't a token (or a space before its colon), two
+// different Host or Content-Length values. Over 100 headers: 431. A request
+// body with Transfer-Encoding: 501 (send Content-Length).
 std::expected<Request, HttpError> parseRequestHead(std::string_view head);
 // Length of the body from Content-Length (0 without it): 400 if it isn't a
 // number, 413 if it is over `limit` bytes.

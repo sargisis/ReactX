@@ -77,7 +77,7 @@ struct RawClient {
         to.sin_port = htons(static_cast<std::uint16_t>(port));
         ::inet_pton(AF_INET, "127.0.0.1", &to.sin_addr);
         if (::connect(fd, reinterpret_cast<sockaddr*>(&to), sizeof to) != 0) return;
-        write("GET " + path + " HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+        write("GET " + path + " HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
               "Sec-WebSocket-Key: " + key + "\r\nSec-WebSocket-Version: 13\r\n\r\n");
         std::size_t end;
         while ((end = buffer.find("\r\n\r\n")) == std::string::npos)

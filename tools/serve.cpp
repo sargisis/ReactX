@@ -1,6 +1,6 @@
 // reactx_serve: development web server for ReactX sites, in C++20.
 //
-//   reactx_serve [DIR] [--port N] [--host IP] [--spa] [--base /ReactX/] [--not-found 404.html] [--quiet]
+//   reactx_serve [DIR] [--port N] [--host IP] [--allow-host NAME] [--spa] [--base /ReactX/] [--not-found 404.html] [--quiet]
 //
 // Serves DIR (default: build/web) at http://127.0.0.1:8090/. With --spa,
 // unknown paths without a file extension get index.html (for a router).
@@ -10,6 +10,7 @@
 #include <print>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "reactx/http.hpp"
 #include "reactx/parse.hpp"
@@ -23,7 +24,7 @@ void onSignal(int) {
 }
 
 int usage() {
-    std::println(stderr, "usage: reactx_serve [DIR] [--port N] [--host IP] [--spa] [--base PATH] [--not-found FILE] [--quiet]");
+    std::println(stderr, "usage: reactx_serve [DIR] [--port N] [--host IP] [--allow-host NAME] [--spa] [--base PATH] [--not-found FILE] [--quiet]");
     return 2;
 }
 
@@ -35,6 +36,7 @@ int main(int argc, char** argv) {
     int port = 8090;
     bool spa = false, quiet = false;
     std::string base, notFound;
+    std::vector<std::string> allowedHosts;
 
     for (int i = 1; i < argc; ++i) {
         std::string_view arg = argv[i];
@@ -47,6 +49,7 @@ int main(int argc, char** argv) {
             port = *parsed;
         }
         else if (arg == "--host" && i + 1 < argc) host = argv[++i];
+        else if (arg == "--allow-host" && i + 1 < argc) allowedHosts.emplace_back(argv[++i]);
         else if (arg == "--spa") spa = true;
         else if (arg == "--base" && i + 1 < argc) base = argv[++i];
         else if (arg == "--not-found" && i + 1 < argc) notFound = argv[++i];
@@ -59,6 +62,7 @@ int main(int argc, char** argv) {
     try {
         rx::net::HttpServer server(host, port);
         server.serveDirectory(dir, spa);
+        server.allowHosts(allowedHosts);
         if (!base.empty()) server.setUrlPrefix(base);
         if (!notFound.empty()) server.setNotFoundPage(notFound);
         server.setLogging(!quiet);

@@ -1,0 +1,1686 @@
+== context.hpp
+namespace rx {
+template <class T>
+class Context {
+public:
+explicit Context(T defaultValue)
+: token_(std::make_shared<char>()), default_(std::move(defaultValue)) {}
+Element provide(T value, std::vector<Element> children) const {
+Element e;
+e.kind = ElementKind::Provider;
+e.provided = std::make_shared<const detail::ContextValue<T>>(id(), std::move(value));
+e.props.setChildren(std::move(children));
+return e;
+}
+const T& defaultValue() const { return default_; }
+const void* id() const { return token_.get(); }
+};
+template <class T>
+Context<T> createContext(T defaultValue) {
+return Context<T>(std::move(defaultValue));
+}
+inline Context<std::string> createContext(const char* defaultValue) {
+return Context<std::string>(defaultValue);
+}
+template <class T>
+const T& useContext(const Context<T>& context) {
+const detail::ContextValueBase* found = detail::readContext(context.id());
+if (!found) return context.defaultValue();
+return static_cast<const detail::ContextValue<T>*>(found)->value;
+}
+}
+== contract.hpp
+#define REACTX_STD_STACKTRACE 1
+#define REACTX_STD_STACKTRACE 0
+#define REACTX_PRE(...) contract_assert(__VA_ARGS__)
+#define REACTX_PRE(...) \
+((__VA_ARGS__) ? static_cast<void>(0) : ::rx::detail::contractViolation(#__VA_ARGS__, std::source_location::current()))
+== dom.hpp
+namespace rx {
+class DomRenderer : public Renderer {
+public:
+explicit DomRenderer(std::string container = "#app");
+NodeHandle rootNode() override { return root_; }
+NodeHandle createElement(std::string_view type) override;
+NodeHandle createText(std::string_view text) override;
+void setText(NodeHandle node, std::string_view text) override;
+void setProp(NodeHandle node, std::string_view name, const PropValue& value) override;
+void removeProp(NodeHandle node, std::string_view name) override;
+void insertChild(NodeHandle parent, NodeHandle child, std::size_t index) override;
+void insertBefore(NodeHandle parent, NodeHandle child, NodeHandle before, std::size_t index) override;
+void removeChild(NodeHandle parent, NodeHandle child) override;
+void destroyNode(NodeHandle node) override;
+bool focus(NodeHandle node) override;
+bool scrollIntoView(NodeHandle node) override;
+std::optional<ScrollEvent> scrollMetrics(NodeHandle node) override;
+bool scrollTo(NodeHandle node, int top) override;
+};
+Root& mountDom(Element element, const std::string& container = "#app");
+void flushDom();
+Root& mountDom(Element element, const std::string& container = "#app") = delete(
+"mountDom works only in the browser build (Emscripten): run `reactx build` without --native, "
+"or put it under #ifdef __EMSCRIPTEN__ and use TerminalApp (reactx/terminal.hpp) natively");
+void flushDom() = delete("flushDom works only in the browser build (Emscripten)");
+}
+== dsl.hpp
+namespace rx::dsl {
+class TagBuilder {
+public:
+constexpr explicit TagBuilder(std::string_view tag) : tag_(tag) {}
+TagBuilder cls(std::string_view className) const {
+TagBuilder copy = *this;
+copy.props_.set("className", std::string(className));
+return copy;
+}
+TagBuilder id(std::string_view idVal) const {
+TagBuilder copy = *this;
+copy.props_.set("id", std::string(idVal));
+return copy;
+}
+TagBuilder key(std::string_view keyVal) const {
+TagBuilder copy = *this;
+copy.key_ = std::string(keyVal);
+return copy;
+}
+TagBuilder prop(std::string_view name, PropValue val) const {
+TagBuilder copy = *this;
+copy.props_.set(std::string(name), std::move(val));
+return copy;
+}
+TagBuilder onClick(Callback cb) const {
+TagBuilder copy = *this;
+copy.props_.set("onClick", std::move(cb));
+return copy;
+}
+TagBuilder onInput(InputHandler ih) const {
+TagBuilder copy = *this;
+copy.props_.set("onInput", std::move(ih));
+return copy;
+}
+TagBuilder onKey(KeyHandler kh) const {
+TagBuilder copy = *this;
+copy.props_.set("onKey", std::move(kh));
+return copy;
+}
+template <class... Args>
+Element operator()(Args&&... children) const {
+std::vector<Element> outChildren;
+outChildren.reserve(sizeof...(children));
+detail::collectChildren(outChildren, std::forward<Args>(children)...);
+Element el;
+el.kind = ElementKind::Host;
+el.type = std::string(tag_);
+el.props = props_;
+el.props.setChildren(std::move(outChildren));
+if (!key_.empty()) el.key = key_;
+return el;
+}
+operator Element() const {
+Element el;
+el.kind = ElementKind::Host;
+el.type = std::string(tag_);
+el.props = props_;
+if (!key_.empty()) el.key = key_;
+return el;
+}
+};
+constexpr TagBuilder operator""_tag(const char* str, std::size_t len) {
+return TagBuilder(std::string_view(str, len));
+}
+namespace tag {
+inline constexpr TagBuilder div{"div"};
+inline constexpr TagBuilder span{"span"};
+inline constexpr TagBuilder p{"p"};
+inline constexpr TagBuilder h1{"h1"};
+inline constexpr TagBuilder h2{"h2"};
+inline constexpr TagBuilder h3{"h3"};
+inline constexpr TagBuilder button{"button"};
+inline constexpr TagBuilder input{"input"};
+inline constexpr TagBuilder a{"a"};
+inline constexpr TagBuilder ul{"ul"};
+inline constexpr TagBuilder li{"li"};
+inline constexpr TagBuilder header{"header"};
+inline constexpr TagBuilder footer{"footer"};
+inline constexpr TagBuilder nav{"nav"};
+inline constexpr TagBuilder section{"section"};
+inline constexpr TagBuilder article{"article"};
+inline constexpr TagBuilder aside{"aside"};
+inline constexpr TagBuilder main{"main"};
+inline constexpr TagBuilder code{"code"};
+inline constexpr TagBuilder pre{"pre"};
+inline constexpr TagBuilder small{"small"};
+inline constexpr TagBuilder b{"b"};
+inline constexpr TagBuilder em{"em"};
+inline constexpr TagBuilder box{"box"};
+inline constexpr TagBuilder text{"text"};
+}
+}
+== element.hpp
+namespace rx {
+struct Element;
+class Props;
+class Renderer;
+using NodeHandle = std::uint64_t;
+template <class T>
+concept EqualityComparable = detail::equalityComparable<T>();
+struct KeyEvent {
+std::string key;
+bool ctrl = false;
+bool alt = false;
+bool shift = false;
+bool operator==(const KeyEvent&) const = default;
+};
+struct ScrollEvent {
+int top = 0, left = 0;
+int scrollHeight = 0, scrollWidth = 0;
+int clientHeight = 0, clientWidth = 0;
+bool nearBottom(int margin = 100) const { return top + clientHeight >= scrollHeight - margin; }
+int scrollTop() const { return top; }
+int scrollLeft() const { return left; }
+bool operator==(const ScrollEvent&) const = default;
+};
+struct PointerEvent {
+double x = 0, y = 0;
+double localX = 0, localY = 0;
+int button = 0;
+int buttons = 0;
+std::string type = "mouse";
+bool ctrl = false, alt = false, shift = false;
+bool operator==(const PointerEvent&) const = default;
+};
+using Callback = std::function<void()>;
+using KeyHandler = std::function<void(const KeyEvent&)>;
+using InputHandler = std::function<void(const std::string&)>;
+using ScrollHandler = std::function<void(const ScrollEvent&)>;
+using RefHandler = std::function<void(NodeHandle)>;
+using PointerHandler = std::function<void(const PointerEvent&)>;
+class NodeRef {
+public:
+NodeRef() = default;
+static NodeRef create() {
+NodeRef r;
+r.state_ = std::make_shared<State>();
+return r;
+}
+NodeHandle get() const { return state_ ? state_->node : 0; }
+explicit operator bool() const { return get() != 0; }
+void operator()(NodeHandle node) const {
+if (state_) state_->node = node;
+}
+bool operator==(const NodeRef&) const = default;
+bool focus() const;
+bool scrollIntoView() const;
+std::optional<ScrollEvent> scrollMetrics() const;
+bool scrollTo(int top) const;
+bool scrollBy(int delta) const;
+};
+inline InputHandler boolHandler(std::function<void(bool)> handler) {
+return [handler = std::move(handler)](const std::string& value) { handler(value == "true"); };
+}
+using EventData = std::variant<std::monostate, KeyEvent, std::string, ScrollEvent, PointerEvent>;
+using PropValue = std::variant<std::monostate, bool, std::int64_t, double, std::string,
+Callback, KeyHandler, InputHandler, ScrollHandler, RefHandler, PointerHandler>;
+bool isHandler(const PropValue& value);
+using Component = Element (*)(const Props&);
+template <class P>
+using TypedComponent = Element (*)(const P&);
+using PropList = std::initializer_list<std::pair<std::string, PropValue>>;
+bool propEquals(const PropValue& a, const PropValue& b);
+std::string propToString(const PropValue& value);
+class Props {
+public:
+Props() = default;
+Props(PropList list);
+bool has(std::string_view name) const { return values_.contains(name); }
+const PropValue* find(std::string_view name) const;
+template <class T>
+T get(std::string_view name, T fallback = T{}) const;
+std::string get(std::string_view name, const char* fallback) const {
+return get<std::string>(name, fallback);
+}
+void set(std::string name, PropValue value);
+using Values = std::flat_map<std::string, PropValue, std::less<>>;
+const Values& values() const { return values_; }
+const std::vector<Element>& children() const { return children_; }
+void setChildren(std::vector<Element> children);
+std::vector<Element> takeChildren();
+};
+enum class ElementKind { Host, Text, Component, Fragment, Provider, Boundary };
+struct RenderError {
+std::string message;
+std::exception_ptr exception{};
+std::function<void()> retry{};
+};
+using ErrorFallback = std::function<Element(const RenderError&)>;
+struct Element {
+ElementKind kind = ElementKind::Fragment;
+std::string type;
+Component component = nullptr;
+Props props;
+std::string key;
+std::shared_ptr<const detail::ContextValueBase> provided;
+std::shared_ptr<const detail::TypedProps> typed;
+std::shared_ptr<const ErrorFallback> fallback;
+Element() = default;
+Element(const char* text);
+Element(std::string text);
+};
+Element h(std::string type, PropList props = {}, std::vector<Element> children = {});
+Element h(Component component, PropList props = {}, std::vector<Element> children = {});
+template <class P>
+requires(!std::same_as<P, Props>)
+Element h(TypedComponent<P> component, P props);
+template <class P>
+requires(!std::same_as<P, Props>) && std::default_initializable<P>
+Element h(TypedComponent<P> component);
+template <class P>
+requires(!std::same_as<P, Props>) && requires(P p) { p.children = std::vector<Element>{}; }
+Element h(TypedComponent<P> component, P props, std::vector<Element> children);
+template <detail::TypedLambda F>
+Element h(F component, detail::LambdaProps<F> props) {
+return h(static_cast<TypedComponent<detail::LambdaProps<F>>>(component), std::move(props));
+}
+template <detail::TypedLambda F>
+requires std::default_initializable<detail::LambdaProps<F>>
+Element h(F component) {
+return h(static_cast<TypedComponent<detail::LambdaProps<F>>>(component));
+}
+template <detail::TypedLambda F>
+requires requires(detail::LambdaProps<F> p) { p.children = std::vector<Element>{}; }
+Element h(F component, detail::LambdaProps<F> props, std::vector<Element> children) {
+return h(static_cast<TypedComponent<detail::LambdaProps<F>>>(component), std::move(props), std::move(children));
+}
+Element text(std::string content);
+Element fragment(std::vector<Element> children, std::string key = {});
+Element errorBoundary(ErrorFallback fallback, std::vector<Element> children, std::string key = {});
+template <class P>
+requires(!std::same_as<P, Props>)
+Element h(TypedComponent<P> component, P props) {
+return detail::makeTyped(component, std::move(props));
+}
+template <class P>
+requires(!std::same_as<P, Props>) && std::default_initializable<P>
+Element h(TypedComponent<P> component) {
+return detail::makeTyped(component, P{});
+}
+template <class P>
+requires(!std::same_as<P, Props>) && requires(P p) { p.children = std::vector<Element>{}; }
+Element h(TypedComponent<P> component, P props, std::vector<Element> children) {
+props.children = std::move(children);
+return detail::makeTyped(component, std::move(props));
+}
+template <class T>
+T Props::get(std::string_view name, T fallback) const {
+const PropValue* v = find(name);
+if (!v) return fallback;
+if constexpr (std::is_same_v<T, bool>) {
+if (auto p = std::get_if<bool>(v)) return *p;
+} else if constexpr (std::is_integral_v<T> || std::is_floating_point_v<T>) {
+if (auto p = std::get_if<std::int64_t>(v)) return static_cast<T>(*p);
+if (auto p = std::get_if<double>(v)) return static_cast<T>(*p);
+} else if constexpr (std::is_same_v<T, std::string>) {
+if (auto p = std::get_if<std::string>(v)) return *p;
+} else if constexpr (std::is_same_v<T, Callback> || std::is_same_v<T, KeyHandler> ||
+std::is_same_v<T, InputHandler> || std::is_same_v<T, ScrollHandler>) {
+if (auto p = std::get_if<T>(v)) return *p;
+} else {
+static_assert(sizeof(T) == 0, "Props::get: unsupported type");
+}
+return fallback;
+}
+template <class P>
+Element detail::TypedPropsOf<P>::render() const {
+return fn(props);
+}
+}
+== fetch.hpp
+namespace rx {
+using FetchHeaders = std::vector<std::pair<std::string, std::string>>;
+struct FetchRequest {
+std::string method = "GET";
+std::string url{};
+std::string body{};
+std::string contentType = "application/json";
+FetchHeaders headers{};
+std::chrono::milliseconds timeout{0};
+bool operator==(const FetchRequest&) const = default;
+};
+struct FetchResponse {
+int status = 0;
+std::string body{};
+std::string error{};
+FetchHeaders headers{};
+std::string header(std::string_view name) const;
+bool ok() const { return error.empty() && status >= 200 && status < 300; }
+std::string errorText() const;
+json::Value json() const { return json::parse(body); }
+std::expected<json::Value, json::Error> tryJson() const { return json::tryParse(body); }
+bool operator==(const FetchResponse&) const = default;
+};
+class FetchHandle {
+public:
+FetchHandle() = default;
+void cancel() const;
+void operator()() const { cancel(); }
+bool cancelled() const { return state_ && *state_; }
+};
+FetchHandle fetch(FetchRequest request, std::function<void(const FetchResponse&)> done);
+using LocalFetch = std::function<std::optional<FetchResponse>(const FetchRequest&)>;
+void setLocalFetch(LocalFetch handler);
+struct FetchState {
+bool loading = true;
+FetchResponse response{};
+std::function<void()> reload{};
+bool ok() const { return !loading && response.ok(); }
+json::Value json() const { return response.json(); }
+std::expected<json::Value, json::Error> tryJson() const { return response.tryJson(); }
+std::string errorText() const;
+};
+FetchState useFetch(const std::string& url);
+FetchState useFetch(FetchRequest request);
+}
+== hooks.hpp
+#define REACTX_NO_DANGLING [[gnu::no_dangling]]
+#define REACTX_NO_DANGLING
+namespace rx {
+using Cleanup = std::function<void()>;
+template <class T>
+class Setter {
+public:
+Setter() = default;
+Setter(std::weak_ptr<detail::Fiber> fiber, std::size_t index)
+: fiber_(std::move(fiber)), index_(index) {}
+template <class U>
+requires std::convertible_to<U, T> || std::is_invocable_r_v<T, U, const T&>
+void operator()(U&& next) const {
+auto fiber = fiber_.lock();
+if (!fiber) return;
+detail::checkUiThread(*fiber);
+auto& hook = static_cast<detail::StateHook<T>&>(*detail::hookAt(*fiber, index_));
+T value = [&]() -> T {
+if constexpr (std::is_invocable_r_v<T, U, const T&>)
+return std::invoke(std::forward<U>(next), std::as_const(hook.value));
+else
+return T(std::forward<U>(next));
+}();
+if constexpr (EqualityComparable<T>) {
+if (value == hook.value) return;
+}
+hook.value = std::move(value);
+detail::scheduleUpdate(*fiber);
+}
+};
+template <class T>
+std::pair<T, Setter<T>> useState(T initial) {
+auto slot = detail::nextHook(
+[&] { return std::make_unique<detail::StateHook<T>>(std::move(initial)); });
+auto& hook = detail::checkedHook<detail::StateHook<T>>(slot.hook);
+return {hook.value, Setter<T>(slot.fiber, slot.index)};
+}
+inline std::pair<std::string, Setter<std::string>> useState(const char* initial) {
+return useState<std::string>(initial);
+}
+template <class T>
+T& useRef(T initial = T{}) {
+auto slot = detail::nextHook(
+[&] { return std::make_unique<detail::RefHook<T>>(std::move(initial)); });
+return detail::checkedHook<detail::RefHook<T>>(slot.hook).value;
+}
+inline NodeRef useNodeRef() {
+auto& ref = useRef<NodeRef>();
+if (ref == NodeRef()) ref = NodeRef::create();
+return ref;
+}
+inline std::string useId() {
+static std::atomic<std::uint64_t> next{0};
+auto& id = useRef<std::string>();
+if (id.empty()) id = "rx-" + std::to_string(++next);
+return id;
+}
+template <class... D>
+std::tuple<std::decay_t<D>...> deps(D&&... values) {
+static_assert((EqualityComparable<std::decay_t<D>> && ...),
+"deps(...): every dependency needs operator== (a struct: bool operator==(const T&) const = default;)");
+return {std::forward<D>(values)...};
+}
+template <class F>
+void useEffect(F&& effect) {
+detail::useEffectImpl(detail::wrapEffect(std::forward<F>(effect)), nullptr);
+}
+template <class F, class... D>
+void useEffect(F&& effect, std::tuple<D...> dependencies) {
+detail::useEffectImpl(
+detail::wrapEffect(std::forward<F>(effect)),
+std::make_unique<detail::Deps<std::tuple<D...>>>(std::move(dependencies)));
+}
+template <class F, class... D>
+REACTX_NO_DANGLING const std::decay_t<std::invoke_result_t<F&>>& useMemo(F&& compute, std::tuple<D...> dependencies) {
+using T = std::decay_t<std::invoke_result_t<F&>>;
+auto slot = detail::nextHook([] { return std::make_unique<detail::MemoHook<T>>(); });
+auto& hook = detail::checkedHook<detail::MemoHook<T>>(slot.hook);
+auto next = std::make_unique<detail::Deps<std::tuple<D...>>>(std::move(dependencies));
+if (!hook.value || !hook.deps || !hook.deps->equals(*next)) {
+hook.value.emplace(std::invoke(compute));
+hook.deps = std::move(next);
+}
+return *hook.value;
+}
+template <class F, class... D>
+std::function<detail::HandlerSig<F>> useCallback(F&& handler, std::tuple<D...> dependencies) {
+using Sig = detail::HandlerSig<F>;
+auto slot = detail::nextHook([] { return std::make_unique<detail::CallbackHook<Sig>>(); });
+auto& hook = detail::checkedHook<detail::CallbackHook<Sig>>(slot.hook);
+auto next = std::make_unique<detail::Deps<std::tuple<D...>>>(std::move(dependencies));
+if (!hook.fn || !hook.deps || !hook.deps->equals(*next)) {
+hook.fn = std::make_shared<std::function<Sig>>(std::forward<F>(handler));
+hook.deps = std::move(next);
+}
+return detail::StableFn<Sig>{hook.fn};
+}
+template <class T>
+requires std::copy_constructible<T> && EqualityComparable<T>
+T useDebounce(const T& value, std::chrono::milliseconds delay) {
+auto [debounced, setDebounced] = useState(value);
+useEffect([value, delay, setDebounced] { return detail::setTimer(delay, [value, setDebounced] { setDebounced(value); }); },
+deps(value, delay.count()));
+return debounced;
+}
+struct WindowSize {
+int width = 0;
+int height = 0;
+bool operator==(const WindowSize&) const = default;
+};
+WindowSize useWindowSize();
+void useTitle(std::string title);
+std::expected<std::optional<std::string>, std::string> storageRead(std::string_view key);
+std::expected<void, std::string> storageWrite(std::string_view key, std::string_view value);
+std::expected<void, std::string> storageRemove(std::string_view key);
+using StorageErrorHandler = std::function<void(const std::string&)>;
+template <class T>
+std::pair<T, Setter<T>> useLocalStorage(std::string key, T initialValue, StorageErrorHandler onError = {}) {
+static_assert(std::same_as<T, std::string> || std::same_as<T, bool> || std::integral<T> || std::floating_point<T>,
+"useLocalStorage: the value must be std::string, bool or a number");
+T initial = std::move(initialValue);
+bool& loaded = useRef(false);
+if (!loaded) {
+loaded = true;
+auto read = storageRead(key);
+if (!read && onError) onError(read.error());
+if (read && *read) {
+std::string saved = std::move(**read);
+if constexpr (std::same_as<T, std::string>) initial = std::move(saved);
+else if constexpr (std::same_as<T, bool>) initial = saved == "true";
+else if (auto n = parseNumber<T>(saved)) initial = *n;
+}
+}
+auto [state, setState] = useState(std::move(initial));
+useEffect(
+[key, state, onError] {
+std::expected<void, std::string> saved;
+if constexpr (std::same_as<T, std::string>) saved = storageWrite(key, state);
+else if constexpr (std::same_as<T, bool>) saved = storageWrite(key, state ? "true" : "false");
+else saved = storageWrite(key, std::format("{}", state));
+if (!saved && onError) onError(saved.error());
+},
+deps(key, state));
+return {state, setState};
+}
+inline std::pair<std::string, Setter<std::string>> useLocalStorage(std::string key, const char* initial,
+StorageErrorHandler onError = {}) {
+return useLocalStorage<std::string>(std::move(key), std::string(initial), std::move(onError));
+}
+template <class State, class Action>
+class Dispatch {
+public:
+Dispatch() = default;
+Dispatch(Setter<State> set, std::shared_ptr<std::function<State(const State&, const Action&)>> reducer)
+: set_(std::move(set)), reducer_(std::move(reducer)) {}
+void operator()(Action action) const {
+if (!reducer_) return;
+set_([reducer = reducer_, action = std::move(action)](const State& s) { return (*reducer)(s, action); });
+}
+};
+template <class Reducer, class State>
+auto useReducer(Reducer reducer, State initial) {
+using Action = typename detail::ReducerTraits<std::decay_t<Reducer>>::Action;
+using Fn = std::function<State(const State&, const Action&)>;
+auto [state, set] = useState(std::move(initial));
+auto& holder = useRef(std::shared_ptr<Fn>{});
+if (!holder) holder = std::make_shared<Fn>();
+*holder = Fn(std::move(reducer));
+return std::pair<State, Dispatch<State, Action>>{state, Dispatch<State, Action>(set, holder)};
+}
+template <class F>
+requires std::invocable<F&>
+void useTimeout(F callback, std::optional<std::chrono::milliseconds> delay) {
+auto& latest = useRef(std::shared_ptr<std::function<void()>>{});
+if (!latest) latest = std::make_shared<std::function<void()>>();
+*latest = std::function<void()>(std::move(callback));
+std::int64_t ms = delay ? delay->count() : -1;
+useEffect(
+[ms, latest = latest]() -> Cleanup {
+if (ms < 0) return {};
+return detail::setTimer(std::chrono::milliseconds(ms), [latest] { (*latest)(); });
+},
+deps(ms));
+}
+template <class F>
+requires std::invocable<F&>
+void useInterval(F callback, std::optional<std::chrono::milliseconds> period) {
+auto& latest = useRef(std::shared_ptr<std::function<void()>>{});
+if (!latest) latest = std::make_shared<std::function<void()>>();
+*latest = std::function<void()>(std::move(callback));
+std::int64_t ms = period ? period->count() : -1;
+useEffect(
+[ms, latest = latest]() -> Cleanup {
+if (ms < 0) return {};
+auto cancel = std::make_shared<Cleanup>();
+auto tick = std::make_shared<std::function<void()>>();
+std::weak_ptr<std::function<void()>> weakTick = tick;
+*tick = [latest, cancel, weakTick, ms] {
+if (auto self = weakTick.lock()) *cancel = detail::setTimer(std::chrono::milliseconds(ms), *self);
+(*latest)();
+};
+*cancel = detail::setTimer(std::chrono::milliseconds(ms), *tick);
+return [cancel, tick] { (*cancel)(); };
+},
+deps(ms));
+}
+template <class F>
+requires std::invocable<F&, const KeyEvent&>
+void useKeyboard(F handler) {
+auto& latest = useRef(std::shared_ptr<std::function<bool(const KeyEvent&)>>{});
+if (!latest) latest = std::make_shared<std::function<bool(const KeyEvent&)>>();
+*latest = [h = std::move(handler)](const KeyEvent& k) mutable -> bool {
+if constexpr (std::is_void_v<std::invoke_result_t<F&, const KeyEvent&>>) {
+h(k);
+return false;
+} else {
+return static_cast<bool>(h(k));
+}
+};
+useEffect([latest = latest] { return detail::onGlobalKey([latest](const KeyEvent& k) { return (*latest)(k); }); }, deps());
+}
+}
+== html.hpp
+namespace rx {
+std::string renderToString(Element element);
+class HtmlRenderer : public Renderer {
+public:
+HtmlRenderer();
+NodeHandle rootNode() override { return kRoot; }
+NodeHandle createElement(std::string_view type) override;
+NodeHandle createText(std::string_view text) override;
+void setText(NodeHandle node, std::string_view text) override;
+void setProp(NodeHandle node, std::string_view name, const PropValue& value) override;
+void removeProp(NodeHandle node, std::string_view name) override;
+void insertChild(NodeHandle parent, NodeHandle child, std::size_t index) override;
+void removeChild(NodeHandle parent, NodeHandle child) override;
+void destroyNode(NodeHandle node) override;
+std::string html() const;
+};
+}
+== http.hpp
+namespace rx::net {
+using rx::matchPath;
+using rx::urlDecode;
+struct Request {
+std::string method{};
+std::string path{};
+std::string query{};
+std::flat_map<std::string, std::string, std::less<>> headers{};
+std::string body{};
+std::map<std::string, std::string> pathParams{};
+std::string target{};
+std::string header(std::string_view name) const;
+std::optional<std::string> param(const std::string& name) const;
+std::string pathParam(const std::string& name) const;
+};
+struct Response {
+int status = 200;
+std::string contentType = "text/plain; charset=utf-8";
+std::string body{};
+std::vector<std::pair<std::string, std::string>> headers{};
+static Response text(std::string body, int status = 200);
+static Response html(std::string body, int status = 200);
+static Response json(std::string body, int status = 200);
+};
+struct HttpError {
+int status = 400;
+std::string message{};
+bool operator==(const HttpError&) const = default;
+};
+using Handler = std::function<Response(const Request&)>;
+class WebSocket {
+public:
+WebSocket(int fd, int id, Request request) : fd_(fd), id_(id), request_(std::move(request)) {}
+WebSocket(const WebSocket&) = delete("one connection");
+bool send(std::string_view text);
+void close(int code = 1000, std::string_view reason = {});
+bool isOpen() const { return open_.load(); }
+int id() const { return id_; }
+const Request& request() const { return request_; }
+};
+using WebSocketPtr = std::shared_ptr<WebSocket>;
+struct WebSocketHandlers {
+std::function<void(const WebSocketPtr&)> onOpen{};
+std::function<void(const WebSocketPtr&, const std::string& message)> onMessage{};
+std::function<void(const WebSocketPtr&, int code)> onClose{};
+};
+struct Upstream {
+std::string host{};
+int port = 80;
+std::string path{};
+bool operator==(const Upstream&) const = default;
+};
+std::expected<Upstream, std::string> parseUpstream(std::string_view url);
+std::expected<Response, HttpError> forward(const Request& request, const Upstream& upstream, int timeoutSeconds = 30);
+class HttpServer {
+public:
+explicit HttpServer(std::string host = "127.0.0.1", int port = 8080);
+~HttpServer();
+HttpServer(const HttpServer&) = delete("a server owns its socket and threads");
+HttpServer& operator=(const HttpServer&) = delete("a server owns its socket and threads");
+void route(std::string method, std::string path, Handler handler);
+void get(std::string path, Handler handler) { route("GET", std::move(path), std::move(handler)); }
+void post(std::string path, Handler handler) { route("POST", std::move(path), std::move(handler)); }
+void put(std::string path, Handler handler) { route("PUT", std::move(path), std::move(handler)); }
+void patch(std::string path, Handler handler) { route("PATCH", std::move(path), std::move(handler)); }
+void del(std::string path, Handler handler) { route("DELETE", std::move(path), std::move(handler)); }
+void proxy(std::string prefix, Upstream upstream);
+void webSocket(std::string path, WebSocketHandlers handlers);
+std::vector<WebSocketPtr> webSockets(const std::string& path) const;
+void serveDirectory(std::filesystem::path root, bool spaFallback = false);
+void setUrlPrefix(std::string prefix);
+void setNotFoundPage(std::filesystem::path file);
+using FileHook = std::function<void(const std::filesystem::path& file, Response& response)>;
+void onFile(FileHook hook) { onFile_ = std::move(hook); }
+void setLogging(bool on) { logging_ = on; }
+void allowHosts(std::vector<std::string> names) { allowedHosts_ = std::move(names); }
+void setRequestTimeout(std::chrono::milliseconds timeout) { requestTimeout_ = timeout; }
+void setMaxConnections(int count) { maxConnections_ = count; }
+std::expected<void, std::string> tryStart();
+void start();
+void run();
+void stop();
+int port() const { return port_; }
+const std::string& host() const { return host_; }
+Response handle(const Request& request) const;
+}
+== js.hpp
+namespace rx {
+inline emscripten::val domElement(NodeHandle node) {
+if (node == 0) return emscripten::val::undefined();
+emscripten::val nodes = emscripten::val::module_property("rxNodes");
+if (nodes.isUndefined()) return emscripten::val::undefined();
+return nodes.call<emscripten::val>("get", static_cast<double>(node));
+}
+inline emscripten::val domElement(const NodeRef& ref) { return domElement(ref.get()); }
+inline emscripten::val jsValue(const json::Value& value) {
+return emscripten::val::global("JSON").call<emscripten::val>("parse", value.dump());
+}
+}
+== json.hpp
+namespace rx::json {
+class Value;
+using Array = std::vector<Value>;
+using Object = std::map<std::string, Value, std::less<>>;
+class Error : public std::runtime_error {
+public:
+explicit Error(const std::string& message, std::size_t offset = 0)
+: std::runtime_error(message), offset_(offset) {}
+std::size_t offset() const { return offset_; }
+};
+enum class Type { Null, Bool, Number, String, Array, Object };
+class Value {
+public:
+Value() = default;
+Value(std::nullptr_t) {}
+Value(bool b) : data_(b) {}
+template <class T>
+requires(std::is_arithmetic_v<T> && !std::is_same_v<T, bool>)
+Value(T number) : data_(static_cast<double>(number)) {}
+Value(const char* s) : data_(std::string(s)) {}
+Value(std::string s) : data_(std::move(s)) {}
+Value(std::string_view s) : data_(std::string(s)) {}
+Value(Array a) : data_(std::move(a)) {}
+Value(Object o) : data_(std::move(o)) {}
+Type type() const { return static_cast<Type>(data_.index()); }
+bool isNull() const { return type() == Type::Null; }
+bool isBool() const { return type() == Type::Bool; }
+bool isNumber() const { return type() == Type::Number; }
+bool isString() const { return type() == Type::String; }
+bool isArray() const { return type() == Type::Array; }
+bool isObject() const { return type() == Type::Object; }
+bool asBool() const;
+double asNumber() const;
+std::int64_t asInt() const;
+const std::string& asString() const&;
+std::string asString() &&;
+const Array& asArray() const&;
+Array& asArray() &;
+Array asArray() &&;
+const Object& asObject() const&;
+Object& asObject() &;
+Object asObject() &&;
+Value& operator[](std::string_view key);
+const Value& operator[](std::string_view key) const;
+bool contains(std::string_view key) const;
+template <class T>
+T get(std::string_view key, T fallback = T{}) const;
+template <class T>
+std::expected<T, Error> require(std::string_view key) const;
+Value& operator[](std::size_t index);
+const Value& operator[](std::size_t index) const;
+void push(Value v);
+std::size_t size() const;
+std::string dump(int indent = 0) const;
+bool operator==(const Value&) const = default;
+};
+Value object(std::initializer_list<std::pair<const std::string, Value>> members = {});
+Value array(std::initializer_list<Value> items = {});
+Value parse(std::string_view text);
+std::expected<Value, Error> tryParse(std::string_view text);
+std::string quote(std::string_view s);
+template <class T>
+T Value::get(std::string_view key, T fallback) const {
+if (!isObject()) return fallback;
+const Object& o = std::get<Object>(data_);
+auto it = o.find(key);
+if (it == o.end()) return fallback;
+const Value& v = it->second;
+if constexpr (std::is_same_v<T, bool>) {
+return v.isBool() ? v.asBool() : fallback;
+} else if constexpr (std::is_arithmetic_v<T>) {
+return v.isNumber() ? static_cast<T>(v.asNumber()) : fallback;
+} else if constexpr (std::is_same_v<T, std::string>) {
+return v.isString() ? v.asString() : fallback;
+} else if constexpr (std::is_same_v<T, Value>) {
+return v;
+} else {
+static_assert(sizeof(T) == 0, "json::Value::get: unsupported type");
+}
+}
+template <class T>
+std::expected<T, Error> Value::require(std::string_view key) const {
+auto fail = [key](std::string_view what) {
+return std::unexpected(Error("field \"" + std::string(key) + "\": expected " + std::string(what)));
+};
+if (!isObject()) return std::unexpected(Error("expected an object with field \"" + std::string(key) + "\""));
+const Object& o = std::get<Object>(data_);
+auto it = o.find(key);
+if (it == o.end()) return std::unexpected(Error("missing field \"" + std::string(key) + "\""));
+const Value& v = it->second;
+if constexpr (std::is_same_v<T, bool>) {
+if (!v.isBool()) return fail("true or false");
+return v.asBool();
+} else if constexpr (std::is_integral_v<T>) {
+if (!v.isNumber()) return fail("a number");
+double d = v.asNumber();
+if (d != std::trunc(d) || d < static_cast<double>(std::numeric_limits<T>::min()) ||
+d > static_cast<double>(std::numeric_limits<T>::max()))
+return fail("an integer that fits");
+return static_cast<T>(d);
+} else if constexpr (std::is_floating_point_v<T>) {
+if (!v.isNumber()) return fail("a number");
+return static_cast<T>(v.asNumber());
+} else if constexpr (std::is_same_v<T, std::string>) {
+if (!v.isString()) return fail("a string");
+return v.asString();
+} else if constexpr (std::is_same_v<T, Value>) {
+return v;
+} else {
+static_assert(sizeof(T) == 0, "json::Value::require: unsupported type");
+}
+}
+template <class T>
+Value to(const T& value) {
+if constexpr (std::same_as<T, Value>) {
+return value;
+} else if constexpr (std::same_as<T, bool> || std::is_arithmetic_v<T>) {
+return Value(value);
+} else if constexpr (detail::StringLike<T>) {
+return Value(std::string_view(value));
+} else if constexpr (detail::isOptional<T>) {
+return value ? to(*value) : Value(nullptr);
+} else if constexpr (detail::StringMap<T>) {
+Value out = object();
+for (const auto& [key, item] : value) out[key] = to(item);
+return out;
+} else if constexpr (detail::Sequence<T>) {
+Value out = array();
+for (const auto& item : value) out.push(to(item));
+return out;
+} else if constexpr (detail::Record<T>) {
+Value out = object();
+template for (constexpr std::meta::info field : detail::fieldsOf<T>()) {
+out[detail::keyOf(field)] = to(value.[:field:]);
+}
+return out;
+} else {
+static_assert(false, "json::to: this type can't be converted to JSON");
+}
+}
+template <class T>
+std::expected<T, Error> from(const Value& v) {
+auto expected = [](std::string_view what) { return std::unexpected(Error("expected " + std::string(what))); };
+if constexpr (std::same_as<T, Value>) {
+return v;
+} else if constexpr (std::same_as<T, bool>) {
+if (!v.isBool()) return expected("true or false");
+return v.asBool();
+} else if constexpr (std::integral<T>) {
+if (!v.isNumber()) return expected("a number");
+double d = v.asNumber();
+if (d != std::trunc(d) || d < static_cast<double>(std::numeric_limits<T>::min()) ||
+d > static_cast<double>(std::numeric_limits<T>::max()))
+return expected("an integer that fits");
+return static_cast<T>(d);
+} else if constexpr (std::floating_point<T>) {
+if (!v.isNumber()) return expected("a number");
+return static_cast<T>(v.asNumber());
+} else if constexpr (std::same_as<T, std::string>) {
+if (!v.isString()) return expected("a string");
+return v.asString();
+} else if constexpr (detail::isOptional<T>) {
+if (v.isNull()) return T{};
+return from<typename T::value_type>(v).transform([](auto x) { return T(std::move(x)); });
+} else if constexpr (detail::StringMap<T>) {
+if (!v.isObject()) return expected("an object");
+T out;
+for (const auto& [key, item] : v.asObject()) {
+auto x = from<typename T::mapped_type>(item);
+if (!x) return std::unexpected(Error("\"" + key + "\": " + x.error().what()));
+out.emplace(key, std::move(*x));
+}
+return out;
+} else if constexpr (detail::Sequence<T>) {
+if (!v.isArray()) return expected("an array");
+T out;
+for (std::size_t i = 0; i < v.size(); ++i) {
+auto x = from<std::ranges::range_value_t<T>>(v[i]);
+if (!x) return std::unexpected(Error("[" + std::to_string(i) + "]: " + x.error().what()));
+out.push_back(std::move(*x));
+}
+return out;
+} else if constexpr (detail::Record<T>) {
+if (!v.isObject()) return expected("an object");
+T out{};
+std::optional<Error> failed;
+template for (constexpr std::meta::info field : detail::fieldsOf<T>()) {
+using Field = std::remove_cvref_t<typename[:std::meta::type_of(field):]>;
+constexpr std::string_view key = detail::keyOf(field);
+if (failed) {
+} else if (!v.contains(key)) {
+if constexpr (!detail::isOptional<Field>) failed = Error("missing field \"" + std::string(key) + "\"");
+} else if (auto x = from<Field>(v[key])) {
+out.[:field:] = std::move(*x);
+} else {
+failed = Error("field \"" + std::string(key) + "\": " + x.error().what());
+}
+}
+if (failed) return std::unexpected(std::move(*failed));
+return out;
+} else {
+static_assert(false, "json::from: this type can't be read from JSON");
+}
+}
+}
+== memo.hpp
+namespace rx {
+template <auto C>
+inline const auto memo = detail::makeMemo<C>();
+}
+== parse.hpp
+namespace rx {
+enum class ParseError {
+Empty,
+NotANumber,
+OutOfRange,
+Trailing,
+};
+constexpr std::string_view describe(ParseError error) {
+switch (error) {
+case ParseError::Empty: return "empty";
+case ParseError::NotANumber: return "not a number";
+case ParseError::OutOfRange: return "out of range";
+case ParseError::Trailing: return "unexpected characters after the number";
+}
+return "invalid";
+}
+template <class T>
+concept Number = (std::integral<T> && !std::same_as<T, bool>) || std::floating_point<T>;
+template <Number T>
+constexpr std::expected<T, ParseError> parseNumber(std::string_view text) {
+if (text.empty()) return std::unexpected(ParseError::Empty);
+T value{};
+const char* last = text.data() + text.size();
+auto [end, ec] = std::from_chars(text.data(), last, value);
+if (ec == std::errc::invalid_argument) return std::unexpected(ParseError::NotANumber);
+if (ec == std::errc::result_out_of_range) return std::unexpected(ParseError::OutOfRange);
+if (end != last) return std::unexpected(ParseError::Trailing);
+return value;
+}
+inline std::expected<int, std::string> parsePort(std::string_view text) {
+auto bad = [text](std::string_view why) {
+return std::unexpected("bad port \"" + std::string(text) + "\": " + std::string(why));
+};
+return parseNumber<int>(text)
+.transform_error([&](ParseError e) { return bad(describe(e)).error(); })
+.and_then([&](int port) -> std::expected<int, std::string> {
+if (port < 0 || port > 65535) return bad("must be 0..65535");
+return port;
+});
+}
+}
+== path.hpp
+namespace rx {
+inline std::string urlDecode(std::string_view text, bool plusIsSpace = false) {
+std::string out;
+out.reserve(text.size());
+auto hex = [](char c) -> int {
+if (c >= '0' && c <= '9') return c - '0';
+if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+return -1;
+};
+for (std::size_t i = 0; i < text.size(); ++i) {
+char c = text[i];
+if (c == '%' && i + 2 < text.size()) {
+int hi = hex(text[i + 1]), lo = hex(text[i + 2]);
+if (hi >= 0 && lo >= 0) {
+out += static_cast<char>(hi * 16 + lo);
+i += 2;
+continue;
+}
+}
+out += (plusIsSpace && c == '+') ? ' ' : c;
+}
+return out;
+}
+inline std::string urlEncode(std::string_view text) {
+static constexpr char hex[] = "0123456789ABCDEF";
+std::string out;
+out.reserve(text.size());
+for (char ch : text) {
+auto c = static_cast<unsigned char>(ch);
+bool unreserved = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' ||
+c == '.' || c == '_' || c == '~';
+if (unreserved) {
+out += ch;
+} else {
+out += '%';
+out += hex[c >> 4];
+out += hex[c & 0xF];
+}
+}
+return out;
+}
+inline bool matchPath(std::string_view pattern, std::string_view path, std::map<std::string, std::string>& params) {
+auto next = [](std::string_view& s) {
+while (!s.empty() && s.front() == '/') s.remove_prefix(1);
+auto slash = s.find('/');
+std::string_view seg = s.substr(0, slash);
+s = slash == std::string_view::npos ? std::string_view{} : s.substr(slash);
+return seg;
+};
+std::map<std::string, std::string> found;
+while (true) {
+std::string_view p = next(pattern);
+if (p == "*") {
+while (!path.empty() && path.front() == '/') path.remove_prefix(1);
+found["*"] = urlDecode(path);
+params = std::move(found);
+return true;
+}
+std::string_view s = next(path);
+if (p.empty() || s.empty()) {
+if (p.empty() && s.empty()) {
+params = std::move(found);
+return true;
+}
+return false;
+}
+if (p.front() == ':') found[std::string(p.substr(1))] = urlDecode(s);
+else if (p != s) return false;
+}
+}
+inline std::optional<std::string> queryParam(std::string_view query, std::string_view name) {
+if (!query.empty() && query.front() == '?') query.remove_prefix(1);
+while (!query.empty()) {
+auto amp = query.find('&');
+std::string_view pair = query.substr(0, amp);
+query = amp == std::string_view::npos ? std::string_view{} : query.substr(amp + 1);
+auto eq = pair.find('=');
+if (urlDecode(pair.substr(0, eq), true) != name) continue;
+return eq == std::string_view::npos ? std::string{} : urlDecode(pair.substr(eq + 1), true);
+}
+return std::nullopt;
+}
+}
+== reactx.hpp
+== renderer.hpp
+namespace rx {
+class Renderer {
+public:
+virtual ~Renderer() = default;
+virtual NodeHandle rootNode() = 0;
+virtual NodeHandle createElement(std::string_view type) = 0;
+virtual NodeHandle createText(std::string_view text) = 0;
+virtual void setText(NodeHandle node, std::string_view text) = 0;
+virtual void setProp(NodeHandle node, std::string_view name, const PropValue& value) = 0;
+virtual void removeProp(NodeHandle node, std::string_view name) = 0;
+virtual void insertChild(NodeHandle parent, NodeHandle child, std::size_t index) = 0;
+virtual void insertBefore(NodeHandle parent, NodeHandle child, NodeHandle before, std::size_t index) {
+(void)before;
+insertChild(parent, child, index);
+}
+virtual void removeChild(NodeHandle parent, NodeHandle child) = 0;
+virtual void destroyNode(NodeHandle node) = 0;
+virtual void commit() {}
+virtual bool focus(NodeHandle) { return false; }
+virtual bool scrollIntoView(NodeHandle) { return false; }
+virtual std::optional<ScrollEvent> scrollMetrics(NodeHandle) { return std::nullopt; }
+virtual bool scrollTo(NodeHandle, int ) { return false; }
+};
+}
+== root.hpp
+namespace rx {
+class Root {
+public:
+explicit Root(Renderer& renderer);
+~Root();
+Root(const Root&) = delete("a Root owns the mounted tree: pass it by reference");
+Root& operator=(const Root&) = delete("a Root owns the mounted tree: pass it by reference");
+void render(Element element);
+void flush();
+bool dispatch(NodeHandle node, const std::string& event, const EventData& data = {});
+};
+}
+== router.hpp
+namespace rx::router {
+using Params = std::map<std::string, std::string>;
+struct Route {
+std::string path;
+Element element;
+bool allow = true;
+std::string redirect{};
+};
+Element routes(std::vector<Route> table);
+Element redirect(std::string to);
+struct LinkProps {
+std::string to{};
+std::string label{};
+std::vector<Element> children{};
+std::string className{};
+std::string activeClassName = "active";
+bool exact = true;
+bool replace = false;
+std::string key{};
+};
+Element link(LinkProps props);
+void navigate(const std::string& path, bool replace = false);
+void back();
+std::string currentPath();
+void reset(const std::string& path = "/");
+std::string base();
+void setBase(std::string path);
+std::string href(const std::string& path);
+std::string useLocation();
+const Params& useParams();
+std::string useParam(const std::string& name);
+std::string useQuery(const std::string& name);
+}
+== store.hpp
+namespace rx {
+template <class T>
+class Store {
+public:
+explicit Store(T initial) : state_(std::make_shared<State>(std::move(initial))) {}
+const T& get() const { return state_->value; }
+void set(T value) const {
+if constexpr (EqualityComparable<T>) {
+if (value == state_->value) return;
+}
+state_->value = std::move(value);
+++state_->version;
+auto listeners = state_->listeners;
+for (auto& [id, listener] : listeners) listener();
+}
+template <class F>
+requires std::is_invocable_r_v<T, F, const T&>
+void update(F&& f) const {
+set(std::invoke(std::forward<F>(f), std::as_const(state_->value)));
+}
+std::uint64_t version() const { return state_->version; }
+Cleanup subscribe(std::function<void()> listener) const {
+std::uint64_t id = state_->nextId++;
+state_->listeners.emplace_back(id, std::move(listener));
+return [weak = std::weak_ptr<State>(state_), id] {
+if (auto s = weak.lock()) std::erase_if(s->listeners, [id](const auto& l) { return l.first == id; });
+};
+}
+bool operator==(const Store& other) const { return state_ == other.state_; }
+};
+template <class T>
+Store<T> createStore(T initial) {
+return Store<T>(std::move(initial));
+}
+inline Store<std::string> createStore(const char* initial) { return Store<std::string>(initial); }
+template <class T>
+const T& useStore(const Store<T>& store) {
+auto [seen, setSeen] = useState(store.version());
+(void)seen;
+useEffect(
+[store, setSeen] {
+setSeen(store.version());
+return store.subscribe([store, setSeen] { setSeen(store.version()); });
+},
+deps(store));
+return store.get();
+}
+template <class T, class F>
+requires std::is_invocable_v<F&, const T&>
+std::decay_t<std::invoke_result_t<F&, const T&>> useStore(const Store<T>& store, F&& select) {
+using R = std::decay_t<std::invoke_result_t<F&, const T&>>;
+R now = std::invoke(select, store.get());
+auto& selector = useRef<std::function<R(const T&)>>();
+selector = std::forward<F>(select);
+auto& shown = useRef<std::optional<R>>();
+shown = now;
+auto [tick, setTick] = useState(std::uint64_t{0});
+(void)tick;
+auto check = [store, &selector, &shown, setTick] {
+R next = selector(store.get());
+if constexpr (EqualityComparable<R>) {
+if (shown && *shown == next) return;
+}
+setTick([](std::uint64_t t) { return t + 1; });
+};
+useEffect(
+[store, check] {
+check();
+return store.subscribe(check);
+},
+deps(store));
+return now;
+}
+}
+== terminal.hpp
+namespace rx {
+std::vector<KeyEvent> decodeKeys(std::string_view bytes);
+struct MouseInput {
+enum class Action { Down, Up, Move, WheelUp, WheelDown };
+Action action = Action::Move;
+int x = 0, y = 0;
+int button = 0;
+bool held = false;
+bool ctrl = false, alt = false, shift = false;
+bool operator==(const MouseInput&) const = default;
+};
+using TerminalInput = std::variant<KeyEvent, MouseInput>;
+std::vector<TerminalInput> decodeInput(std::string_view bytes);
+class TerminalRenderer : public TextRenderer {
+public:
+using Output = std::function<void(std::string_view)>;
+explicit TerminalRenderer(Output output = {});
+~TerminalRenderer() override;
+void setSize(int width, int height);
+void setUnicode(bool on);
+bool unicode() const { return unicode_; }
+int width() const { return width_; }
+int height() const { return height_; }
+void commit() override;
+void destroyNode(NodeHandle node) override;
+void setProp(NodeHandle node, std::string_view name, const PropValue& value) override;
+void setText(NodeHandle node, std::string_view text) override;
+void removeProp(NodeHandle node, std::string_view name) override;
+void insertChild(NodeHandle parent, NodeHandle child, std::size_t index) override;
+void removeChild(NodeHandle parent, NodeHandle child) override;
+void repaint();
+void invalidate();
+std::vector<std::string> frameLines() const;
+std::string frameText() const;
+NodeHandle focused() const { return focused_; }
+std::vector<NodeHandle> focusable() const;
+bool focus(NodeHandle node) override;
+void focusNext();
+void focusPrev();
+bool handleKey(Root& root, const KeyEvent& key);
+bool handleMouse(Root& root, const MouseInput& mouse);
+NodeHandle nodeAt(int x, int y) const;
+bool scrollIntoView(NodeHandle node) override;
+std::optional<ScrollEvent> scrollMetrics(NodeHandle box) override;
+bool scrollTo(NodeHandle box, int top) override;
+int scrollTop(NodeHandle box) const;
+bool scrollBy(NodeHandle box, int rows);
+void sendScrollEvents(Root& root);
+std::optional<std::pair<int, int>> caret() const { return caret_; }
+bool editingText() const;
+};
+class Terminal {
+public:
+Terminal();
+~Terminal();
+Terminal(const Terminal&) = delete("there is one terminal: pass it by reference");
+Terminal& operator=(const Terminal&) = delete("there is one terminal: pass it by reference");
+static bool isInteractive();
+void write(std::string_view data);
+int width() const;
+int height() const;
+std::vector<KeyEvent> readKeys(int timeoutMs);
+std::vector<TerminalInput> readInput(int timeoutMs);
+void setMouse(bool on);
+};
+class TerminalApp {
+public:
+TerminalApp();
+~TerminalApp();
+void run(Element element);
+void quit() { running_ = false; }
+void setMouse(bool on) { mouse_ = on; }
+TerminalRenderer& renderer() { return *renderer_; }
+Root& root() { return *root_; }
+};
+}
+== testing.hpp
+namespace rx::testing {
+class Screen {
+public:
+explicit Screen(Element app, int width = 80, int height = 24);
+~Screen();
+Screen(const Screen&) = delete("a Screen owns the mounted app");
+Screen& operator=(const Screen&) = delete("a Screen owns the mounted app");
+std::string text() const;
+std::vector<std::string> lines() const;
+bool shows(std::string_view part) const;
+void press(std::string_view key);
+void type(std::string_view text);
+bool click(std::string_view label);
+void settle(std::chrono::milliseconds wait = std::chrono::milliseconds(0));
+void render(Element app);
+void resize(int width, int height);
+Root& root() { return *root_; }
+TerminalRenderer& renderer() { return *renderer_; }
+};
+void registerTest(const char* name, void (*test)());
+void recordCheck(bool ok, const char* expression, const char* file, int line);
+int runTests(int argc, char** argv);
+}
+#define RX_TEST(name) \
+static void rx_test_##name(); \
+[[maybe_unused]] static const bool rx_test_registered_##name = \
+(::rx::testing::registerTest(#name, &rx_test_##name), true); \
+static void rx_test_##name()
+#define RX_CHECK(...) ::rx::testing::recordCheck(static_cast<bool>(__VA_ARGS__), #__VA_ARGS__, __FILE__, __LINE__)
+#define CHECK(...) RX_CHECK(__VA_ARGS__)
+== text_renderer.hpp
+namespace rx {
+class TextRenderer : public Renderer {
+public:
+explicit TextRenderer(std::ostream* log = nullptr);
+NodeHandle rootNode() override { return kRoot; }
+NodeHandle createElement(std::string_view type) override;
+NodeHandle createText(std::string_view text) override;
+void setText(NodeHandle node, std::string_view text) override;
+void setProp(NodeHandle node, std::string_view name, const PropValue& value) override;
+void removeProp(NodeHandle node, std::string_view name) override;
+void insertChild(NodeHandle parent, NodeHandle child, std::size_t index) override;
+void removeChild(NodeHandle parent, NodeHandle child) override;
+void destroyNode(NodeHandle node) override;
+void commit() override;
+std::string toString() const;
+std::optional<NodeHandle> findByProp(const std::string& name, const std::string& value) const;
+std::size_t nodeCount() const { return nodes_.size(); }
+std::size_t operationCount() const { return ops_; }
+protected:
+static constexpr NodeHandle kRoot = 1;
+struct Node {
+std::string type;
+std::string text;
+bool isText = false;
+std::flat_map<std::string, std::string, std::less<>> props;
+std::vector<NodeHandle> children;
+NodeHandle parent = 0;
+};
+Node& node(NodeHandle h);
+const Node* findNode(NodeHandle h) const;
+protected:
+std::unordered_map<NodeHandle, Node> nodes_;
+};
+}
+== ui.hpp
+namespace rx::ui {
+struct Theme {
+std::string accent = "cyan";
+std::string text = "white";
+std::string muted = "gray";
+std::string success = "green";
+std::string warning = "yellow";
+std::string danger = "red";
+std::string surface{};
+bool operator==(const Theme&) const = default;
+};
+inline const Context<Theme> ThemeContext{Theme{}};
+Element themeProvider(Theme theme, std::vector<Element> children);
+const Theme& useTheme();
+Element Button(const Props& props);
+Element Input(const Props& props);
+Element Checkbox(const Props& props);
+Element Tabs(const Props& props);
+Element Modal(const Props& props);
+Element List(const Props& props);
+Element ListItem(const Props& props);
+Element Text(const Props& props);
+Element Card(const Props& props);
+Element Stack(const Props& props);
+Element Select(const Props& props);
+Element Tooltip(const Props& props);
+Element Confirm(const Props& props);
+Element Toaster(const Props& props);
+Element Textarea(const Props& props);
+Element RadioGroup(const Props& props);
+Element Slider(const Props& props);
+Element Progress(const Props& props);
+enum class Variant { Default, Primary, Danger, Success };
+struct ButtonProps {
+std::string label{};
+Callback onClick{};
+Variant variant = Variant::Default;
+bool disabled = false;
+std::string key{};
+};
+Element button(ButtonProps props);
+struct InputProps {
+std::string value{};
+InputHandler onChange{};
+InputHandler onSubmit{};
+std::string placeholder{};
+std::string label{};
+bool labelAbove = false;
+bool disabled = false;
+std::string error{};
+std::string key{};
+};
+Element input(InputProps props);
+struct CheckboxProps {
+std::string label{};
+bool checked = false;
+Callback onToggle{};
+std::function<void(bool)> onChange{};
+bool disabled = false;
+std::string error{};
+std::string key{};
+};
+Element checkbox(CheckboxProps props);
+struct Tab {
+std::string label{};
+std::vector<Element> content{};
+};
+struct TabsProps {
+std::vector<Tab> tabs{};
+int initial = 0;
+std::string key{};
+};
+Element tabs(TabsProps props);
+struct ModalProps {
+std::string title{};
+bool open = false;
+Callback onClose{};
+int width = 0;
+std::vector<Element> children{};
+std::string key{};
+};
+Element modal(ModalProps props);
+struct ListItemProps {
+std::string label{};
+std::string detail{};
+bool selected = false;
+Callback onSelect{};
+KeyHandler onKey{};
+std::string key{};
+};
+Element listItem(ListItemProps props);
+struct ListProps {
+std::string title{};
+std::string emptyText = "nothing here";
+std::vector<Element> items{};
+std::vector<Element> children{};
+std::string key{};
+bool scroll = false;
+};
+Element list(ListProps props);
+struct TextProps {
+std::string text{};
+bool muted = false;
+std::string key{};
+};
+Element text(TextProps props);
+struct CardProps {
+std::string title{};
+std::vector<Element> children{};
+std::string key{};
+int level = 3;
+};
+Element card(CardProps props);
+enum class Direction { Column, Row };
+enum class Align { Stretch, Start, Center, End };
+enum class Justify { Start, Center, End, Between };
+struct StackProps {
+Direction direction = Direction::Column;
+int gap = 1;
+Align align = Align::Stretch;
+Justify justify = Justify::Start;
+bool wrap = false;
+std::vector<Element> children{};
+std::string key{};
+};
+Element stack(StackProps props);
+struct Option {
+std::string value{};
+std::string label{};
+};
+struct SelectProps {
+std::string label{};
+std::string value{};
+std::vector<Option> options{};
+InputHandler onChange{};
+bool labelAbove = false;
+bool disabled = false;
+std::string error{};
+std::string key{};
+};
+Element select(SelectProps props);
+struct TextareaProps {
+std::string value{};
+InputHandler onChange{};
+std::string placeholder{};
+std::string label{};
+int rows = 4;
+bool disabled = false;
+std::string error{};
+std::string key{};
+};
+Element textarea(TextareaProps props);
+struct RadioGroupProps {
+std::string label{};
+std::string value{};
+std::vector<Option> options{};
+InputHandler onChange{};
+Direction direction = Direction::Column;
+bool row = false;
+bool disabled = false;
+std::string error{};
+std::string key{};
+};
+Element radioGroup(RadioGroupProps props);
+struct SliderProps {
+std::string label{};
+int value = 0;
+int min = 0;
+int max = 100;
+int step = 1;
+std::function<void(int)> onChange{};
+bool showValue = true;
+bool disabled = false;
+std::string key{};
+};
+Element slider(SliderProps props);
+struct ProgressProps {
+int value = 0;
+int max = 100;
+std::string label{};
+Variant variant = Variant::Primary;
+std::string key{};
+};
+Element progress(ProgressProps props);
+using FormErrors = std::map<std::string, std::string>;
+template <class T>
+struct FormOptions {
+T initial{};
+std::function<FormErrors(const T&)> validate{};
+std::function<void(const T&)> onSubmit{};
+};
+template <class T>
+struct Form {
+T values{};
+FormErrors errors{};
+bool submitted = false;
+Callback submit{};
+Callback reset{};
+std::function<void(T)> setValues{};
+bool valid() const { return errors.empty(); }
+std::string error(const std::string& name) const {
+auto it = errors.find(name);
+if (it == errors.end() || (!submitted && !touched_.contains(name))) return {};
+return it->second;
+}
+template <class V>
+std::function<void(const V&)> set(std::string name, V T::* field) const {
+return [update = update_, name = std::move(name), field](const V& v) {
+update([&](State& s) {
+s.values.*field = v;
+s.touched.insert(name);
+});
+};
+}
+struct State {
+T values{};
+std::set<std::string> touched{};
+bool submitted = false;
+};
+std::set<std::string> touched_{};
+std::function<void(const std::function<void(State&)>&)> update_{};
+};
+template <class T>
+Form<T> useForm(FormOptions<T> options = {}) {
+using State = typename Form<T>::State;
+auto [state, setState] = useState(State{options.initial});
+Form<T> form;
+form.values = state.values;
+form.errors = options.validate ? options.validate(state.values) : FormErrors{};
+form.submitted = state.submitted;
+form.touched_ = state.touched;
+form.update_ = [setState](const std::function<void(State&)>& change) {
+setState([&change](State s) {
+change(s);
+return s;
+});
+};
+form.submit = [setState, values = state.values, validate = options.validate, onSubmit = options.onSubmit] {
+setState([](State s) {
+s.submitted = true;
+return s;
+});
+if ((!validate || validate(values).empty()) && onSubmit) onSubmit(values);
+};
+form.reset = [setState, initial = options.initial] { setState(State{initial}); };
+form.setValues = [setState](T values) { setState(State{std::move(values)}); };
+return form;
+}
+struct TooltipProps {
+std::string text{};
+std::vector<Element> children{};
+std::string key{};
+};
+Element tooltip(TooltipProps props);
+struct ConfirmProps {
+std::string title{};
+std::string message{};
+bool open = false;
+std::string confirmLabel = "OK";
+std::string cancelLabel = "Cancel";
+bool danger = false;
+Callback onConfirm{};
+Callback onCancel{};
+std::string key{};
+};
+Element confirm(ConfirmProps props);
+struct VirtualListOptions {
+int count = 0;
+int rowHeight = 32;
+int rowLines = 1;
+int height = 0;
+bool follow = false;
+bool border = false;
+ScrollHandler onScroll{};
+};
+struct VirtualList {
+int first = 0;
+int last = 0;
+Element view(std::vector<Element> rows) const;
+VirtualListOptions options{};
+NodeRef box{};
+Setter<std::pair<int, int>> setViewport{};
+};
+VirtualList useVirtualList(VirtualListOptions options);
+struct TableColumn {
+std::string title{};
+int width = 0;
+Align align = Align::Start;
+bool sortable = false;
+};
+struct TableRow {
+std::vector<Element> cells{};
+std::string key{};
+Callback onSelect{};
+bool selected = false;
+};
+struct TableProps {
+std::vector<TableColumn> columns{};
+std::vector<TableRow> rows{};
+int sortColumn = -1;
+bool sortDescending = false;
+std::function<void(int column)> onSort{};
+std::string emptyText{};
+std::optional<VirtualList> list{};
+std::string key{};
+};
+Element table(TableProps props);
+struct ToastProps {
+std::string text{};
+Variant variant = Variant::Default;
+std::chrono::milliseconds duration = std::chrono::seconds(4);
+};
+void toast(ToastProps props);
+Element toaster();
+}
+== websocket.hpp
+namespace rx {
+enum class WebSocketStatus { Connecting, Open, Closed };
+struct WebSocketOptions {
+std::function<void(const std::string& message)> onMessage{};
+Callback onOpen{};
+std::function<void(int code)> onClose{};
+bool reconnect = true;
+std::chrono::milliseconds retryDelay{1000};
+};
+struct WebSocketState {
+WebSocketStatus status = WebSocketStatus::Connecting;
+std::string error{};
+std::function<bool(const std::string& text)> send{};
+Callback reconnect{};
+bool open() const { return status == WebSocketStatus::Open; }
+};
+WebSocketState useWebSocket(std::string url, WebSocketOptions options = {});
+}

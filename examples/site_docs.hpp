@@ -123,6 +123,7 @@ inline const std::vector<Page>& pages() {
                  "# или из исходников\n"
                  "cmake --preset release && cmake --build --preset release\n"
                  "cmake --install build/release --prefix ~/.local     # ~/.local/bin/reactx"},
+                {"Справка", "Каждая команда объясняет себя сама.", "reactx help\nreactx add --help"},
                 {"Docker и devcontainer", "Образ ghcr.io/sargisis/reactx содержит GCC 16, Emscripten и reactx — ставить ничего не нужно. "
                                           "В контейнере запускайте reactx dev --host 0.0.0.0, иначе страница не откроется снаружи. "
                                           "reactx new кладёт в проект .devcontainer/ с образом той же версии: VS Code "
@@ -478,6 +479,8 @@ inline const std::vector<Page>& pages() {
                  "              {\"onChange\", boolHandler([setDone](bool on) { setDone(on); })}})"},
                 {"События", "onClick, onInput(text), onChange, onKey(KeyEvent), onSubmit (форма не перезагружает страницу), "
                             "onFocus, onBlur, onScroll(ScrollEvent).", ""},
+                {"CSS", "Свои стили кладите в public/style.css проекта: он копируется рядом со страницей.", ""},
+                {"Безопасность", "Текст — всегда текст, а не HTML. Ссылки с адресом javascript: блокируются.", ""},
                 {"SVG", "Теги SVG (svg, rect, circle, path, line, g, ...) создаются в пространстве имён SVG сами. "
                         "Текст и ссылки внутри SVG — «svg:text», «svg:a» (такие теги есть и в HTML).",
                  "h(\"svg\", {{\"viewBox\", \"0 0 100 40\"}}, {\n"
@@ -581,8 +584,11 @@ inline const std::vector<Page>& pages() {
                  "    {.path = \"/admin/*\", .element = h(Admin), .allow = user.isAdmin, .redirect = \"/login\"},\n"
                  "    {\"*\", h(NotFound)},\n"
                  "})"},
-                {"Ссылки и переходы", "link — ссылка без перезагрузки (Ctrl+клик — новая вкладка); navigate и back — из кода.",
-                 "router::link({.to = \"/todos/7\", .label = \"Открыть\"});\nrouter::navigate(\"/todos\");\nrouter::back();"},
+                {"Ссылки и переходы", "link — ссылка без перезагрузки (Ctrl+клик — новая вкладка), на текущем пути получает "
+                                      ".activeClassName (\"active\"); navigate и back — из кода. useParams() — все параметры "
+                                      "маршрута, currentPath() — путь с query (не хук), href(path) — URL с базовым путём.",
+                 "router::link({.to = \"/todos/7\", .label = \"Открыть\"});\nrouter::navigate(\"/todos\");\nrouter::navigate(\"/login\", /*replace=*/true);\nrouter::back();\n"
+                 "const auto& params = router::useParams();   // {\"id\": \"7\"}\nstd::string url = router::href(\"/todos/7\");  // \"/my-app/todos/7\""},
                 {"Базовый путь", "Если на странице есть <base href=\"/ReactX/\">, приложение живёт по этому пути (GitHub Pages), "
                                  "а маршруты и ссылки пишутся без него.", ""},
             },
@@ -645,7 +651,12 @@ inline const std::vector<Page>& pages() {
                  "server.get(\"/api/hello/:name\", [](const rx::net::Request& req) {\n"
                  "    return rx::net::Response::json(json::object({{\"hello\", req.pathParam(\"name\")}}).dump());\n"
                  "});\n"
+                 "server.post(\"/api/todos\", [](const rx::net::Request& req) {  // а также put, patch, del; req.body, req.header(\"x-token\"), req.param(\"q\")\n"
+                 "    return rx::net::Response::json(req.body, 201);\n"
+                 "});\n"
                  "server.serveDirectory(\"build/web\", /*spaFallback=*/true);\n"
+                 "server.setNotFoundPage(\"404.html\");   // unknown GET paths\n"
+                 "server.setLogging(true);                // a line per request\n"
                  "server.start();\nserver.run();"},
                 {"Готовые программы", "reactx_serve — раздаёт папку для разработки (с --base и --not-found ведёт себя как "
                                       "GitHub Pages). api_server — пример полного стека: веб-приложение задач и его REST API "

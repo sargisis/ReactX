@@ -257,6 +257,11 @@ inline const std::vector<Page>& pagesEn() {
                  "const auto Badge = [](const BadgeProps& p) -> Element {\n"
                  "    return h(\"span\", {{\"className\", \"badge\"}}, {p.label});\n};\n\n"
                  "h(Badge, {.label = \"new\"})"},
+                {"Props by name", "The older way works too: Element(const Props&), props.get<T>(name, fallback), "
+                                  "props.children().",
+                 "Element Hello(const Props& p) {\n"
+                 "    return h(\"p\", {}, {\"Hello, \" + p.get<std::string>(\"name\", \"world\")});\n"
+                 "}\n\nh(Hello, {{\"name\", \"ReactX\"}})"},
                 {"Lists and keys", "Give list items a key so ReactX recognizes them when the list changes: moved items are "
                                    "moved, not recreated, and keep their state. A key field in the props struct is the key. "
                                    "fragment() groups children without an extra node.",
@@ -425,6 +430,8 @@ inline const std::vector<Page>& pagesEn() {
                                "\"false\"; rx::boolHandler turns that into a bool.",
                  "h(\"input\", {{\"type\", \"checkbox\"}, {\"checked\", done},\n"
                  "              {\"onChange\", boolHandler([setDone](bool on) { setDone(on); })}})"},
+                {"Events", "onClick, onInput(text), onChange, onKey(KeyEvent), onSubmit (a form doesn't reload the page), "
+                           "onFocus, onBlur, onScroll(ScrollEvent).", ""},
                 {"CSS", "Put your styles in public/style.css of the project; it is copied next to the page.", ""},
                 {"SVG", "SVG tags (svg, rect, circle, path, g, ...) just work. For text and links inside SVG write svg:text "
                         "and svg:a.",
@@ -529,9 +536,12 @@ inline const std::vector<Page>& pagesEn() {
                  "    {.path = \"/admin/*\", .element = h(Admin), .allow = user.isAdmin, .redirect = \"/login\"},\n"
                  "    {\"*\", h(NotFound)},\n"
                  "})"},
-                {"Links", "link changes the page without reloading (Ctrl+click still opens a new tab); navigate and back "
-                          "do it from code.",
-                 "router::link({.to = \"/todos/7\", .label = \"Open\"});\nrouter::navigate(\"/todos\");\nrouter::back();"},
+                {"Links", "link changes the page without reloading (Ctrl+click still opens a new tab) and gets "
+                          ".activeClassName (\"active\") on the current path; navigate and back do it from code. "
+                          "useParams() gives every route parameter, currentPath() the path with the query (not a hook), "
+                          "href(path) the URL with the base path.",
+                 "router::link({.to = \"/todos/7\", .label = \"Open\"});\nrouter::navigate(\"/todos\");\nrouter::navigate(\"/login\", /*replace=*/true);\nrouter::back();\n"
+                 "const auto& params = router::useParams();   // {\"id\": \"7\"}\nstd::string url = router::href(\"/todos/7\");  // \"/my-app/todos/7\""},
                 {"A base path", "To publish under a folder (like GitHub Pages: /my-app/), set \"web\": {\"base\": \"/my-app/\"} "
                                 "in reactx.json. Routes and links are still written without it.", ""},
             },
@@ -592,8 +602,19 @@ inline const std::vector<Page>& pagesEn() {
                  "server.get(\"/api/hello/:name\", [](const rx::net::Request& req) {\n"
                  "    return rx::net::Response::json(json::object({{\"hello\", req.pathParam(\"name\")}}).dump());\n"
                  "});\n"
+                 "server.post(\"/api/todos\", [](const rx::net::Request& req) {  // also put, patch, del; req.body, req.header(\"x-token\"), req.param(\"q\")\n"
+                 "    return rx::net::Response::json(req.body, 201);\n"
+                 "});\n"
                  "server.serveDirectory(\"build/web/dist\", /*spaFallback=*/true);\n"
+                 "server.setNotFoundPage(\"404.html\");   // unknown GET paths\n"
+                 "server.setLogging(true);                // a line per request\n"
                  "server.start();\nserver.run();"},
+                {"Ready programs", "reactx_serve serves a folder for development (with --base and --not-found it behaves like "
+                                   "GitHub Pages). api_server is a full-stack example: the todo web app and its REST API in "
+                                   "one process; with --data the todos are saved to a file.",
+                 "./build/debug/reactx_serve build/web --port 8090\n"
+                 "./build/debug/reactx_serve build/pages/site --base /ReactX/ --not-found 404.html\n"
+                 "./build/debug/api_server build/web/app --port 8091 --data todos.json"},
                 {"WebSocket", "server.webSocket(path, handlers): the handlers run on the connection's thread (guard shared "
                               "data with a mutex); server.webSockets(path) lists open connections to broadcast to.",
                  "server.webSocket(\"/api/ws\", {.onMessage = [&server](const rx::net::WebSocketPtr&, const std::string& text) {\n"

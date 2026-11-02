@@ -380,6 +380,8 @@ router::routes({
 });
 router::link({.to = "/todos/7", .label = "Открыть"});   // <a href>, Ctrl+клик — новая вкладка
 router::navigate("/todos");  router::back();  router::useQuery("show");
+router::useParams();      // все параметры маршрута; router::currentPath() — путь с query, не хук
+router::href("/todos/7"); // "/ReactX/todos/7" под базовым путём; ссылка на текущий путь получает .activeClassName ("active")
 ```
 
 Вложенные маршруты, guards и редиректы (v0.19): `{"/settings/*", h(Settings)}` совпадает со всем под `/settings`, а `router::routes()` внутри `Settings` разбирают остаток (`{"/profile", h(Profile)}`), пока `Settings` остаётся смонтированным; `{.path = "/admin/*", .element = h(Admin), .allow = isAdmin, .redirect = "/login"}` закрывает маршрут; `router::redirect("/inbox")` сразу уводит дальше; `link({..., .exact = false})` активна и на путях под ней.
@@ -670,7 +672,7 @@ ReactX распространяется **на ваш выбор** на усло
 
 Если вы присылаете изменения в ReactX (pull request), вы соглашаетесь, что они распространяются на тех же условиях — под обеими лицензиями, без дополнительных требований.
 
-**Стабильность API.** Публичный API — то, что объявлено в `include/reactx/` вне пространств `detail`, команды и опции CLI `reactx`, `reactx.json` и CMake-функции и цели (`reactx_add_app`, `reactx::reactx`, `reactx::testing`, ...). С 1.0 он меняется только в MAJOR-релизах. Имена никогда не переименовываются на месте: добавляется лучшее имя, а старое помечается устаревшим (в комментарии в коде, в документации и в разделе CHANGELOG «Устарело») и работает до 2.0. Устарели пока: `ui::ListProps::items` (используйте `.children`) и `ui::RadioGroupProps::row` (используйте `.direction = ui::Direction::Row`). Рефлексия C++26 остаётся опциональной (`reactx::reflection`, нативные сборки) и вне этого обещания, пока компиляторы о ней не договорятся.
+**Стабильность API.** Публичный API — то, что объявлено в `include/reactx/` вне пространств `detail`, команды и опции CLI `reactx`, `reactx.json` и CMake-функции и цели (`reactx_add_app`, `reactx::reactx`, `reactx::testing`, ...). С 1.0 он меняется только в MAJOR-релизах. Имена никогда не переименовываются на месте: добавляется лучшее имя, а старое помечается устаревшим (в комментарии в коде, в документации и в разделе CHANGELOG «Устарело») и работает до 2.0. Тест `reactx_api_check` сверяет публичные заголовки со снимком (`api/reactx.api`), так что ни одно изменение не пройдёт незамеченным. Устарели пока: `ui::ListProps::items` (используйте `.children`) и `ui::RadioGroupProps::row` (используйте `.direction = ui::Direction::Row`). Рефлексия C++26 остаётся опциональной (`reactx::reflection`, нативные сборки) и вне этого обещания, пока компиляторы о ней не договорятся.
 
 ---
 

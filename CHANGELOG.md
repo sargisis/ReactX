@@ -16,6 +16,8 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ### Added
 
+- API freeze before 1.0: `api/reactx.api` is a snapshot of the public headers, and the test `reactx_api_check` fails when they change without it.
+- Docs: `router::useParams`, `currentPath`, `href`, `reset`, `link .activeClassName`, `HttpServer::post/put/patch/del`, `setNotFoundPage`, `setLogging`, `ui::slider .step/.showValue`, `ui::useTheme` are described; the English and Russian docs pages have the same sections.
 - `ui::CardProps::level`: the title's heading level in the browser (`<h3>` by default; 2 for cards right under the page's `<h1>`, so no heading level is skipped).
 - `HttpServer::allowHosts`, `setRequestTimeout` (30 s by default) and `setMaxConnections` (512 by default); `--allow-host` in `reactx dev` and `reactx_serve`.
 

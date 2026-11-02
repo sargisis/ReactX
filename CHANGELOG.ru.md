@@ -16,6 +16,8 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ### Добавлено
 
+- Заморозка API перед 1.0: `api/reactx.api` — снимок публичных заголовков, тест `reactx_api_check` падает, если они изменились без него.
+- Документация: описаны `router::useParams`, `currentPath`, `href`, `reset`, `link .activeClassName`, `HttpServer::post/put/patch/del`, `setNotFoundPage`, `setLogging`, `.step/.showValue` у `ui::slider`, `ui::useTheme`; у английской и русской документации одинаковые разделы.
 - `ui::CardProps::level` — уровень заголовка карточки в браузере (по умолчанию `<h3>`; 2 для карточек сразу под `<h1>` страницы, чтобы уровни не пропускались).
 - `HttpServer::allowHosts`, `setRequestTimeout` (по умолчанию 30 с) и `setMaxConnections` (по умолчанию 512); `--allow-host` в `reactx dev` и `reactx_serve`.
 

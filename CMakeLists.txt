@@ -497,6 +497,11 @@ add_executable(reactx_ui_tests tests/test_ui.cpp)
 target_link_libraries(reactx_ui_tests PRIVATE reactx)
 add_test(NAME reactx_ui_tests COMMAND reactx_ui_tests)
 
+# The public API is frozen in api/reactx.api: changing a public header fails
+# this test until the snapshot is updated on purpose (see tests/api_check.cpp).
+add_executable(reactx_api_check tests/api_check.cpp)
+add_test(NAME reactx_api_check COMMAND reactx_api_check ${PROJECT_SOURCE_DIR})
+
 if(REACTX_MODULES)
   add_executable(reactx_module_tests tests/test_module.cpp)
   target_link_libraries(reactx_module_tests PRIVATE reactx)

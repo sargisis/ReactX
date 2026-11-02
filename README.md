@@ -392,6 +392,8 @@ router::routes({
 });
 router::link({.to = "/todos/7", .label = "Open"});   // <a href>, Ctrl+click opens a new tab
 router::navigate("/todos");  router::back();  router::useQuery("show");
+router::useParams();      // every parameter of the route; router::currentPath() — the path with the query, not a hook
+router::href("/todos/7"); // "/ReactX/todos/7" under a base path; a link to the current path gets .activeClassName ("active")
 ```
 
 Nested routes, guards and redirects (v0.19): `{"/settings/*", h(Settings)}` matches everything under `/settings`, and the `router::routes()` inside `Settings` match the rest (`{"/profile", h(Profile)}`) while `Settings` stays mounted; `{.path = "/admin/*", .element = h(Admin), .allow = isAdmin, .redirect = "/login"}` guards a route; `router::redirect("/inbox")` goes on at once; `link({..., .exact = false})` is active on the paths under it.
@@ -681,7 +683,7 @@ at your option.
 
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in ReactX by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
 
-**API stability.** The public API is what `include/reactx/` declares outside `detail` namespaces, the `reactx` CLI commands and options, `reactx.json`, and the CMake functions and targets (`reactx_add_app`, `reactx::reactx`, `reactx::testing`, ...). From 1.0 on it changes only in MAJOR releases. Names are never renamed in place: a better name is added and the old one is marked deprecated (in the code comment, the docs and the CHANGELOG's "Deprecated" section) and keeps working until 2.0. Deprecated so far: `ui::ListProps::items` (use `.children`) and `ui::RadioGroupProps::row` (use `.direction = ui::Direction::Row`). C++26 reflection stays opt-in (`reactx::reflection`, native builds) and outside this promise until the compilers agree on it.
+**API stability.** The public API is what `include/reactx/` declares outside `detail` namespaces, the `reactx` CLI commands and options, `reactx.json`, and the CMake functions and targets (`reactx_add_app`, `reactx::reactx`, `reactx::testing`, ...). From 1.0 on it changes only in MAJOR releases. Names are never renamed in place: a better name is added and the old one is marked deprecated (in the code comment, the docs and the CHANGELOG's "Deprecated" section) and keeps working until 2.0. The test `reactx_api_check` holds the public headers to a snapshot (`api/reactx.api`), so no change slips in unnoticed. Deprecated so far: `ui::ListProps::items` (use `.children`) and `ui::RadioGroupProps::row` (use `.direction = ui::Direction::Row`). C++26 reflection stays opt-in (`reactx::reflection`, native builds) and outside this promise until the compilers agree on it.
 
 ---
 

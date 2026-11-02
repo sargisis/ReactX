@@ -67,6 +67,7 @@ web/              HTML shells for the web builds
 
 ## Changes that need more than code
 
+- Public headers: the API is frozen in `api/reactx.api` and the `reactx_api_check` test fails when `include/reactx/` changes. An addition: `./build/debug/reactx_api_check . --update` and commit the snapshot; a rename or removal: add the new name and deprecate the old one instead (README "API stability").
 - Public API or behaviour: README.md and README.ru.md, the docs pages in `examples/site_docs_en.hpp` and `site_docs.hpp`, [llms.txt](llms.txt), and the unreleased section of both changelogs: `## [Unreleased]` in CHANGELOG.md (Added / Changed / Fixed) and `## [Не выпущено]` in CHANGELOG.ru.md (Добавлено / Изменено / Исправлено), with the same entries.
 - New source file: add it to **both** source lists in CMakeLists.txt (native and `if(EMSCRIPTEN)`) when the web build needs it.
 - CLI templates (`kWebMain`, `kTerminalMain`, ...): new projects pin ReactX to the release tag of the CLI, so a template may only use API that exists in that release.

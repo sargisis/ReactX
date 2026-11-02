@@ -6,6 +6,12 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+## [0.21.0] — 2026-11-02
+
+The last release before 1.0: a security review of `HttpServer`, an accessible website and `rx::ui` (axe-core: 0 violations, light and dark, desktop and phone), complete docs in both languages and a frozen public API (`api/reactx.api`). A MINOR release because `HttpServer` now refuses unknown `Host` names and cross-site `Origin`s.
+
+**Update:** `reactx upgrade`, then `reactx update` in each project. A server reached by a domain name (not `localhost` or an IP) needs `server.allowHosts({"example.com"})`, or `--allow-host` for `reactx dev` / `reactx_serve`.
+
 ### Changed
 
 - `HttpServer` (and `reactx dev`, `reactx_serve`) answers only to `localhost`, `*.localhost` and IP addresses; other `Host` names get 403, so a site that points its DNS name at `127.0.0.1` can't read your dev server (DNS rebinding). Add names with `server.allowHosts({...})` / `reactx dev --allow-host NAME`; `reactx dev` allows the GitHub Codespaces domain itself.
@@ -479,7 +485,8 @@ The first release.
 - **A documentation site** built with ReactX: https://sargisis.github.io/ReactX/, published by GitHub Actions through the `gh-pages` branch.
 - The version in one place (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; new projects from `reactx new` use ReactX by release tag.
 
-[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/sargisis/ReactX/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/sargisis/ReactX/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/sargisis/ReactX/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/sargisis/ReactX/compare/v0.17.0...v0.18.0

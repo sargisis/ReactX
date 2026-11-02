@@ -6,6 +6,12 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ## [Не выпущено]
 
+## [0.21.0] — 2026-11-02
+
+Последний релиз перед 1.0: проверка безопасности `HttpServer`, доступный сайт и `rx::ui` (axe-core: 0 нарушений, светлая и тёмная темы, компьютер и телефон), полная документация на двух языках и замороженный публичный API (`api/reactx.api`). MINOR-релиз, потому что `HttpServer` теперь отказывает незнакомым именам в `Host` и чужим `Origin`.
+
+**Обновиться:** `reactx upgrade`, затем `reactx update` в каждом проекте. Серверу, к которому обращаются по доменному имени (не `localhost` и не IP), нужен `server.allowHosts({"example.com"})` или `--allow-host` для `reactx dev` / `reactx_serve`.
+
 ### Изменено
 
 - `HttpServer` (а с ним `reactx dev` и `reactx_serve`) отвечает только на `localhost`, `*.localhost` и IP-адреса; другие имена в `Host` получают 403, и сайт, направивший своё DNS-имя на `127.0.0.1`, не прочитает ваш dev-сервер (DNS rebinding). Другие имена: `server.allowHosts({...})` / `reactx dev --allow-host ИМЯ`; домен GitHub Codespaces `reactx dev` разрешает сам.
@@ -479,7 +485,8 @@ ReactX без установки компиляторов: готовый `react
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.20.0...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/sargisis/ReactX/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/sargisis/ReactX/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/sargisis/ReactX/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/sargisis/ReactX/compare/v0.17.0...v0.18.0

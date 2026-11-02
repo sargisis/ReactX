@@ -1680,7 +1680,7 @@ std::string_view commandHelp(std::string_view command) {
     if (command == "update")
         return "reactx update [--check] [--to vX.Y.Z]\n\n"
                "Moves the project to the newest ReactX release (by SemVer, skipping -rc) and writes it to reactx.json;\n"
-               "the next build fetches it. A new MINOR while MAJOR is 0 may need changes: read the CHANGELOG.\n\n"
+               "the next build fetches it. A new MAJOR (or, before 1.0, a new MINOR) may need changes: read the CHANGELOG.\n\n"
                "  --check       only say whether a newer release exists\n"
                "  --to vX.Y.Z   a specific version (also older)\n";
     return {};

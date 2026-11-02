@@ -165,14 +165,14 @@ inline const std::vector<Page>& pagesEn() {
                               "and --target links it to your app.",
                  "reactx add fmt https://github.com/fmtlib/fmt.git --rev 11.0.2 --target fmt::fmt\nreactx remove fmt"},
                 {"reactx update", "Moves your project to the newest ReactX release. --check only tells you whether there is one.",
-                 "reactx update --check   # ReactX v0.20.0 -> v0.21.0 is available\n"
+                 "reactx update --check   # ReactX v0.21.0 -> v1.0.0 is available\n"
                  "reactx update\n"
                  "reactx build"},
                 {"reactx.json", "Everything about the project in one file.",
                  "{\n"
                  "  \"name\": \"my-app\",\n"
                  "  \"template\": \"web\",\n"
-                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.21.0\" },\n"
+                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v1.0.0\" },\n"
                  "  \"dependencies\": { \"fmt\": { \"git\": \"...\", \"rev\": \"11.0.2\", \"target\": \"fmt::fmt\" } },\n"
                  "  \"web\": { \"base\": \"/\", \"proxy\": { \"/api\": \"http://127.0.0.1:5000\" } }\n"
                  "}"},
@@ -181,11 +181,11 @@ inline const std::vector<Page>& pagesEn() {
         {
             "versions", "Versions", "How ReactX versions work and how to upgrade.",
             {
-                {"Version numbers", "ReactX uses Semantic Versioning: MAJOR.MINOR.PATCH. PATCH fixes bugs, MINOR adds features. "
-                                    "While MAJOR is 0, a MINOR release may also change the API — the CHANGELOG says what "
-                                    "to adjust.", ""},
+                {"Version numbers", "ReactX uses Semantic Versioning: MAJOR.MINOR.PATCH. PATCH fixes bugs, MINOR adds features, "
+                                    "MAJOR may change the API — the CHANGELOG says what to adjust. Before 1.0 a MINOR "
+                                    "release could change the API too.", ""},
                 {"API stability", "The public API is what include/reactx/ declares outside detail namespaces, the reactx "
-                                  "commands and options, reactx.json and the CMake functions and targets. From 1.0 on it "
+                                  "commands and options, reactx.json and the CMake functions and targets. Since 1.0 it "
                                   "changes only in MAJOR releases. Nothing is renamed in place: a better name is added, the "
                                   "old one is marked deprecated (code comment, docs, the CHANGELOG's Deprecated section) and "
                                   "keeps working until 2.0. Deprecated so far: ui::ListProps::items (use .children) and "
@@ -199,10 +199,10 @@ inline const std::vector<Page>& pagesEn() {
                  "cd my-app && reactx update && reactx build"},
                 {"Upgrading a project", "reactx update finds the newest release and writes it into reactx.json; the next build downloads it. "
                               "By hand: change rev to the new tag.",
-                 "reactx update\n# or in reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v0.21.0\" }"},
+                 "reactx update\n# or in reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v1.0.0\" }"},
                 {"The version in code", "",
-                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"0.21.0\"\n"
-                 "static_assert(REACTX_VERSION_MAJOR == 0);"},
+                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"1.0.0\"\n"
+                 "static_assert(REACTX_VERSION_MAJOR == 1);"},
             },
         },
         {

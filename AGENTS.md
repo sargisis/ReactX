@@ -37,7 +37,7 @@ Run what CI runs; a green native build alone proved nothing in the past (v0.3.0 
 - **Errors.** Run-time failures (input, network, files) return `std::expected`; `REACTX_PRE(cond)` (`reactx/contract.hpp`, becomes a C++26 `contract_assert`) is for programmer errors only. Text to number: `rx::parseNumber` (`reactx/parse.hpp`), never `std::stoi`.
 - **Threads.** Component state changes only on the UI thread. Timers go through `detail::setTimer` (browser `setTimeout`, natively `Root::flush()`), never a thread that calls a setter.
 - **Props structs** (`h(Card, {.title = "x"})`) are the preferred component API; every field gets a default (`{}`) so designated initializers can skip fields under `-Wextra -Werror`.
-- **No breaking changes without a reason**: add, don't rename. While MAJOR is 0, a breaking change means a MINOR bump and a CHANGELOG note.
+- **No breaking changes**: add, don't rename. Since 1.0 the public API (README "API stability") changes only in a MAJOR release; deprecate instead (the old name works until 2.0) and note it in both CHANGELOGs.
 
 ## WebAssembly size
 

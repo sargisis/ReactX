@@ -250,7 +250,7 @@ h("box", {{"flexGrow", 1}}, {
 
 **Оформление**: `border`, `title`, `color`, `bg`, `bold`, `dim`, `underline`, `focusable`. Цвета: `black red green yellow blue magenta cyan white gray`, `bright-<цвет>`. Рамки — `┌─┐` в UTF-8 и `+-+` в других локалях (по `std::text_encoding`).
 
-**Клавиши**: Tab/↓ и Shift+Tab/↑ — фокус (элемент, который его потерял, получает `onBlur`, новый — `onFocus`); любая клавиша уходит в `onKey` элемента в фокусе и всплывает к родителям; в `input` символы и Backspace меняют `value` через `onInput` (держите `value` в `useState`); Enter/Space — `onClick`; Ctrl+C — выход. Фокус получают `input`, `button` и узлы с `focusable=true`; `trapFocus` не выпускает Tab из окна, `opaque` стирает то, что под коробкой; `arrowKeys=true` (v0.22) отдаёт ↑ ↓ в `onKey` элемента в фокусе вместо перемещения фокуса.
+**Клавиши**: Tab/↓ и Shift+Tab/↑ — фокус (элемент, который его потерял, получает `onBlur`, новый — `onFocus`); любая клавиша уходит в `onKey` элемента в фокусе и всплывает к родителям; в `input` символы и Backspace меняют `value` через `onInput` (держите `value` в `useState`); Enter/Space — `onClick`; Ctrl+C — выход. Фокус получают `input`, `button` и узлы с `focusable=true`; `trapFocus` не выпускает Tab из окна, `opaque` стирает то, что под коробкой; `arrowKeys=true` (v1.0) отдаёт ↑ ↓ в `onKey` элемента в фокусе вместо перемещения фокуса.
 
 Отличия от браузера: корень занимает весь терминал; `flexShrink` по умолчанию 1 в строках и 0 в столбцах (что не влезло по высоте — обрезается), кнопки не сжимаются; рамка всегда обрезает содержимое.
 
@@ -283,7 +283,7 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 | Компонент | Что умеет |
 |---|---|
 | `button` | `label`, `onClick`, `variant` (`Default`, `Primary`, `Danger`, `Success`), `disabled` (не получает фокус) |
-| `input` | `value`, `onChange(text)`, `onSubmit(text)` по Enter, `placeholder`, `label`; Escape очищает; в строке `stack` занимает свободное место; `labelAbove` — подпись на своей строке (поля формы выровнены); клик по подписи ставит фокус в поле; (v0.22) `type`: `ui::InputType::Password` (точки в терминале), `Email`, `Number`, `Search`, `Tel`, `Url` |
+| `input` | `value`, `onChange(text)`, `onSubmit(text)` по Enter, `placeholder`, `label`; Escape очищает; в строке `stack` занимает свободное место; `labelAbove` — подпись на своей строке (поля формы выровнены); клик по подписи ставит фокус в поле; (v1.0) `type`: `ui::InputType::Password` (точки в терминале), `Email`, `Number`, `Search`, `Tel`, `Url` |
 | `checkbox` | `label`, `checked`, `onToggle` (Enter / Space), `onChange(bool)` с новым состоянием |
 | `tabs` | вкладки `{label, content}`, `initial`; Enter на заголовке открывает вкладку |
 | `modal` | `title`, `open`, `onClose` (Escape), `width`; закрывает то, что под ним, держит фокус внутри и возвращает его после закрытия |
@@ -291,7 +291,7 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 | `select` | `label`, `value`, `options` (`{value, label}`), `onChange(value)`; в браузере нативный `<select>`, в терминале ‹ › со стрелками ← → / Enter или кликом; `labelAbove` |
 | `textarea` | `value`, `onChange`, `placeholder`, `label`, `rows`; и в терминале: Enter, ↑ ↓ по строкам, перенос, прокрутка |
 | `radioGroup` | `label`, `value`, `options`, `onChange(value)`, `direction` (`Row` — в ряд): все варианты на виду; в браузере нативные radio; в терминале (•), одна остановка Tab, как в браузере, выбор стрелками или кликом |
-| `slider` | `label`, `value`, `min`, `max`, `step`, `onChange(int)`, `showValue`, (v0.22) `error`; в браузере ползунок, в терминале ← → / Home / End или клик |
+| `slider` | `label`, `value`, `min`, `max`, `step`, `onChange(int)`, `showValue`, (v1.0) `error`; в браузере ползунок, в терминале ← → / Home / End или клик |
 | `progress` | `value` из `max`, `label`, `variant`: полоса с процентами |
 | `disabled` | (v0.20) у каждого поля — `input`, `textarea`, `select`, `checkbox`, `radioGroup`, `slider`, как у `button` — есть `.disabled = true`: поле видно, но не редактируется и пропускается Tab |
 | `useForm<T>` | значения формы в вашей структуре: `{.initial, .validate (возвращает FormErrors: поле -> сообщение), .onSubmit}` даёт `values`, `set("name", &T::name)` (onChange), `error("name")` (видна после изменения поля или попытки отправить), `submit`, `reset`, `valid()`; у `input`, `select`, `textarea`, `radioGroup` и `checkbox` есть `.error` |
@@ -384,7 +384,7 @@ router::useParams();      // все параметры маршрута; router:
 router::href("/todos/7"); // "/ReactX/todos/7" под базовым путём; ссылка на текущий путь получает .activeClassName ("active")
 ```
 
-Вложенные маршруты, guards и редиректы (v0.19): `{"/settings/*", h(Settings)}` совпадает со всем под `/settings`, а `router::routes()` внутри `Settings` разбирают остаток (`{"/profile", h(Profile)}`), пока `Settings` остаётся смонтированным; `{.path = "/admin/*", .element = h(Admin), .allow = isAdmin, .redirect = "/login"}` закрывает маршрут; `router::redirect("/inbox")` сразу уводит дальше; `link({..., .exact = false})` активна и на путях под ней. (v0.22) `router::redirectedFrom()` — откуда guard увёл пользователя (`"/admin/users?page=2"`): страница входа возвращает его туда после входа.
+Вложенные маршруты, guards и редиректы (v0.19): `{"/settings/*", h(Settings)}` совпадает со всем под `/settings`, а `router::routes()` внутри `Settings` разбирают остаток (`{"/profile", h(Profile)}`), пока `Settings` остаётся смонтированным; `{.path = "/admin/*", .element = h(Admin), .allow = isAdmin, .redirect = "/login"}` закрывает маршрут; `router::redirect("/inbox")` сразу уводит дальше; `link({..., .exact = false})` активна и на путях под ней. (v1.0) `router::redirectedFrom()` — откуда guard увёл пользователя (`"/admin/users?page=2"`): страница входа возвращает его туда после входа.
 
 Базовый путь (например `/ReactX/` на GitHub Pages) берётся из `<base href>`; маршруты и ссылки в коде пишутся без него.
 

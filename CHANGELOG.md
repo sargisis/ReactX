@@ -1,10 +1,16 @@
 # Changelog
 
-All notable changes to ReactX. Versions follow [Semantic Versioning](https://semver.org): `MAJOR.MINOR.PATCH`, git tags are `vMAJOR.MINOR.PATCH`. While `MAJOR = 0` the API may change: incompatible changes bump `MINOR`, fixes bump `PATCH`.
+All notable changes to ReactX. Versions follow [Semantic Versioning](https://semver.org): `MAJOR.MINOR.PATCH`, git tags are `vMAJOR.MINOR.PATCH`. Since 1.0 incompatible changes bump `MAJOR`, new features `MINOR`, fixes `PATCH` (before 1.0 incompatible changes bumped `MINOR`).
 
 На русском: [CHANGELOG.ru.md](CHANGELOG.ru.md).
 
 ## [Unreleased]
+
+## [1.0.0] — 2026-11-02
+
+ReactX 1.0: the API is stable. Everything in `include/reactx/` outside `detail`, the `reactx` commands, `reactx.json` and the CMake functions now change only in a MAJOR release — nothing is renamed or removed before 2.0 (README "API stability"; the snapshot `api/reactx.api` and the test `reactx_api_check` guard it). This release also brings the fixes of the last trial round: password fields, the arrows in a terminal radio group, `router::redirectedFrom()` for login pages, `.error` on `ui::slider`, and a CSS edit reaching `dist` without a C++ change.
+
+**Update:** `reactx upgrade`, then `reactx update` in each project. Apps written for 0.21 build unchanged.
 
 ### Added
 
@@ -506,7 +512,8 @@ The first release.
 - **A documentation site** built with ReactX: https://sargisis.github.io/ReactX/, published by GitHub Actions through the `gh-pages` branch.
 - The version in one place (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; new projects from `reactx new` use ReactX by release tag.
 
-[Unreleased]: https://github.com/sargisis/ReactX/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/sargisis/ReactX/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/sargisis/ReactX/compare/v0.21.0...v1.0.0
 [0.21.0]: https://github.com/sargisis/ReactX/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/sargisis/ReactX/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/sargisis/ReactX/compare/v0.18.0...v0.19.0

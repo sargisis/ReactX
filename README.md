@@ -262,7 +262,7 @@ h("box", {{"flexGrow", 1}}, {
 
 **Look**: `border`, `title`, `color`, `bg`, `bold`, `dim`, `underline`, `focusable`. Colors: `black red green yellow blue magenta cyan white gray`, `bright-<color>`. Borders are `┌─┐` in UTF-8 and `+-+` in other locales (decided with `std::text_encoding`).
 
-**Keys**: Tab/↓ and Shift+Tab/↑ move the focus (the element that lost it gets `onBlur`, the new one `onFocus`); any key goes to the focused element's `onKey` and bubbles to its parents; in an `input`, characters and Backspace change `value` through `onInput` (keep `value` in `useState`); Enter/Space — `onClick`; Ctrl+C quits. `input`, `button` and nodes with `focusable=true` take focus; `trapFocus` keeps Tab inside a window, `opaque` clears what is under a box; `arrowKeys=true` (v0.22) gives Up/Down to the focused node's `onKey` instead of moving the focus.
+**Keys**: Tab/↓ and Shift+Tab/↑ move the focus (the element that lost it gets `onBlur`, the new one `onFocus`); any key goes to the focused element's `onKey` and bubbles to its parents; in an `input`, characters and Backspace change `value` through `onInput` (keep `value` in `useState`); Enter/Space — `onClick`; Ctrl+C quits. `input`, `button` and nodes with `focusable=true` take focus; `trapFocus` keeps Tab inside a window, `opaque` clears what is under a box; `arrowKeys=true` (v1.0) gives Up/Down to the focused node's `onKey` instead of moving the focus.
 
 Differences from the browser: the root fills the whole terminal; `flexShrink` defaults to 1 in rows and 0 in columns (what doesn't fit in height is cut off), buttons don't shrink; a border always clips its content.
 
@@ -295,7 +295,7 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 | Component | Does |
 |---|---|
 | `button` | `label`, `onClick`, `variant` (`Default`, `Primary`, `Danger`, `Success`), `disabled` (doesn't take focus) |
-| `input` | `value`, `onChange(text)`, `onSubmit(text)` on Enter, `placeholder`, `label`; Escape clears it; takes the free room in a `stack` row; `labelAbove` puts the label on its own line (forms line up); a click on the label focuses the field; (v0.22) `type`: `ui::InputType::Password` (dots in a terminal), `Email`, `Number`, `Search`, `Tel`, `Url` |
+| `input` | `value`, `onChange(text)`, `onSubmit(text)` on Enter, `placeholder`, `label`; Escape clears it; takes the free room in a `stack` row; `labelAbove` puts the label on its own line (forms line up); a click on the label focuses the field; (v1.0) `type`: `ui::InputType::Password` (dots in a terminal), `Email`, `Number`, `Search`, `Tel`, `Url` |
 | `checkbox` | `label`, `checked`, `onToggle` (Enter / Space), `onChange(bool)` with the new state |
 | `tabs` | tabs `{label, content}`, `initial`; Enter on a title opens the tab |
 | `modal` | `title`, `open`, `onClose` (Escape), `width`; covers what is under it, keeps the focus inside and gives it back when closed |
@@ -303,7 +303,7 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 | `select` | `label`, `value`, `options` (`{value, label}`), `onChange(value)`; a native `<select>` in the browser, ‹ › with Left / Right / Enter or a click in a terminal; `labelAbove` |
 | `textarea` | `value`, `onChange`, `placeholder`, `label`, `rows`; in a terminal too: Enter, Up / Down between lines, wrapping, scrolling |
 | `radioGroup` | `label`, `value`, `options`, `onChange(value)`, `direction` (`Row` side by side): every option visible; native radios in the browser; in a terminal (•), one Tab stop like in the browser, the arrows or a click pick |
-| `slider` | `label`, `value`, `min`, `max`, `step`, `onChange(int)`, `showValue`, (v0.22) `error`; a range input in the browser, Left / Right / Home / End or a click in a terminal |
+| `slider` | `label`, `value`, `min`, `max`, `step`, `onChange(int)`, `showValue`, (v1.0) `error`; a range input in the browser, Left / Right / Home / End or a click in a terminal |
 | `progress` | `value` of `max`, `label`, `variant`: a bar with the percentage |
 | `disabled` | (v0.20) every form field — `input`, `textarea`, `select`, `checkbox`, `radioGroup`, `slider`, like `button` — takes `.disabled = true`: shown, not editable, skipped by Tab |
 | `useForm<T>` | the values of a form in your struct: `{.initial, .validate (returns FormErrors: field -> message), .onSubmit}` gives `values`, `set("name", &T::name)` (an onChange), `error("name")` (shown after the field changed or a submit), `submit`, `reset`, `valid()`; `input`, `select`, `textarea`, `radioGroup` and `checkbox` take `.error` |
@@ -396,7 +396,7 @@ router::useParams();      // every parameter of the route; router::currentPath()
 router::href("/todos/7"); // "/ReactX/todos/7" under a base path; a link to the current path gets .activeClassName ("active")
 ```
 
-Nested routes, guards and redirects (v0.19): `{"/settings/*", h(Settings)}` matches everything under `/settings`, and the `router::routes()` inside `Settings` match the rest (`{"/profile", h(Profile)}`) while `Settings` stays mounted; `{.path = "/admin/*", .element = h(Admin), .allow = isAdmin, .redirect = "/login"}` guards a route; `router::redirect("/inbox")` goes on at once; `link({..., .exact = false})` is active on the paths under it. (v0.22) `router::redirectedFrom()` is where a guard turned the user away (`"/admin/users?page=2"`): a login page goes back there after logging in.
+Nested routes, guards and redirects (v0.19): `{"/settings/*", h(Settings)}` matches everything under `/settings`, and the `router::routes()` inside `Settings` match the rest (`{"/profile", h(Profile)}`) while `Settings` stays mounted; `{.path = "/admin/*", .element = h(Admin), .allow = isAdmin, .redirect = "/login"}` guards a route; `router::redirect("/inbox")` goes on at once; `link({..., .exact = false})` is active on the paths under it. (v1.0) `router::redirectedFrom()` is where a guard turned the user away (`"/admin/users?page=2"`): a login page goes back there after logging in.
 
 The base path (e.g. `/ReactX/` on GitHub Pages) comes from `<base href>`; routes and links in code are written without it.
 
@@ -683,7 +683,7 @@ at your option.
 
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in ReactX by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
 
-**API stability.** The public API is what `include/reactx/` declares outside `detail` namespaces, the `reactx` CLI commands and options, `reactx.json`, and the CMake functions and targets (`reactx_add_app`, `reactx::reactx`, `reactx::testing`, ...). From 1.0 on it changes only in MAJOR releases. Names are never renamed in place: a better name is added and the old one is marked deprecated (in the code comment, the docs and the CHANGELOG's "Deprecated" section) and keeps working until 2.0. The test `reactx_api_check` holds the public headers to a snapshot (`api/reactx.api`), so no change slips in unnoticed. Deprecated so far: `ui::ListProps::items` (use `.children`) and `ui::RadioGroupProps::row` (use `.direction = ui::Direction::Row`). C++26 reflection stays opt-in (`reactx::reflection`, native builds) and outside this promise until the compilers agree on it.
+**API stability.** The public API is what `include/reactx/` declares outside `detail` namespaces, the `reactx` CLI commands and options, `reactx.json`, and the CMake functions and targets (`reactx_add_app`, `reactx::reactx`, `reactx::testing`, ...). Since 1.0 it changes only in MAJOR releases. Names are never renamed in place: a better name is added and the old one is marked deprecated (in the code comment, the docs and the CHANGELOG's "Deprecated" section) and keeps working until 2.0. The test `reactx_api_check` holds the public headers to a snapshot (`api/reactx.api`), so no change slips in unnoticed. Deprecated so far: `ui::ListProps::items` (use `.children`) and `ui::RadioGroupProps::row` (use `.direction = ui::Direction::Row`). C++26 reflection stays opt-in (`reactx::reflection`, native builds) and outside this promise until the compilers agree on it.
 
 ---
 

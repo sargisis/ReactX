@@ -175,7 +175,9 @@ inline const std::vector<Page>& pages() {
                 {"reactx build", "Сборка для публикации: build/web/dist — обычные файлы для любого статического хостинга "
                                  "(404.html уже лежит рядом с index.html для маршрутов). Для терминального проекта — "
                                  "build/native/<имя>. Веб-сборка ещё печатает размер .wasm и его самые большие части "
-                                 "и называет код, который тянет std::format (~100 КБ).",
+                                 "и называет код, который тянет std::format (~100 КБ). set(REACTX_WEB_LTO ON) выше FetchContent в "
+                                 "CMakeLists.txt включает оптимизацию при компоновке: .wasm на ~5% меньше, но каждая "
+                                 "пересборка в reactx dev дольше на пару секунд.",
                  "reactx build\n# index.wasm: 122 KB (the page shows nothing until it is downloaded)\n"
                  "#   biggest parts: src/app.cpp 23%, ReactX reconciler.cpp 15%, the C++ library 12%, ..."},
                 {"Зависимости", "reactx add записывает git-репозиторий в reactx.json; CMake проекта подключает его через "

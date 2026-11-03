@@ -165,6 +165,14 @@ if(EMSCRIPTEN)
     target_compile_options(reactx PUBLIC $<$<CONFIG:Release>:-Oz>)
     target_link_options(reactx PUBLIC $<$<CONFIG:Release>:-Oz>)
   endif()
+  # Link-time optimization: ~5% smaller .wasm (gzip), but every link optimizes
+  # the whole program again (a rebuild in `reactx dev` takes ~2 s longer), so it
+  # is off by default; the website turns it on (the pages preset).
+  option(REACTX_WEB_LTO "Release web builds use link-time optimization (smaller .wasm, slower links)" OFF)
+  if(REACTX_WEB_LTO)
+    target_compile_options(reactx PUBLIC $<$<CONFIG:Release>:-flto>)
+    target_link_options(reactx PUBLIC $<$<CONFIG:Release>:-flto>)
+  endif()
   message(STATUS "ReactX: web build (Emscripten) - DOM backend")
   if(NOT REACTX_BUILD_EXAMPLES AND NOT REACTX_BUILD_TESTS)
     return()

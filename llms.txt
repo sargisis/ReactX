@@ -271,7 +271,7 @@ server.run();
 - Numbers from text: `rx::parseNumber<int>(s)` / `rx::parsePort(s)` (`reactx/parse.hpp`), not `std::stoi`.
 - Never change state from another thread (natively a setter called off the UI thread stops the program with `precondition failed: ... onOwnThread()`). Timers: `useTimeout`, `useInterval`, `useDebounce`; the UI thread runs them.
 - Prefer the standard library (`std::format`, `std::print`, `std::ranges`, `std::flat_map`, `std::expected`) over hand-written helpers or extra libraries.
-- Code built for the browser: build strings with `+` and `std::to_string`, not `std::format` / `std::print` — any use adds ~100 KB to the `.wasm` (a whole counter app is 93 KB without it). Natively `std::format` is fine. `reactx build` prints the `.wasm` size, (v0.15.0+) its biggest parts (`biggest parts: src/app.cpp 23%, ReactX reconciler.cpp 15%, ...`), and names the files that pull these in (`reactx: size: ...`).
+- Code built for the browser: build strings with `+` and `std::to_string`, not `std::format` / `std::print` — any use adds ~100 KB to the `.wasm` (a whole counter app is 93 KB without it). Natively `std::format` is fine. `reactx build` prints the `.wasm` size, (v0.15.0+) its biggest parts (`biggest parts: src/app.cpp 23%, ReactX reconciler.cpp 15%, ...`), and names the files that pull these in (`reactx: size: ...`). (v1.1.0+) `set(REACTX_WEB_LTO ON)` in CMakeLists.txt, above `FetchContent_MakeAvailable(reactx)`: link-time optimization, a ~5% smaller `.wasm` (gzip), but each rebuild in `reactx dev` takes ~2 s longer.
 - Code built for the browser must not use reflection, `std::generator`, `<stacktrace>`, threads, sockets or the file system.
 
 ## JavaScript and the DOM (browser build)

@@ -121,7 +121,8 @@ Next:
 
 ```sh
 reactx build                        # build/web/dist — files for any static host; prints the .wasm size
-                                    # and warns about std::format / printed doubles (~100 KB each)
+                                    # and warns about std::format / printed doubles (~100 KB each);
+                                    # (v1.1) set(REACTX_WEB_LTO ON) in CMakeLists.txt: ~5% smaller, slower rebuilds
 reactx test                         # build and run tests/*.cpp (reactx/testing.hpp); reactx test <name> runs some
 reactx add magic_enum https://github.com/Neargye/magic_enum.git --rev v0.9.8 --target magic_enum::magic_enum
 reactx update                       # move the project to the newest ReactX release

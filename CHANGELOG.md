@@ -8,6 +8,7 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ### Added
 
+- The CMake option `REACTX_WEB_LTO` (off by default): link-time optimization for Release web builds, a ~5% smaller `.wasm` (gzip) at the cost of slower links — `set(REACTX_WEB_LTO ON)` above `FetchContent_MakeAvailable(reactx)`. The website uses it: its `.wasm` is 6.5% smaller (181.9 → 170.1 KB gzip).
 - `ui::tabs` can be controlled: `.active` (the open tab, from your state) and `.onChange(int)` (the tab a click or Enter picked), so a shortcut or code can switch tabs. Without them the tabs keep the open one themselves, as before.
 
 ## [1.0.1] — 2026-11-03

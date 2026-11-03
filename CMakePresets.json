@@ -36,7 +36,7 @@
       "binaryDir": "${sourceDir}/build/pages",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "REACTX_WEB_BASE": "/ReactX/"
+        "REACTX_WEB_BASE": "/ReactX/", "REACTX_WEB_LTO": "ON"
       }
     }
   ],

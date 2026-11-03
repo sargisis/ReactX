@@ -158,7 +158,9 @@ inline const std::vector<Page>& pagesEn() {
                  "// reactx test           -> OK, 2 tests passed"},
                 {"reactx build", "Builds for publishing: build/web/dist holds plain files for any static host "
                                  "(GitHub Pages, Netlify, nginx). A terminal app goes to build/native/<name>. A web build also prints the "
-                                 "size of the .wasm and its biggest parts, and names code that pulls in std::format (~100 KB).",
+                                 "size of the .wasm and its biggest parts, and names code that pulls in std::format (~100 KB). "
+                                 "set(REACTX_WEB_LTO ON) above FetchContent in CMakeLists.txt turns on link-time optimization: "
+                                 "a ~5% smaller .wasm, but every rebuild in reactx dev takes a couple of seconds longer.",
                  "reactx build\n# index.wasm: 122 KB (the page shows nothing until it is downloaded)\n"
                  "#   biggest parts: src/app.cpp 23%, ReactX reconciler.cpp 15%, the C++ library 12%, ..."},
                 {"Libraries", "reactx add records a git repository in reactx.json; CMake fetches it on the next build, "

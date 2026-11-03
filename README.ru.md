@@ -109,7 +109,8 @@ reactx dev                          # сервер на C++, пересборк�
 
 ```sh
 reactx build                        # build/web/dist — файлы для любого хостинга; печатает размер .wasm
-                                    # и предупреждает о std::format / печати double (~100 КБ каждое)
+                                    # и предупреждает о std::format / печати double (~100 КБ каждое);
+                                    # (v1.1) set(REACTX_WEB_LTO ON) в CMakeLists.txt: на ~5% меньше, пересборка дольше
 reactx test                         # собрать и запустить tests/*.cpp (reactx/testing.hpp); reactx test <имя> — часть
 reactx add magic_enum https://github.com/Neargye/magic_enum.git --rev v0.9.8 --target magic_enum::magic_enum
 reactx update                       # перевести проект на новейший релиз ReactX

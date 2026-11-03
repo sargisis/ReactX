@@ -6,6 +6,12 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+## [1.0.1] — 2026-11-03
+
+Fixes from the first trial round after 1.0: a scroll list inside a terminal tab, filter links with a query, prerendered page titles, `useWindowSize` in tests and form rows on phones. No API changes.
+
+**Update:** `reactx upgrade`, then `reactx update` in each project.
+
 ### Changed
 
 - New web projects: the About page sets its tab title with `useTitle("About")`.
@@ -526,7 +532,8 @@ The first release.
 - **A documentation site** built with ReactX: https://sargisis.github.io/ReactX/, published by GitHub Actions through the `gh-pages` branch.
 - The version in one place (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; new projects from `reactx new` use ReactX by release tag.
 
-[Unreleased]: https://github.com/sargisis/ReactX/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/sargisis/ReactX/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/sargisis/ReactX/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/sargisis/ReactX/compare/v0.21.0...v1.0.0
 [0.21.0]: https://github.com/sargisis/ReactX/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/sargisis/ReactX/compare/v0.19.0...v0.20.0

@@ -6,6 +6,12 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ## [Не выпущено]
 
+## [1.0.1] — 2026-11-03
+
+Исправления первого пробного раунда после 1.0: список с прокруткой во вкладке терминала, ссылки-фильтры с query, заголовки заранее отрисованных страниц, `useWindowSize` в тестах и строки форм на телефоне. API не менялся.
+
+**Обновление:** `reactx upgrade`, затем `reactx update` в каждом проекте.
+
 ### Изменено
 
 - Новые веб-проекты: страница About задаёт заголовок вкладки через `useTitle("About")`.
@@ -526,7 +532,8 @@ ReactX без установки компиляторов: готовый `react
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v1.0.0...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/sargisis/ReactX/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/sargisis/ReactX/compare/v0.21.0...v1.0.0
 [0.21.0]: https://github.com/sargisis/ReactX/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/sargisis/ReactX/compare/v0.19.0...v0.20.0

@@ -295,6 +295,7 @@ struct TerminalRenderer::Layout {
         YGNodeRef y = nullptr;
         std::unique_ptr<Leaf> leaf;  // text, button, input: measured by us
         bool parentRow = false;      // flexShrink depends on the parent's direction
+        bool holdsScroll = false;    // an overflow="scroll" box, or one is inside (not in a fixed node)
         bool fresh = true;           // not synced yet
     };
 
@@ -378,7 +379,7 @@ struct TerminalRenderer::Layout {
 
     // Style of `n` from its props, built on `scratch` and copied to `y` only if
     // it changed (copying marks the node for layout).
-    void applyStyleTo(YGNodeRef y, const Node& n, bool parentRow, bool fixedNode) {
+    void applyStyleTo(YGNodeRef y, const Node& n, bool parentRow, bool fixedNode, bool holdsScroll) {
         YGNodeCopyStyle(scratch, blank);
         // Rows squeeze their children (text gets narrower); columns cut off.
         // Buttons never shrink: a half button is useless.
@@ -386,15 +387,16 @@ struct TerminalRenderer::Layout {
         YGNodeStyleSetFlexShrink(scratch, parentRow && !button ? 1.0f : 0.0f);
         if (!n.isText) {
             bool leaf = isLeafType(n.type);
+            // A scroll box in a column is as tall as its rows, or the room that is
+            // left if they don't fit (CSS `flex: 1 1 auto; min-height: 0`); the boxes
+            // around it give way too, so a short list shows all of its rows even in a
+            // box that isn't stretched, and a long one scrolls.
+            if (!parentRow && holdsScroll) YGNodeStyleSetFlexShrink(scratch, 1.0f);
             if (!leaf && prop(n.props, "overflow") == "scroll") {
                 YGNodeStyleSetOverflow(scratch, YGOverflowScroll);  // children keep their size
-                if (!parentRow) {  // take the room that is left, like CSS `flex: 1; min-height: 0`
-                    YGNodeStyleSetFlexShrink(scratch, 1.0f);
-                    if (prop(n.props, "height").empty() && prop(n.props, "flexBasis").empty()) {
-                        YGNodeStyleSetFlexBasis(scratch, 0.0f);
-                        if (prop(n.props, "flexGrow").empty()) YGNodeStyleSetFlexGrow(scratch, 1.0f);
-                    }
-                }
+                if (!parentRow && prop(n.props, "height").empty() && prop(n.props, "flexBasis").empty() &&
+                    prop(n.props, "flexGrow").empty())
+                    YGNodeStyleSetFlexGrow(scratch, 1.0f);
             }
             applyStyle(scratch, n.props, !leaf);
         }
@@ -481,7 +483,7 @@ struct TerminalRenderer::Layout {
         bool relisted = relist.erase(h) > 0;
         bool onPath = path.erase(h) > 0;
         bool fixedNode = isFixed(r, h);
-        if (fresh || restyled || e.parentRow != parentRow) applyStyleTo(e.y, *n, parentRow, fixedNode);
+        if (fresh || restyled || e.parentRow != parentRow) applyStyleTo(e.y, *n, parentRow, fixedNode, e.holdsScroll);
         e.parentRow = parentRow;
 
         if (n->isText || isLeafType(n->type)) {
@@ -500,6 +502,14 @@ struct TerminalRenderer::Layout {
             if (it == nodes.end() || it->second.fresh || it->second.parentRow != childRow || restyle.contains(c) ||
                 relist.contains(c) || path.contains(c))
                 sync(r, c, childRow);
+        }
+        bool holds = prop(n->props, "overflow") == "scroll";
+        for (NodeHandle c : n->children)
+            if (auto it = nodes.find(c); !holds && it != nodes.end() && it->second.holdsScroll && !wraps.contains(c))
+                holds = true;
+        if (holds != e.holdsScroll) {
+            e.holdsScroll = holds;
+            applyStyleTo(e.y, *n, parentRow, fixedNode, holds);
         }
     }
 

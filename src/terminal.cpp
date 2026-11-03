@@ -265,6 +265,7 @@ TerminalApp::~TerminalApp() = default;
 
 void TerminalApp::run(Element element) {
     renderer_->setSize(terminal_.width(), terminal_.height());
+    detail::notifyResize({terminal_.width(), terminal_.height()});  // the size useWindowSize starts with
     terminal_.setMouse(mouse_);
     root_->render(std::move(element));
     running_ = true;

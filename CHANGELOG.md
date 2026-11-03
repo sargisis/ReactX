@@ -6,6 +6,20 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Changed
+
+- New web projects: the About page sets its tab title with `useTitle("About")`.
+
+### Fixed
+
+- Terminal: a scroll box (`overflow: "scroll"`, `ui::list({.scroll = true})`) in a box that isn't stretched, or in a `ui::tabs` tab, showed no rows, only its border. Now it is as tall as its rows, or takes the rows that are left when they don't fit.
+- `router::link` with a query (`"/?tag=work"`) was active on every query of that path, so all filter links were marked; now only while the page's query has those values. A link without a query ignores the query, as before.
+- Prerendered pages had the page's default `<title>`; now they get the one `useTitle` sets.
+- Prerendering an app that reads `localStorage` (`useLocalStorage`, `storageRead`) printed Node's "localStorage is not available" warning on every build; there it now reads as empty.
+- `useWindowSize()` in `testing::Screen` was always 80x24; now it is the screen's size, and `s.resize(w, h)` changes it.
+- `rx::ui` in the browser: in a `ui::stack` row, an input with `.labelAbove` ran under the field next to it on a phone, and a `select`'s label sat 3px lower than an input's.
+- Docs: an `errorBoundary` on a route page keeps showing its fallback on another address of that route; key it by the path (`errorBoundary(fallback, {h(Page)}, router::useLocation())`). `ui::tabs` fields (`.content` is a list, `.initial`) in llms.txt.
+
 ## [1.0.0] — 2026-11-02
 
 ReactX 1.0: the API is stable. Everything in `include/reactx/` outside `detail`, the `reactx` commands, `reactx.json` and the CMake functions now change only in a MAJOR release — nothing is renamed or removed before 2.0 (README "API stability"; the snapshot `api/reactx.api` and the test `reactx_api_check` guard it). This release also brings the fixes of the last trial round: password fields, the arrows in a terminal radio group, `router::redirectedFrom()` for login pages, `.error` on `ui::slider`, and a CSS edit reaching `dist` without a C++ change.

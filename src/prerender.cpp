@@ -9,11 +9,13 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "reactx/dom.hpp"
 #include "reactx/html.hpp"
 #include "reactx/router.hpp"
+#include "prerender_title.hpp"
 
 namespace rx {
 
@@ -27,6 +29,17 @@ std::optional<std::string> readText(const std::filesystem::path& path) {
 
 // "/" -> index.html, "/docs/faq" -> docs/faq.html (GitHub Pages, Netlify and
 // HttpServer::serveDirectory serve /docs/faq from docs/faq.html).
+std::string escapeHtml(std::string_view text) {
+    std::string out;
+    for (char c : text) {
+        if (c == '&') out += "&amp;";
+        else if (c == '<') out += "&lt;";
+        else if (c == '>') out += "&gt;";
+        else out += c;
+    }
+    return out;
+}
+
 std::filesystem::path pageFile(std::string route) {
     while (route.size() > 1 && route.back() == '/') route.pop_back();
     if (route == "/" || route.empty()) return "index.html";
@@ -75,9 +88,15 @@ int prerender(const Element& app, const std::string& args) {
         const std::string& route = parts[i];
         if (route.empty() || route.front() != '/') continue;
         router::reset(route);
+        detail::prerenderTitle() = {.collecting = true, .title = std::nullopt};
         std::string html = renderToString(app);
+        auto title = std::exchange(detail::prerenderTitle(), {}).title;
         std::string out = *page;
         out.replace(at, len, "<" + std::string(tag) + " id=app>" + html + "</" + std::string(tag) + ">");
+        // useTitle's title, so each page has its own (tabs, search results).
+        if (auto open = out.find("<title>"); title && open != std::string::npos && open < at)
+            if (auto close = out.find("</title>", open); close != std::string::npos)
+                out.replace(open + 7, close - open - 7, escapeHtml(*title));
         if (auto head = out.find("</head>"); head != std::string::npos && !detail::prerenderHead().empty() &&
                                               out.find("id=\"rx-ui-styles\"") == std::string::npos)
             out.insert(head, detail::prerenderHead());

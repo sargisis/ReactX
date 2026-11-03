@@ -68,6 +68,17 @@ RX_TEST(settle_runs_timers_that_are_due) {
     CHECK(s.shows("ready"));
 }
 
+RX_TEST(use_window_size_is_the_screens_size) {
+    const auto Size = [](const Props&) -> Element {
+        WindowSize w = useWindowSize();
+        return h("text", {}, {std::to_string(w.width) + "x" + std::to_string(w.height)});
+    };
+    testing::Screen s(h(Size), 40, 12);
+    CHECK(s.shows("40x12"));
+    s.resize(30, 8);
+    CHECK(s.shows("30x8"));
+}
+
 RX_TEST(render_and_resize_redraw) {
     testing::Screen s(h("text", {}, {"one"}), 20, 4);
     s.render(h("text", {}, {"two"}));

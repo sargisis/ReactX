@@ -66,6 +66,37 @@ TEST(matches_paths) {
     CHECK(!queryParam("page=2", "q").has_value());
 }
 
+TEST(a_link_with_a_query_is_active_only_with_that_query) {
+    const auto Filters = [](const Props&) -> Element {
+        return h("nav", {}, {
+            router::link({.to = "/", .label = "All", .key = "a"}),
+            router::link({.to = "/?tag=work", .label = "Work", .key = "w"}),
+            router::link({.to = "/?tag=fun&sort=new", .label = "Fun", .key = "f"}),
+        });
+    };
+    auto bold = [](const TextRenderer& r, const std::string& label) {  // the line before the label is its <text>
+        std::string tree = r.toString();
+        auto at = tree.find("\"" + label + "\"");
+        if (at == std::string::npos) return false;
+        auto open = tree.rfind('<', at);
+        return tree.substr(open, at - open).find("bold=\"true\"") != std::string::npos;
+    };
+    router::reset("/");
+    TextRenderer r;
+    Root root(r);
+    root.render(h(Filters));
+    CHECK(bold(r, "All") && !bold(r, "Work") && !bold(r, "Fun"));
+    router::navigate("/?tag=work");
+    root.flush();
+    CHECK(bold(r, "All") && bold(r, "Work") && !bold(r, "Fun"));  // a link without a query ignores it
+    router::navigate("/?sort=new&tag=fun%20");
+    root.flush();
+    CHECK(!bold(r, "Fun"));  // "fun " isn't "fun"
+    router::navigate("/?sort=new&tag=fun");
+    root.flush();
+    CHECK(!bold(r, "Work") && bold(r, "Fun"));  // any order
+}
+
 TEST(renders_the_matching_route) {
     router::reset("/");
     TextRenderer r;

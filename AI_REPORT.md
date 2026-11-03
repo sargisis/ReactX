@@ -1001,3 +1001,96 @@ CanvasText; }` — axe в тёмной теме: 4 нарушения → 0), F6
 подписи `input` / `textarea` ставит фокус), G2 (`router::redirectedFrom()`), G3 и G5 (llms.txt), G4 (`white-space:
 pre-line` у `ui::text`). Проверено на helpdesk и journal с локальным ReactX (браузер и pty). `.wasm`: счётчик без
 изменений (97 022 Б), сайт +2,9 КБ (+1 КБ gzip). Осталось: G6 (размер helpdesk).
+
+---
+
+## Сводный отчёт #11 — Claude (claude-opus-5-5), 2026-11-03, ReactX v1.0.0
+
+Первый раунд после 1.0: CLI v1.0.0 из релиза, проекты в `~/Desktop/reactx-trials/`, только `llms.txt` + `AGENTS.md`
+проекта; исходники ReactX — только после того, как проблема воспроизведена. Браузер — безголовый Brave через CDP
+(+ axe-core), терминал — pty + pyte, тесты — `reactx test`. Цель: то, что раньше почти не проверялось.
+
+Проекты:
+1. **habits** (веб + терминал из одного исходника, `--native`) — трекер привычек на неделю: `useReducer` с
+   `std::variant` действий, состояние и `dispatch` через `createContext`, настройки в `createStore` + `useStore` с
+   селектором, `memo`-строки с `useCallback`-обработчиками своих сигнатур, перетаскивание строк указателем (pointer
+   events, в браузере и мышью в терминале), фильтр `?tag=` (`useQuery` + ссылки), график недели — SVG в браузере и
+   `ui::progress` в терминале, страница привычки `/habit/:id` под `errorBoundary`, `ui::confirm`, `ui::toast`,
+   `useTitle`, `ui::themeProvider`, сохранение в `localStorage` (JSON через `require`), prerender `/` и `/stats`.
+   7 тестов на `testing::Screen`.
+2. **focus** (терминал) — помодоро: `useInterval` с выключением через `std::nullopt`, крупные цифры по
+   `useWindowSize`, `ui::tabs` (таймер / задачи / журнал), `ui::list .scroll`, `ui::table`, `ui::modal` со `slider`,
+   `ui::confirm` на выход, `useKeyboard`, задачи с эмодзи / кириллицей / китайским в `~/.focus.json`. 4 теста.
+
+Итог: оба приложения собрались почти с первого раза; habits прошёл 7 тестов с первой попытки. Работают перетаскивание
+в обоих бэкендах, контекст через `memo`-границу, `useReducer` с вариантом, SVG, `errorBoundary` с `retry`, prerender,
+изменение размера терминала, таймеры (тики в пределах интервала 250 мс). axe: 0 нарушений на всех страницах habits,
+светлая и тёмная тема. Трижды «баг» оказывался моим: `click("Task")` попадал во вкладку «Tasks», `click("Quit")` — в
+заголовок «Quit?» (это описано в llms.txt), «таймер отстаёт» — мой замер был короче интервала.
+
+### Баги
+
+**F1. [P1][bug] Терминал: контейнер с прокруткой в нерастянутом `box` или во вкладке `ui::tabs` не показывает строк.**
+`ui::tabs({.tabs = {{.content = {ui::list({.children = items, .scroll = true})}}}})` — видна только рамка, строк нет;
+то же `h("box", {}, {ui::list(...)})` и голый `overflow: "scroll"`. Добавленная задача «пропадала», и следующий ввод
+уходил в невидимый список. llms.txt: «takes the rows that are left in a column (no height needed)». Причина:
+scroll-контейнер получал `flexBasis 0; flexGrow 1` (`src/terminal_renderer.cpp`, `applyStyleTo`), а Yoga считает
+высоту родителя «по содержимому» без него — 0 (браузерный CSS тут учёл бы содержимое).
+
+**F2. [P2][bug] `router::link` с query активна при любом query.** На `/?tag=fun` класс `active` у «All», «Health»,
+«Work» и «Fun» сразу: `Link` сравнивает только путь (`withoutQuery`). Фильтры-ссылки не показывают, какой выбран.
+
+**F3. [P2][bug] У заранее отрисованных страниц один `<title>`.** `index.html` и `stats.html` — `<title>habits</title>`,
+хотя страницы вызывают `useTitle`: при prerender эффекты не выполняются. Вкладки и поисковики видят одно имя.
+
+**F4. [P2][bug] Prerender печатает предупреждение Node.** Приложение читает сохранённое (`storageRead`) при первой
+отрисовке → при каждой `reactx build` / `dev`: «ExperimentalWarning: localStorage is not available because
+--localstorage-file was not provided». Node 22+ сам определяет `localStorage` и предупреждает при обращении.
+
+**F5. [P2][bug] `useWindowSize()` в `testing::Screen(app, 40, 12)` — всегда 80x24**, и `s.resize()` его не меняет:
+натив читает `ioctl(STDOUT)`, а `Screen` свой размер никому не сообщает. Тест «маленький экран → без крупных цифр»
+написать нельзя.
+
+**F6. [P2][bug] `rx::ui` в браузере: поля с `.labelAbove` в строке `ui::stack` на телефоне налезают друг на друга.**
+`input` (226 px) шире своей подписи (182 px) и уходит под `select`; подпись `select` на 3 px ниже подписи `input`.
+Причины в CSS: `.rx-field` с `flex-wrap: wrap` в колонке растягивает поле до ширины строки flex, а не до ширины
+подписи; `select` в Chrome ниже `input` (`line-height: normal`), а `flex: 1` в колонке перебивает высоту.
+
+### Пробелы и неудобства
+
+**G1. [P2][gap] `ui::tabs` только неуправляемые** (`.initial`): нельзя переключить вкладку из кода или горячей клавишей
+(«1/2/3»), нельзя узнать открытую. llms.txt не называл поля: `.content` — список элементов, а не элемент; ошибка
+компиляции про `TabsProps` длинная. Предложение для 1.1: `.active` + `.onChange(int)` после `.key`.
+
+**G2. [P2][gap] `errorBoundary` на странице маршрута «залипает».** `/habit/zzz` → fallback; «Назад» на рабочий
+`/habit/h2` — всё ещё «Not found». Так и в React (граница держит ошибку до `retry()`), но в роутере это ловушка;
+решение уже есть — ключ: `errorBoundary(fb, {h(Page)}, router::useLocation())`. Нужно сказать об этом в документации.
+
+**G3. [P2][gap] Терминал: в сжатой строке короткий текст исчезает.** На ширине 50 у строки привычки пропал значок «⠿»
+(1 клетка → 0): Yoga сжимает текст до нуля, в браузере `min-width: auto` этого не даёт.
+
+**G4. [P2][size] Код приложения — главная часть `.wasm`.** habits: 275 КБ (118 КБ gzip), `app.cpp` — 32 %, около
+100 КБ кода на ~400 строк (`Week` 11,7 КБ, `App` 8 КБ; 141 копия кода `std::string` и 158 — `std::vector`). Каждый проп
+`{"className", x}` разворачивается на месте вызова (строка + `PropValue` + элемент вектора). То же, что G6 отчёта #10.
+
+### Что понравилось
+
+- Перетаскивание по рецепту из llms.txt (`onPointerDown` / `onMouseEnter` / `onPointerUp`) заработало в браузере и
+  мышью в терминале одним кодом.
+- `memo` + `useCallback` с сигнатурой `(std::string, int)` — строки не перерисовываются при чужих изменениях.
+- `useInterval(fn, running ? std::optional(250ms) : std::nullopt)` — таймер в одну строку.
+- `testing::Screen` + `settle()` проверяют обратный отсчёт и смену режима без терминала.
+- SVG (`svg:text`, `rect`) и prerender без единой правки кода.
+
+### Приоритет на исправление (v1.0.1)
+
+F1 → F2, F3, F4, F5, F6 → G2 (документация), G1 (поля в llms.txt; управляемые вкладки — 1.1) → G3, G4.
+
+**Статус (2026-11-03, после отчёта #11):** исправлено в `[Unreleased]` — F1 (scroll-контейнер в колонке — по высоте
+своих строк, а если не помещаются — оставшееся место; его предки по пути уступают место: `holdsScroll` в
+`Layout::sync`; тест: список в `box`, во вкладке и длинный список под заголовком), F2 (ссылка с query активна, только
+пока в query те же значения; ссылка без query — как раньше), F3 (`useTitle` сообщает заголовок при prerender,
+`prerender.cpp` пишет его в `<title>`; шаблон: About с `useTitle`; e2e-проверка), F4 (вне браузера `storageRead` —
+пусто, `localStorage` Node не трогается), F5 (`notifyResize` из `Screen` и `TerminalApp`; `useWindowSize` берёт
+сообщённый размер), F6 (`.rx-field--above` без переноса, поля в колонке не тянутся, `select` той же высоты, что
+`input`), G2 и G1 — в документации (README, сайт, llms.txt). Остались: G1 (управляемые `ui::tabs` — 1.1), G3, G4.

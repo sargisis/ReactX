@@ -326,7 +326,8 @@ inline const std::vector<Page>& pages() {
                                     "возвращают ошибки как std::expected.",
                  "auto [theme, setTheme] = useLocalStorage(\"rx-theme\", std::string(\"dark\"));"},
                 {"useTitle", "Заголовок вкладки браузера, пока компонент смонтирован; при размонтировании возвращается прежний, "
-                             "так что каждая страница роутера называет себя сама. Нативно только хранит текст.",
+                             "так что каждая страница роутера называет себя сама; у заранее отрисованных страниц он попадает в <title>. "
+                             "Нативно только хранит текст.",
                  "useTitle(\"Заказы (\" + std::to_string(count) + \")\");"},
                 {"useWindowSize", "Размер окна браузера (в пикселях) или терминала (в ячейках); компонент перерисовывается при изменении.",
                  "WindowSize size = useWindowSize();"},
@@ -358,7 +359,9 @@ inline const std::vector<Page>& pages() {
                  "std::string id = useId();\n"
                  "h(\"label\", {{\"for\", id}}, {\"Имя\"}), h(\"input\", {{\"id\", id}})"},
                 {"errorBoundary", "Если дети бросили исключение при отрисовке — сразу или позже, при обновлении состояния, — "
-                                  "вместо них показывается запасной вариант, а остальное приложение работает. retry() пробует снова. "
+                                  "вместо них показывается запасной вариант, а остальное приложение работает. retry() пробует снова; до этого "
+                                  "граница показывает запасной вариант, даже когда меняются параметры маршрута, поэтому на странице "
+                                  "маршрута дайте ей путь как ключ: errorBoundary(fallback, {h(Page)}, router::useLocation()). "
                                   "Исключения в обработчиках событий и эффектах не ловятся, как в React.",
                  "errorBoundary([](const RenderError& e) {\n"
                  "    return h(\"div\", {}, {\"Ошибка: \" + e.message,\n"
@@ -426,7 +429,7 @@ inline const std::vector<Page>& pages() {
                  "    h(\"box\", {{\"border\", true}, {\"title\", \"Окно\"}, {\"padding\", 1}}, {h(\"text\", {}, {\"Привет\"})}),\n"
                  "})"},
                 {"Прокрутка", "Что выше терминала, обрезается, поэтому длинные списки кладут в box с overflow: \"scroll\". "
-                              "В колонке он занимает оставшиеся строки; колёсико и PageUp/PageDown прокручивают его, элемент в "
+                              "В колонке он высотой со свои строки, а если они не помещаются — занимает оставшиеся; колёсико и PageUp/PageDown прокручивают его, элемент в "
                               "фокусе остаётся на виду, рамка показывает положение, onScroll сообщает его в строках. "
                               "ui::list({.children = items, .scroll = true}) прокручивается внутри своей рамки. Окна и уведомления — "
                               "position: \"fixed\", они видны на экране, какой бы длинной ни была страница.",
@@ -592,7 +595,8 @@ inline const std::vector<Page>& pages() {
                  "std::string from = router::redirectedFrom();\n"
                  "router::navigate(from.empty() ? \"/\" : from, /*replace=*/true);"},
                 {"Ссылки и переходы", "link — ссылка без перезагрузки (Ctrl+клик — новая вкладка), на текущем пути получает "
-                                      ".activeClassName (\"active\"); navigate и back — из кода. useParams() — все параметры "
+                                      ".activeClassName (\"active\") (ссылка с query, \"/?tag=work\", — только пока в query те же "
+                                      "значения); navigate и back — из кода. useParams() — все параметры "
                                       "маршрута, currentPath() — путь с query (не хук), href(path) — URL с базовым путём.",
                  "router::link({.to = \"/todos/7\", .label = \"Открыть\"});\nrouter::navigate(\"/todos\");\nrouter::navigate(\"/login\", /*replace=*/true);\nrouter::back();\n"
                  "const auto& params = router::useParams();   // {\"id\": \"7\"}\nstd::string url = router::href(\"/todos/7\");  // \"/my-app/todos/7\""},

@@ -73,12 +73,13 @@ constexpr const char* kCss = R"css(
 .rx-progress--danger .rx-progress__bar { background: var(--rx-danger); }
 .rx-field__label { color: var(--rx-muted); white-space: nowrap; }
 .rx-stack--row > .rx-field--input { flex: 1 1 10em; min-width: 0; }
-.rx-field--above { flex-direction: column; align-items: stretch; gap: 4px; }
+.rx-field--above { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 4px; }
+.rx-field--above > .rx-input { flex: none; }  /* full width, its own height */
 .rx-vlist { overflow-y: auto; overscroll-behavior: contain; }
 .rx-vlist--border { border: 1px solid var(--rx-border); border-radius: var(--rx-radius); }
 .rx-vlist__row { overflow: hidden; }
 .rx-input {
-  flex: 1; min-width: 0; font: inherit; padding: 8px 12px; border-radius: var(--rx-radius);
+  flex: 1; min-width: 0; font: inherit; line-height: 1.5; padding: 8px 12px; border-radius: var(--rx-radius);
   border: 1px solid var(--rx-border); background: transparent; color: inherit;
 }
 .rx-input:focus { outline: 2px solid var(--rx-accent); outline-offset: 1px; }
@@ -131,7 +132,7 @@ constexpr const char* kCss = R"css(
            display: flex; flex-direction: column; gap: 12px; }
 .rx-card__title { margin: 0; font-size: 1rem; }
 
-.rx-select { cursor: pointer; }
+.rx-select { cursor: pointer; box-sizing: border-box; height: calc(1.5em + 18px); }  /* as tall as .rx-input */
 
 .rx-tip { position: relative; display: inline-flex; }
 .rx-tip__bubble {

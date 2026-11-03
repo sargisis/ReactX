@@ -802,6 +802,25 @@ TEST(scroll_box_takes_the_room_left_and_clips) {
     CHECK(contains(screen, "┃"));  // where we are, on the right border
 }
 
+// A scroll box in a box that isn't stretched (or in a tab) shows its rows:
+// it was 0 rows tall there, only its border showed.
+TEST(scroll_box_in_a_box_of_its_own_height_shows_its_rows) {
+    auto items = [] { return std::vector<Element>{ui::listItem({.label = "One"}), ui::listItem({.label = "Two"})}; };
+    for (Element e : {h("box", {}, {ui::list({.title = "L", .children = items(), .scroll = true})}),
+                      ui::tabs({.tabs = {{.label = "T", .content = {ui::list({.title = "L", .children = items(), .scroll = true})}}}}),
+                      h("box", {}, {h("text", {}, {"top"}), h("box", {{"overflow", "scroll"}}, {h("text", {}, {"row1"})})})}) {
+        Screen s(std::move(e));
+        CHECK((contains(s.text(), "One") && contains(s.text(), "Two")) || contains(s.text(), "row1"));
+    }
+    // Too long for the screen: it still gets the rows that are left and scrolls.
+    std::vector<Element> many;
+    for (int i = 0; i < 40; ++i) many.push_back(ui::listItem({.label = "item " + std::to_string(i), .key = std::to_string(i)}));
+    Screen s(h("box", {}, {h("text", {}, {"HEADER"}), ui::list({.title = "L", .children = std::move(many), .scroll = true}),
+                           h("text", {}, {"FOOTER"})}));
+    CHECK(contains(s.text(), "HEADER") && contains(s.text(), "item 0") && contains(s.text(), "FOOTER"));
+    CHECK(!contains(s.text(), "item 39"));
+}
+
 TEST(scroll_by_moves_the_content_and_sends_onScroll) {
     Screen s(h(Scroller));
     NodeHandle box = byId(s, "box");

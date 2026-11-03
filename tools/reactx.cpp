@@ -439,6 +439,7 @@ Element Home(const HomeProps&) {
 struct AboutProps {};
 
 Element About(const AboutProps&) {
+    useTitle("About");  // the tab's title on this page (prerendered pages get it too)
     return h("section", {{"className", "page"}}, {
         h("h1", {}, {"About"}),
         h("p", {}, {"Made with ReactX: React-like UI in C++26, compiled to WebAssembly."}),

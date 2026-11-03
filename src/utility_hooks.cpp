@@ -5,12 +5,14 @@
 #include <chrono>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "reactx/hooks.hpp"
 
+#include "prerender_title.hpp"
 #include "utf8.hpp"
 
 #if defined(__EMSCRIPTEN__)
@@ -48,6 +50,13 @@ std::map<int, Timer>& timers() {  // id -> timer
 std::map<int, std::function<void(WindowSize)>>& resizeListeners() {
     static std::map<int, std::function<void(WindowSize)>> all;
     return all;
+}
+
+// Natively: the size TerminalApp or testing::Screen last reported, so
+// useWindowSize matches the screen it draws on (a test's Screen(app, 40, 12)).
+std::optional<WindowSize>& reportedSize() {
+    static std::optional<WindowSize> size;
+    return size;
 }
 
 std::map<int, std::function<bool(const KeyEvent&)>>& keyListeners() {
@@ -110,7 +119,10 @@ EM_JS(void, rx_js_listen_keys, (), {
     }, true);
 });
 // "v" + the value, "n" if there is none, "e" + the reason if storage failed.
+// Not in a browser (prerendering under Node): nothing is saved, and Node's own
+// localStorage isn't touched (it warns on every build without --localstorage-file).
 EM_JS(char*, rx_js_storage_get, (const char* key), {
+    if (typeof window === "undefined") return stringToNewUTF8("n");
     try {
         const v = localStorage.getItem(UTF8ToString(key));
         return stringToNewUTF8(v === null ? "n" : "v" + v);
@@ -120,6 +132,7 @@ EM_JS(char*, rx_js_storage_get, (const char* key), {
 });
 // "" on success, otherwise the reason (QuotaExceededError, SecurityError, ...).
 EM_JS(char*, rx_js_storage_set, (const char* key, const char* value, int remove), {
+    if (typeof window === "undefined") return stringToNewUTF8("Error: no localStorage outside the browser");
     try {
         if (remove) localStorage.removeItem(UTF8ToString(key));
         else localStorage.setItem(UTF8ToString(key), UTF8ToString(value));
@@ -186,6 +199,10 @@ WindowSize currentWindowSize() {
 #if defined(__EMSCRIPTEN__)
     return {rx_js_window_width(), rx_js_window_height()};
 #else
+    {
+        std::scoped_lock lock(stateMutex());
+        if (reportedSize()) return *reportedSize();
+    }
     winsize ws{};
     if (::ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0 && ws.ws_col && ws.ws_row) return {ws.ws_col, ws.ws_row};
     return {80, 24};  // not a terminal (tests, pipes)
@@ -212,6 +229,7 @@ void notifyResize(WindowSize size) {
     std::vector<std::function<void(WindowSize)>> listeners;
     {
         std::scoped_lock lock(stateMutex());
+        reportedSize() = size;
         for (const auto& [id, fn] : resizeListeners()) listeners.push_back(fn);
     }
     for (const auto& fn : listeners) fn(size);
@@ -307,9 +325,18 @@ std::string& memoryTitle() {
 std::string pageTitle() { return memoryTitle(); }
 void setPageTitle(const std::string& title) { memoryTitle() = title; }
 #endif
+
+// Prerendering runs no effects, so useTitle reports its title here while it
+// renders; src/prerender.cpp puts it into the page's <title>. The outermost
+// one wins, as in the browser, where the parent's effect runs last.
+PrerenderTitle& prerenderTitle() {
+    static PrerenderTitle state;
+    return state;
+}
 }  // namespace detail
 
 void useTitle(std::string title) {
+    if (auto& pre = detail::prerenderTitle(); pre.collecting && !pre.title) pre.title = title;
     // The title before this component set its own: restored on unmount.
     auto& slot = useRef(std::shared_ptr<std::optional<std::string>>{});
     if (!slot) slot = std::make_shared<std::optional<std::string>>();

@@ -206,6 +206,22 @@ Element Link(const Props& p) {
     bool active = here == target ||
                   (!p.get<bool>("exact", true) && here.starts_with(target) &&
                    (target.ends_with('/') || here.size() == target.size() || here[target.size()] == '/'));
+    // A link with a query ("/?tag=work") is active only while the page's query
+    // has the same values: filter links mark the one in use, not all of them.
+    if (active) {
+        std::string toQuery = queryOf(to);
+        std::string_view query = toQuery;
+        std::string current = queryOf(store().path);
+        while (active && !query.empty()) {
+            auto amp = query.find('&');
+            std::string_view pair = query.substr(0, amp);
+            query = amp == std::string_view::npos ? std::string_view{} : query.substr(amp + 1);
+            auto eq = pair.find('=');
+            std::string name = urlDecode(pair.substr(0, eq), true);
+            std::string value = eq == std::string_view::npos ? std::string{} : urlDecode(pair.substr(eq + 1), true);
+            active = name.empty() || queryParam(current, name) == value;
+        }
+    }
     std::string className = p.get<std::string>("className");
     if (active && !p.get<std::string>("activeClassName").empty())
         className += (className.empty() ? "" : " ") + p.get<std::string>("activeClassName");

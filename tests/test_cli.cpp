@@ -445,6 +445,7 @@ void endToEnd(const fs::path& tmp) {
     CHECK(contains(read(dist / "index.html"), "Hello, web-app!"));  // the home page, before the .wasm
     CHECK(contains(read(dist / "index.html"), "<main id=app>"));     // still the page's main landmark
     CHECK(contains(read(dist / "about.html"), "<h1>About</h1>") && contains(read(dist / "about.html"), "href=\"/about\""));
+    CHECK(contains(read(dist / "about.html"), "<title>About</title>"));  // useTitle, though effects don't run there
     CHECK(contains(read(dist / "index.html"), "id=\"rx-ui-styles\""));  // rx::ui's CSS is in the page too
     for (const char* empty : {"404.html", "200.html"})                  // other routes: the page without content
         CHECK(contains(read(dist / empty), "<main id=app></main>") && !contains(read(dist / empty), "Hello"));

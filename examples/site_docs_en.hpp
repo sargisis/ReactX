@@ -307,7 +307,7 @@ inline const std::vector<Page>& pagesEn() {
                  "    return false;\n"
                  "});"},
                 {"useTitle", "The browser tab's title while the component is mounted; the previous title comes back when it unmounts, "
-                             "so each route page can name itself. Natively it only keeps the text.",
+                             "so each route page can name itself; prerendered pages get it in their <title>. Natively it only keeps the text.",
                  "useTitle(\"Orders (\" + std::to_string(count) + \")\");"},
                 {"useDebounce, useLocalStorage, useWindowSize, useId",
                  "useDebounce gives a value only after it stopped changing (search boxes). useLocalStorage remembers state across "
@@ -318,7 +318,9 @@ inline const std::vector<Page>& pagesEn() {
                  "WindowSize size = useWindowSize();\n"
                  "std::string id = useId();"},
                 {"errorBoundary", "If a component throws while rendering, show a fallback instead of crashing the whole app. "
-                                  "retry() tries again. (Exceptions in event handlers and effects aren't caught, as in React.)",
+                                  "retry() tries again; until then it shows the fallback, also when its route's parameters change, so on a route page "
+                                  "give it the path as its key: errorBoundary(fallback, {h(Page)}, router::useLocation()). "
+                                  "(Exceptions in event handlers and effects aren't caught, as in React.)",
                  "errorBoundary([](const RenderError& e) {\n"
                  "    return h(\"div\", {}, {\"Error: \" + e.message,\n"
                  "                           h(\"button\", {{\"onClick\", e.retry}}, {\"Try again\"})});\n"
@@ -380,7 +382,7 @@ inline const std::vector<Page>& pagesEn() {
                  "    h(\"box\", {{\"border\", true}, {\"title\", \"Window\"}, {\"padding\", 1}}, {h(\"text\", {}, {\"Hello\"})}),\n"
                  "})"},
                 {"Scrolling", "What is taller than the terminal is cut off, so long lists go in a box with overflow: \"scroll\". "
-                              "In a column it takes the rows that are left; the mouse wheel and PageUp/PageDown scroll it, the "
+                              "In a column it is as tall as its rows, or takes the rows that are left when they don't fit; the mouse wheel and PageUp/PageDown scroll it, the "
                               "focused element stays visible, a border shows the position and onScroll reports it in rows. "
                               "ui::list({.children = items, .scroll = true}) scrolls inside its border. Modals and toasts use "
                               "position: \"fixed\", so they show on the screen however tall the page is.",
@@ -545,7 +547,8 @@ inline const std::vector<Page>& pagesEn() {
                  "std::string from = router::redirectedFrom();\n"
                  "router::navigate(from.empty() ? \"/\" : from, /*replace=*/true);"},
                 {"Links", "link changes the page without reloading (Ctrl+click still opens a new tab) and gets "
-                          ".activeClassName (\"active\") on the current path; navigate and back do it from code. "
+                          ".activeClassName (\"active\") on the current path (a link with a query, \"/?tag=work\", only while the query has "
+                          "those values); navigate and back do it from code. "
                           "useParams() gives every route parameter, currentPath() the path with the query (not a hook), "
                           "href(path) the URL with the base path.",
                  "router::link({.to = \"/todos/7\", .label = \"Open\"});\nrouter::navigate(\"/todos\");\nrouter::navigate(\"/login\", /*replace=*/true);\nrouter::back();\n"

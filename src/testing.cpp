@@ -15,6 +15,7 @@ namespace rx::testing {
 Screen::Screen(Element app, int width, int height)
     : renderer_(std::make_unique<TerminalRenderer>()), root_(std::make_unique<Root>(*renderer_)) {
     renderer_->setSize(width, height);
+    detail::notifyResize({width, height});  // useWindowSize sees this screen
     root_->render(std::move(app));
 }
 
@@ -72,6 +73,7 @@ void Screen::render(Element app) { root_->render(std::move(app)); }
 
 void Screen::resize(int width, int height) {
     renderer_->setSize(width, height);
+    detail::notifyResize({width, height});  // useWindowSize; re-rendered by the flush
     root_->flush();
 }
 

@@ -6,6 +6,12 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ## [Не выпущено]
 
+## [1.1.0] — 2026-11-03
+
+Вкладки, которые переключает код, и `.wasm` поменьше для тех, кому это нужно. В существующих приложениях ничего не меняется.
+
+**Обновление:** `reactx upgrade`, затем `reactx update` в каждом проекте.
+
 ### Добавлено
 
 - CMake-опция `REACTX_WEB_LTO` (по умолчанию выключена): оптимизация при компоновке для Release-сборок под браузер, `.wasm` на ~5% меньше (gzip) ценой более долгой компоновки — `set(REACTX_WEB_LTO ON)` выше `FetchContent_MakeAvailable(reactx)`. Сайт ReactX её использует: его `.wasm` меньше на 6,5% (181,9 → 170,1 КБ gzip).
@@ -537,7 +543,8 @@ ReactX без установки компиляторов: готовый `react
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v1.0.1...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/sargisis/ReactX/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/sargisis/ReactX/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/sargisis/ReactX/compare/v0.21.0...v1.0.0
 [0.21.0]: https://github.com/sargisis/ReactX/compare/v0.20.0...v0.21.0

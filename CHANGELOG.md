@@ -6,6 +6,12 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-11-03
+
+Tabs that code can switch, and a smaller `.wasm` for those who want it. Nothing changes for existing apps.
+
+**Update:** `reactx upgrade`, then `reactx update` in each project.
+
 ### Added
 
 - The CMake option `REACTX_WEB_LTO` (off by default): link-time optimization for Release web builds, a ~5% smaller `.wasm` (gzip) at the cost of slower links — `set(REACTX_WEB_LTO ON)` above `FetchContent_MakeAvailable(reactx)`. The website uses it: its `.wasm` is 6.5% smaller (181.9 → 170.1 KB gzip).
@@ -537,7 +543,8 @@ The first release.
 - **A documentation site** built with ReactX: https://sargisis.github.io/ReactX/, published by GitHub Actions through the `gh-pages` branch.
 - The version in one place (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; new projects from `reactx new` use ReactX by release tag.
 
-[Unreleased]: https://github.com/sargisis/ReactX/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/sargisis/ReactX/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/sargisis/ReactX/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/sargisis/ReactX/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/sargisis/ReactX/compare/v0.21.0...v1.0.0
 [0.21.0]: https://github.com/sargisis/ReactX/compare/v0.20.0...v0.21.0

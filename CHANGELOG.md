@@ -6,6 +6,10 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Changed
+
+- Docs: [rx-charts](https://github.com/sargisis/rx-charts), the first ReactX library (bar, line and pie charts; SVG in the browser, characters in a terminal), in README, the site and llms.txt.
+
 ## [1.1.0] — 2026-11-03
 
 Tabs that code can switch, and a smaller `.wasm` for those who want it. Nothing changes for existing apps.

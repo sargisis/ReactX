@@ -181,7 +181,9 @@ inline const std::vector<Page>& pages() {
                  "reactx build\n# index.wasm: 122 KB (the page shows nothing until it is downloaded)\n"
                  "#   biggest parts: src/app.cpp 23%, ReactX reconciler.cpp 15%, the C++ library 12%, ..."},
                 {"Зависимости", "reactx add записывает git-репозиторий в reactx.json; CMake проекта подключает его через "
-                                "FetchContent, а --target сразу связывает библиотеку с приложением.",
+                                "FetchContent, а --target сразу связывает библиотеку с приложением. rx-charts (графики: столбцы, "
+                                "линии, круговые — SVG в браузере, символы в терминале) — библиотека для ReactX, подключаемая так же.",
+                 "reactx add rx-charts https://github.com/sargisis/rx-charts.git --rev v0.1.0 --target rx::charts\n"
                  "reactx add fmt https://github.com/fmtlib/fmt.git --rev 11.0.2 --target fmt::fmt\nreactx remove fmt"},
                 {"reactx update", "Переводит проект на новейший релиз ReactX: находит теги в репозитории из reactx.json, "
                                   "выбирает самый новый по SemVer (без -rc) и записывает его в rev. --check только проверяет, "

@@ -125,6 +125,7 @@ reactx build                        # build/web/dist — files for any static ho
                                     # (v1.1) set(REACTX_WEB_LTO ON) in CMakeLists.txt: ~5% smaller, slower rebuilds
 reactx test                         # build and run tests/*.cpp (reactx/testing.hpp); reactx test <name> runs some
 reactx add magic_enum https://github.com/Neargye/magic_enum.git --rev v0.9.8 --target magic_enum::magic_enum
+reactx add rx-charts https://github.com/sargisis/rx-charts.git --rev v0.1.0 --target rx::charts   # charts, both backends
 reactx update                       # move the project to the newest ReactX release
 reactx upgrade                      # replace the reactx tool with the newest release
 reactx install [--check]            # download Emscripten (+ CMake, Ninja if missing) into ~/.reactx

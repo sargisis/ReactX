@@ -99,7 +99,14 @@ Element checkbox(CheckboxProps p) {
 Element tabs(TabsProps p) {
     std::vector<Element> children;
     for (auto& tab : p.tabs) children.push_back(h("ui-tab", {{"label", tab.label}}, std::move(tab.content)));
-    return withKey(h(Tabs, {{"initial", p.initial}}, std::move(children)), p.key);
+    std::function<void(int)> onChange = std::move(p.onChange);
+    InputHandler picked;  // the props of a component hold no std::function<void(int)>: the index as text
+    if (onChange)
+        picked = [onChange](const std::string& text) {
+            if (auto n = parseNumber<int>(text)) onChange(*n);
+        };
+    return withKey(h(Tabs, {{"initial", p.initial}, {"active", p.active}, {"onChange", std::move(picked)}}, std::move(children)),
+                   p.key);
 }
 
 Element modal(ModalProps p) {

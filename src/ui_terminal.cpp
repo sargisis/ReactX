@@ -104,9 +104,15 @@ Element Checkbox(const Props& p) {
 Element Tabs(const Props& p) {
     const Theme& t = useTheme();
     const auto& tabs = p.children();
-    auto [active, setActive] = useState(p.get<int>("initial", 0));
+    auto [own, setOwn] = useState(p.get<int>("initial", 0));
     if (tabs.empty()) return fragment({});
-    int current = std::clamp(active, 0, static_cast<int>(tabs.size()) - 1);
+    const int controlled = p.get<int>("active", -1);  // >= 0: the app keeps the open tab
+    int current = std::clamp(controlled >= 0 ? controlled : own, 0, static_cast<int>(tabs.size()) - 1);
+    auto onChange = p.get<InputHandler>("onChange");
+    auto pick = [setOwn, onChange](int index) {
+        setOwn(index);
+        if (onChange) onChange(std::to_string(index));
+    };
 
     std::vector<Element> header;
     for (std::size_t i = 0; i < tabs.size(); ++i) {
@@ -116,7 +122,7 @@ Element Tabs(const Props& p) {
         header.push_back(h("box", {{"key", label},
                                    {"focusable", true},
                                    {"paddingX", 1},
-                                   {"onClick", [setActive, index] { setActive(index); }}},
+                                   {"onClick", [pick, index] { pick(index); }}},
                            {h("text", {{"color", on ? t.accent : t.muted}, {"bold", on}, {"underline", on}, {"wrap", false}},
                               {label})}));
     }

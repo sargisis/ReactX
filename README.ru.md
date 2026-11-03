@@ -285,7 +285,7 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 | `button` | `label`, `onClick`, `variant` (`Default`, `Primary`, `Danger`, `Success`), `disabled` (не получает фокус) |
 | `input` | `value`, `onChange(text)`, `onSubmit(text)` по Enter, `placeholder`, `label`; Escape очищает; в строке `stack` занимает свободное место; `labelAbove` — подпись на своей строке (поля формы выровнены); клик по подписи ставит фокус в поле; (v1.0) `type`: `ui::InputType::Password` (точки в терминале), `Email`, `Number`, `Search`, `Tel`, `Url` |
 | `checkbox` | `label`, `checked`, `onToggle` (Enter / Space), `onChange(bool)` с новым состоянием |
-| `tabs` | вкладки `{label, content}`, `initial`; Enter на заголовке открывает вкладку |
+| `tabs` | вкладки `{label, content}`, `initial`; Enter на заголовке открывает вкладку; (v1.1) `active` + `onChange(int)` — открытая вкладка в вашем состоянии (переключение горячей клавишей) |
 | `modal` | `title`, `open`, `onClose` (Escape), `width`; закрывает то, что под ним, держит фокус внутри и возвращает его после закрытия |
 | `list` / `listItem` | `children` (элементы; `items` — старое имя), рамка с заголовком, `emptyText`, `scroll` (прокрутка внутри вместо роста); пункт: `label`, `detail` справа, `selected` (новый выбранный пункт прокручивается на виду), `onSelect`, `onKey` |
 | `select` | `label`, `value`, `options` (`{value, label}`), `onChange(value)`; в браузере нативный `<select>`, в терминале ‹ › со стрелками ← → / Enter или кликом; `labelAbove` |

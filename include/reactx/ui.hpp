@@ -53,7 +53,7 @@ const Theme& useTheme();
 // Input     value, onChange(text), onSubmit(text) on Enter, placeholder, label
 //           Escape clears the field through onChange.
 // Checkbox  label, checked, onToggle
-// Tabs      children: tab elements (see ui::tab); initial (index)
+// Tabs      children: tab elements (see ui::tab); initial (index); active (>= 0: controlled), onChange(index as text)
 // Modal     title, open, onClose (Escape), width, children
 //           Put it last inside a box that fills the screen: it covers that box,
 //           traps focus while open and gives it back when closed.
@@ -146,6 +146,10 @@ struct TabsProps {
     std::vector<Tab> tabs{};
     int initial = 0;
     std::string key{};
+    // (v1.1) Controlled: active >= 0 is the open tab, kept in your state; onChange
+    // gets the index a click (or Enter) picked. -1: the tabs keep it themselves.
+    int active = -1;
+    std::function<void(int)> onChange{};
 };
 Element tabs(TabsProps props);
 

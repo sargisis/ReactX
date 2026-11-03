@@ -592,6 +592,34 @@ TEST(tabs_initial_index) {
     CHECK(contains(s.text(), "bbb"));
 }
 
+// Controlled tabs: the app keeps the open one (a shortcut switches it) and hears clicks.
+int pickedTab = -1;
+Element ControlledTabs(const Props&) {
+    auto [tab, setTab] = useState(0);
+    useKeyboard([setTab](const KeyEvent& k) {
+        if (k.key != "2") return false;
+        setTab(1);
+        return true;
+    });
+    return ui::tabs({.tabs = {{"A", {h("text", {}, {"aaa"})}}, {"B", {h("text", {}, {"bbb"})}}, {"C", {h("text", {}, {"ccc"})}}},
+                     .active = tab,
+                     .onChange = [setTab](int i) { pickedTab = i; setTab(i); }});
+}
+
+TEST(tabs_can_be_controlled) {
+    Screen s(h(ControlledTabs));
+    CHECK(contains(s.text(), "aaa"));
+    detail::dispatchGlobalKey(KeyEvent{.key = "2"}, false);
+    s.root.flush();
+    CHECK(contains(s.text(), "bbb") && !contains(s.text(), "aaa"));  // switched from code
+    s.click("C");
+    CHECK(pickedTab == 2 && contains(s.text(), "ccc"));
+    // .active without onChange: a click can't open another tab.
+    Screen fixed(ui::tabs({.tabs = {{"A", {h("text", {}, {"aaa"})}}, {"B", {h("text", {}, {"bbb"})}}}, .active = 0}));
+    fixed.click("B");
+    CHECK(contains(fixed.text(), "aaa"));
+}
+
 TEST(modal_is_hidden_until_open) {
     Screen s(h(ModalApp));
     CHECK(!contains(s.text(), "Sure?"));

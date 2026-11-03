@@ -6,6 +6,10 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Added
+
+- `ui::tabs` can be controlled: `.active` (the open tab, from your state) and `.onChange(int)` (the tab a click or Enter picked), so a shortcut or code can switch tabs. Without them the tabs keep the open one themselves, as before.
+
 ## [1.0.1] — 2026-11-03
 
 Fixes from the first trial round after 1.0: a scroll list inside a terminal tab, filter links with a query, prerendered page titles, `useWindowSize` in tests and form rows on phones. No API changes.

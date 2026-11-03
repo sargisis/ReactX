@@ -46,6 +46,7 @@ Element App(const Props&) {
     auto [open, setOpen] = useState(false);
     auto [picked, setPicked] = useState(std::string{});
     auto [accent, setAccent] = useState(std::string("cyan"));
+    auto [page, setPage] = useState(0);
 
     ui::Theme theme;
     theme.accent = accent;
@@ -66,6 +67,10 @@ Element App(const Props&) {
                    .label = "Name"}),
         ui::checkbox({.label = "I agree", .checked = agree, .onToggle = [setAgree, agree] { setAgree(!agree); }}),
         ui::tabs({.tabs = {{"One", {h("p", {}, {"first page"})}}, {"Two", {h("p", {}, {"second page"})}}}}),
+        ui::tabs({.tabs = {{"Red", {h("p", {}, {"red page"})}}, {"Blue", {h("p", {}, {"blue page"})}}},
+                  .active = page, .onChange = [setPage](int i) { setPage(i); }}),
+        ui::button({.label = "Go blue", .onClick = [setPage] { setPage(1); }}),
+        h("p", {}, {"page=" + std::to_string(page)}),
         ui::list({.title = "Fruit", .items = std::move(fruit)}),
         ui::list({.title = "Empty", .emptyText = "no fruit"}),
         h("p", {}, {"name=" + name + " agree=" + (agree ? "yes" : "no") + " picked=" + picked}),
@@ -190,6 +195,12 @@ int main() {
     js("rxTest.clickText('Two')");
     CHECK(has("second page") && !has("first page"));
     CHECK(has("<button aria-selected=\"true\" class=\"rx-tab rx-tab--active\" role=\"tab\" type=\"button\">Two</button>"));
+    std::cout << "tabs: controlled\n";
+    CHECK(has("red page") && has("page=0"));
+    js("rxTest.clickText('Go blue')");
+    CHECK(has("blue page") && !has("red page"));  // switched from code
+    js("rxTest.clickText('Red')");
+    CHECK(has("red page") && has("page=0"));  // onChange got the index
 
     std::cout << "lists\n";
     CHECK(has("<div class=\"rx-list__title\">Fruit</div><ul class=\"rx-list__items\">"));

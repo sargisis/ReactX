@@ -297,7 +297,7 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 | `button` | `label`, `onClick`, `variant` (`Default`, `Primary`, `Danger`, `Success`), `disabled` (doesn't take focus) |
 | `input` | `value`, `onChange(text)`, `onSubmit(text)` on Enter, `placeholder`, `label`; Escape clears it; takes the free room in a `stack` row; `labelAbove` puts the label on its own line (forms line up); a click on the label focuses the field; (v1.0) `type`: `ui::InputType::Password` (dots in a terminal), `Email`, `Number`, `Search`, `Tel`, `Url` |
 | `checkbox` | `label`, `checked`, `onToggle` (Enter / Space), `onChange(bool)` with the new state |
-| `tabs` | tabs `{label, content}`, `initial`; Enter on a title opens the tab |
+| `tabs` | tabs `{label, content}`, `initial`; Enter on a title opens the tab; (v1.1) `active` + `onChange(int)` keep the open tab in your state (switch it from a shortcut) |
 | `modal` | `title`, `open`, `onClose` (Escape), `width`; covers what is under it, keeps the focus inside and gives it back when closed |
 | `list` / `listItem` | `children` (the items; `items` is the old name), a bordered box with a title, `emptyText`, `scroll` (scrolls inside instead of growing); an item: `label`, `detail` on the right, `selected` (a newly selected item scrolls into view), `onSelect`, `onKey` |
 | `select` | `label`, `value`, `options` (`{value, label}`), `onChange(value)`; a native `<select>` in the browser, ‹ › with Left / Right / Enter or a click in a terminal; `labelAbove` |

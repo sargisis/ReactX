@@ -8,6 +8,8 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ### Added
 
+- `reactx::log` in `library/log` (`rx/log.hpp`): structured logs — `debug` / `info` / `warn` / `error` with `key=value` fields, as text or JSON lines (`setup({.json = true})`), a level from `LOG_LEVEL` (`levelFromEnv`), your own sink; thread-safe. Link `reactx::log`.
+- `reactx::config` in `library/config` (`rx/config.hpp`, native): settings from arguments (`--port 9000`), environment variables (`APP_PORT`) and a JSON file (nested keys as `db.path`), in that order; `text`, `number`, `flag`, `require` / `requireNumber` (`std::expected` naming where it looked), `positional`, `source`. Link `reactx::config`.
 - `reactx::auth` in `library/auth` (`rx/auth.hpp`, native): `hashPassword` / `verifyPassword` / `needsRehash` (PBKDF2-HMAC-SHA256, 600,000 rounds, a random salt, constant-time compare), `Sessions` (an HttpOnly SameSite cookie, a new id at each sign-in, idle and absolute expiry, `endAll` to sign out everywhere; thread-safe), middleware `requireLogin` and `csrf` for `reactx::api`, and `randomToken`, `sha256Hex`, `hmacSha256Hex`, `constantTimeEquals`. Checked against the NIST, RFC 4231 and RFC 7914 test vectors. Link `reactx::auth`.
 - `reactx::api` in `library/api` (`rx/api.hpp`, native): a JSON API on `HttpServer` — `Router` (routes under a prefix, middleware, `OPTIONS` routes for preflights), `catchErrors`, `cors`, `rateLimit` (429 with `Retry-After`), `log`, `body(request, schema)` (400 / 415 / 422 with the field errors), `intParam`, `clientAddress`, and answers `ok` / `error` / `invalid` / `noContent`. Link `reactx::api`.
 - `net::Request::remote`: the client's IP address.

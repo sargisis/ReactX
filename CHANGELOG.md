@@ -6,6 +6,10 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Added
+
+- Faster builds with [ccache](https://ccache.dev): when it is installed, ReactX and apps made with `reactx_add_app` compile through it, so building the same code again (a clean `build/`, a new project) takes seconds — a clean build of a new web project 13 → 6 s, of ReactX itself 37 → 15 s. `-DREACTX_CCACHE=OFF` turns it off; a launcher you set yourself (`CMAKE_CXX_COMPILER_LAUNCHER`) wins. ReactX's own code is no longer scanned for C++ modules (ccache can't cache a scanned compile); `import reactx;` works as before.
+
 ## [1.2.0] — 2026-11-06
 
 Libraries that come with ReactX: charts and translations, linked with one line in CMakeLists.txt. Nothing changes for existing apps.

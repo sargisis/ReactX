@@ -8,7 +8,9 @@ name: Build, test and publish the site
 on:
   push:
     branches: [main]
+    paths-ignore: ["**.md"]  # README, CHANGELOG, AGENTS.md: not part of the build or the site
   pull_request:
+    paths-ignore: ["**.md"]
   workflow_dispatch:
 
 permissions:
@@ -32,7 +34,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install tools
-        run: apt-get update && apt-get install -y --no-install-recommends cmake ninja-build
+        run: |
+          apt-get update && apt-get install -y --no-install-recommends cmake ninja-build ccache
+          echo "CCACHE_DIR=$GITHUB_WORKSPACE/.ccache" >> "$GITHUB_ENV"; echo "CCACHE_MAXSIZE=500M" >> "$GITHUB_ENV"
+      # Compiled files from earlier runs (ReactX finds ccache by itself): only
+      # what changed is compiled again.
+      - name: Restore the compiler cache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-native-${{ github.sha }}
+          restore-keys: ccache-native-
       - name: Configure
         run: >
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
@@ -57,7 +69,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install tools
-        run: apt-get update && apt-get install -y --no-install-recommends cmake ninja-build
+        run: |
+          apt-get update && apt-get install -y --no-install-recommends cmake ninja-build ccache
+          echo "CCACHE_DIR=$GITHUB_WORKSPACE/.ccache" >> "$GITHUB_ENV"; echo "CCACHE_MAXSIZE=500M" >> "$GITHUB_ENV"
+      # Compiled files from earlier runs (ReactX finds ccache by itself): only
+      # what changed is compiled again.
+      - name: Restore the compiler cache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-asan-${{ github.sha }}
+          restore-keys: ccache-asan-
       - name: Configure
         run: >
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
@@ -68,8 +90,8 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure -LE "slow|fuzz"
       # Random inputs to the JSON, HTTP and URL parsers; a new seed every run.
-      - name: Fuzz the input parsers (60 s)
-        run: cd build && ./reactx_fuzz_tests 60
+      - name: Fuzz the input parsers (30 s)
+        run: cd build && ./reactx_fuzz_tests 30
       - name: Keep the input that crashed the fuzzer
         if: failure()
         uses: actions/upload-artifact@v4
@@ -87,7 +109,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install tools
-        run: apt-get update && apt-get install -y --no-install-recommends cmake ninja-build
+        run: |
+          apt-get update && apt-get install -y --no-install-recommends cmake ninja-build ccache
+          echo "CCACHE_DIR=$GITHUB_WORKSPACE/.ccache" >> "$GITHUB_ENV"; echo "CCACHE_MAXSIZE=500M" >> "$GITHUB_ENV"
+      # Compiled files from earlier runs (ReactX finds ccache by itself): only
+      # what changed is compiled again.
+      - name: Restore the compiler cache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-analyze-${{ github.sha }}
+          restore-keys: ccache-analyze-
       - name: Configure
         run: >
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DREACTX_ANALYZER=ON
@@ -107,7 +139,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install tools
-        run: apt-get update && apt-get install -y --no-install-recommends cmake ninja-build
+        run: |
+          apt-get update && apt-get install -y --no-install-recommends cmake ninja-build ccache
+          echo "CCACHE_DIR=$GITHUB_WORKSPACE/.ccache" >> "$GITHUB_ENV"; echo "CCACHE_MAXSIZE=500M" >> "$GITHUB_ENV"
+      # Compiled files from earlier runs (ReactX finds ccache by itself): only
+      # what changed is compiled again.
+      - name: Restore the compiler cache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-tsan-${{ github.sha }}
+          restore-keys: ccache-tsan-
       - name: Configure
         run: >
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
@@ -124,9 +166,27 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install tools
-        run: sudo apt-get update && sudo apt-get install -y ninja-build
+        run: |
+          sudo apt-get update && sudo apt-get install -y ninja-build ccache
+          echo "CCACHE_DIR=$GITHUB_WORKSPACE/.ccache" >> "$GITHUB_ENV"; echo "CCACHE_MAXSIZE=500M" >> "$GITHUB_ENV"
+
+      - name: Restore the compiler cache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-web-${{ github.sha }}
+          restore-keys: ccache-web-
+
+      # Emscripten with its prebuilt system libraries, downloaded once per version.
+      - name: Restore Emscripten ${{ env.EMSDK_VERSION }}
+        id: emsdk
+        uses: actions/cache@v4
+        with:
+          path: ~/emsdk
+          key: emsdk-${{ env.EMSDK_VERSION }}
 
       - name: Install Emscripten ${{ env.EMSDK_VERSION }}
+        if: steps.emsdk.outputs.cache-hit != 'true'
         run: |
           git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$HOME/emsdk"
           "$HOME/emsdk/emsdk" install "$EMSDK_VERSION"

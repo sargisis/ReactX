@@ -26,6 +26,22 @@ set(REACTX_DIR ${PROJECT_SOURCE_DIR} CACHE INTERNAL "ReactX source directory")
 # mode in libc++), so on by default; applies to programs linking ReactX too.
 option(REACTX_HARDENING "Bounds checks in the C++ standard library" ON)
 
+# Faster builds. ccache, when it is installed, keeps compiled files: building
+# the same code again (a clean build directory, a new project, CI with a saved
+# cache) takes seconds. Apps made with reactx_add_app use it too.
+option(REACTX_CCACHE "Compile through ccache when it is installed" ON)
+if(REACTX_CCACHE AND NOT CMAKE_CXX_COMPILER_LAUNCHER)
+  find_program(REACTX_CCACHE_PROGRAM ccache)
+  if(REACTX_CCACHE_PROGRAM)
+    set(CMAKE_CXX_COMPILER_LAUNCHER ${REACTX_CCACHE_PROGRAM})
+    set(CMAKE_C_COMPILER_LAUNCHER ${REACTX_CCACHE_PROGRAM})
+  endif()
+endif()
+# ccache can't cache a compile that is scanned for C++ modules, and only code
+# that writes `import reactx;` needs the scan (the examples, the module test;
+# the module itself is always scanned): the rest of ReactX goes without it.
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
+
 # reactx/version.hpp (REACTX_VERSION, rx::version()) for the CLI and for apps.
 configure_file(${PROJECT_SOURCE_DIR}/cmake/version.hpp.in ${PROJECT_BINARY_DIR}/generated/reactx/version.hpp @ONLY)
 
@@ -431,6 +447,7 @@ function(reactx_example name)
   target_link_libraries(${name} PRIVATE reactx)
   if(REACTX_MODULES)
     target_compile_definitions(${name} PRIVATE REACTX_USE_MODULES)
+    set_target_properties(${name} PROPERTIES CXX_SCAN_FOR_MODULES ON)
   endif()
 endfunction()
 if(REACTX_BUILD_EXAMPLES)
@@ -522,5 +539,6 @@ add_test(NAME reactx_api_check COMMAND reactx_api_check ${PROJECT_SOURCE_DIR})
 if(REACTX_MODULES)
   add_executable(reactx_module_tests tests/test_module.cpp)
   target_link_libraries(reactx_module_tests PRIVATE reactx)
+  set_target_properties(reactx_module_tests PROPERTIES CXX_SCAN_FOR_MODULES ON)
   add_test(NAME reactx_module_tests COMMAND reactx_module_tests)
 endif()

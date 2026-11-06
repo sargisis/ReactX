@@ -15,6 +15,16 @@
 # project's reactx.json): after the build the same program runs under Node and
 # mountDom writes each route's HTML into dist/index.html, dist/docs/faq.html, ...
 
+# ccache for a target of the app, when ReactX found it (REACTX_CCACHE) and the
+# project hasn't chosen a compiler launcher of its own.
+function(_reactx_use_ccache target)
+  get_target_property(launcher ${target} CXX_COMPILER_LAUNCHER)
+  if(REACTX_CCACHE AND REACTX_CCACHE_PROGRAM AND NOT launcher)
+    set_target_properties(${target} PROPERTIES CXX_COMPILER_LAUNCHER ${REACTX_CCACHE_PROGRAM}
+                                               C_COMPILER_LAUNCHER ${REACTX_CCACHE_PROGRAM})
+  endif()
+endfunction()
+
 function(reactx_add_app target)
   cmake_parse_arguments(APP "" "PUBLIC;BASE;SHELL" "SOURCES;PRERENDER" ${ARGN})
   if(NOT APP_SOURCES)
@@ -22,6 +32,7 @@ function(reactx_add_app target)
   endif()
   add_executable(${target} ${APP_SOURCES})
   target_link_libraries(${target} PRIVATE reactx::reactx)
+  _reactx_use_ccache(${target})
   if(NOT EMSCRIPTEN)
     # Tests (`reactx test`): tests/*.cpp with the app's sources except main.cpp,
     # linked with reactx::testing (Screen, RX_TEST and a main). What the app
@@ -31,6 +42,7 @@ function(reactx_add_app target)
       set(tested ${APP_SOURCES})
       list(FILTER tested EXCLUDE REGEX "(^|/)main\\.cpp$")
       add_executable(${target}_tests EXCLUDE_FROM_ALL ${app_tests} ${tested})
+      _reactx_use_ccache(${target}_tests)
       target_link_libraries(${target}_tests PRIVATE reactx::testing $<TARGET_PROPERTY:${target},LINK_LIBRARIES>)
       target_include_directories(${target}_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
                                  $<TARGET_PROPERTY:${target},INCLUDE_DIRECTORIES>)
@@ -102,6 +114,7 @@ function(reactx_add_app target)
     # The same sources, built for Node; what the app adds later
     # (target_link_libraries, include folders, defines) follows it.
     add_executable(${target}_prerender ${APP_SOURCES})
+    _reactx_use_ccache(${target}_prerender)
     target_link_libraries(${target}_prerender PRIVATE reactx::reactx reactx::prerender
                           $<TARGET_PROPERTY:${target},LINK_LIBRARIES>)
     target_include_directories(${target}_prerender PRIVATE $<TARGET_PROPERTY:${target},INCLUDE_DIRECTORIES>)

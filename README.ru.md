@@ -113,7 +113,7 @@ reactx build                        # build/web/dist — файлы для лю�
                                     # (v1.1) set(REACTX_WEB_LTO ON) в CMakeLists.txt: на ~5% меньше, пересборка дольше
 reactx test                         # собрать и запустить tests/*.cpp (reactx/testing.hpp); reactx test <имя> — часть
 reactx add magic_enum https://github.com/Neargye/magic_enum.git --rev v0.9.8 --target magic_enum::magic_enum
-reactx add rx-charts https://github.com/sargisis/rx-charts.git --rev v0.1.0 --target rx::charts   # графики, оба бэкенда
+# (v1.2) библиотеки из library/: target_link_libraries(<app> PRIVATE reactx::charts reactx::i18n) в CMakeLists.txt
 reactx update                       # перевести проект на новейший релиз ReactX
 reactx upgrade                      # заменить сам reactx новейшим релизом
 reactx install [--check]            # скачать Emscripten (+ CMake, Ninja, если их нет) в ~/.reactx
@@ -171,6 +171,7 @@ int main() { mountDom(h(App)); }
 | **Браузер** | WebAssembly + DOM, управляемые поля, SVG, делегирование событий |
 | **Компоненты** | `rx::ui`: кнопки, поля, флажки, вкладки, модальные окна, списки — с темой |
 | **Приложения** | роутер (History API), `useFetch`, `useWebSocket`, JSON с рефлексией, HTTP-сервер на C++ (с WebSocket), REST API |
+| **Библиотеки** | `library/`, подключайте нужные: `reactx::charts` (столбцы, линии, круговые графики — SVG в браузере, символы в терминале), `reactx::i18n` (переводы, множественное число, числа, деньги и даты на 10 языках) |
 | **Инструменты** | CLI `reactx` (`new`, `dev`, `build`, `test`, `add`, `remove`, `update`), модуль `import reactx;`, `reactx/testing.hpp` (`Screen`: `click`, `type`, `press`, `shows`) и `TextRenderer` для тестов |
 
 ## Справочник
@@ -674,7 +675,7 @@ ReactX распространяется **на ваш выбор** на усло
 
 Если вы присылаете изменения в ReactX (pull request), вы соглашаетесь, что они распространяются на тех же условиях — под обеими лицензиями, без дополнительных требований.
 
-**Стабильность API.** Публичный API — то, что объявлено в `include/reactx/` вне пространств `detail`, команды и опции CLI `reactx`, `reactx.json` и CMake-функции и цели (`reactx_add_app`, `reactx::reactx`, `reactx::testing`, ...). С 1.0 он меняется только в MAJOR-релизах. Имена никогда не переименовываются на месте: добавляется лучшее имя, а старое помечается устаревшим (в комментарии в коде, в документации и в разделе CHANGELOG «Устарело») и работает до 2.0. Тест `reactx_api_check` сверяет публичные заголовки со снимком (`api/reactx.api`), так что ни одно изменение не пройдёт незамеченным. Устарели пока: `ui::ListProps::items` (используйте `.children`) и `ui::RadioGroupProps::row` (используйте `.direction = ui::Direction::Row`). Рефлексия C++26 остаётся опциональной (`reactx::reflection`, нативные сборки) и вне этого обещания, пока компиляторы о ней не договорятся.
+**Стабильность API.** Публичный API — то, что объявлено в `include/reactx/` вне пространств `detail`, команды и опции CLI `reactx`, `reactx.json` и CMake-функции и цели (`reactx_add_app`, `reactx::reactx`, `reactx::testing`, ...). С 1.0 он меняется только в MAJOR-релизах. Имена никогда не переименовываются на месте: добавляется лучшее имя, а старое помечается устаревшим (в комментарии в коде, в документации и в разделе CHANGELOG «Устарело») и работает до 2.0. Тест `reactx_api_check` сверяет публичные заголовки со снимком (`api/reactx.api`), так что ни одно изменение не пройдёт незамеченным. Устарели пока: `ui::ListProps::items` (используйте `.children`) и `ui::RadioGroupProps::row` (используйте `.direction = ui::Direction::Row`). Рефлексия C++26 остаётся опциональной (`reactx::reflection`, нативные сборки) и вне этого обещания, пока компиляторы о ней не договорятся. Библиотеки в `library/` (`reactx::charts`, `reactx::i18n`) — предварительная версия: их API ещё может меняться в MINOR-релизе (с записью в CHANGELOG), пока его не объявят стабильным.
 
 ---
 

@@ -125,7 +125,7 @@ reactx build                        # build/web/dist — files for any static ho
                                     # (v1.1) set(REACTX_WEB_LTO ON) in CMakeLists.txt: ~5% smaller, slower rebuilds
 reactx test                         # build and run tests/*.cpp (reactx/testing.hpp); reactx test <name> runs some
 reactx add magic_enum https://github.com/Neargye/magic_enum.git --rev v0.9.8 --target magic_enum::magic_enum
-reactx add rx-charts https://github.com/sargisis/rx-charts.git --rev v0.1.0 --target rx::charts   # charts, both backends
+# (v1.2) libraries from library/: target_link_libraries(<app> PRIVATE reactx::charts reactx::i18n) in CMakeLists.txt
 reactx update                       # move the project to the newest ReactX release
 reactx upgrade                      # replace the reactx tool with the newest release
 reactx install [--check]            # download Emscripten (+ CMake, Ninja if missing) into ~/.reactx
@@ -183,6 +183,7 @@ For a terminal: `#include "reactx/terminal.hpp"` and `TerminalApp().run(h(App))`
 | **Browser** | WebAssembly + DOM, controlled inputs, SVG, event delegation |
 | **Components** | `rx::ui`: buttons, inputs, checkboxes, tabs, modals, lists — themed |
 | **Apps** | a router (History API), `useFetch`, `useWebSocket`, JSON with reflection, an HTTP server in C++ (with WebSockets), a REST API |
+| **Libraries** | `library/`, link what you use: `reactx::charts` (bar, line and pie charts — SVG in the browser, characters in a terminal), `reactx::i18n` (translations, plurals, numbers, money and dates in 10 languages) |
 | **Tools** | the `reactx` CLI (`new`, `dev`, `build`, `test`, `add`, `remove`, `update`), the `import reactx;` module, `reactx/testing.hpp` (`Screen`: `click`, `type`, `press`, `shows`) and `TextRenderer` for tests |
 
 ## Reference
@@ -685,7 +686,7 @@ at your option.
 
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in ReactX by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
 
-**API stability.** The public API is what `include/reactx/` declares outside `detail` namespaces, the `reactx` CLI commands and options, `reactx.json`, and the CMake functions and targets (`reactx_add_app`, `reactx::reactx`, `reactx::testing`, ...). Since 1.0 it changes only in MAJOR releases. Names are never renamed in place: a better name is added and the old one is marked deprecated (in the code comment, the docs and the CHANGELOG's "Deprecated" section) and keeps working until 2.0. The test `reactx_api_check` holds the public headers to a snapshot (`api/reactx.api`), so no change slips in unnoticed. Deprecated so far: `ui::ListProps::items` (use `.children`) and `ui::RadioGroupProps::row` (use `.direction = ui::Direction::Row`). C++26 reflection stays opt-in (`reactx::reflection`, native builds) and outside this promise until the compilers agree on it.
+**API stability.** The public API is what `include/reactx/` declares outside `detail` namespaces, the `reactx` CLI commands and options, `reactx.json`, and the CMake functions and targets (`reactx_add_app`, `reactx::reactx`, `reactx::testing`, ...). Since 1.0 it changes only in MAJOR releases. Names are never renamed in place: a better name is added and the old one is marked deprecated (in the code comment, the docs and the CHANGELOG's "Deprecated" section) and keeps working until 2.0. The test `reactx_api_check` holds the public headers to a snapshot (`api/reactx.api`), so no change slips in unnoticed. Deprecated so far: `ui::ListProps::items` (use `.children`) and `ui::RadioGroupProps::row` (use `.direction = ui::Direction::Row`). C++26 reflection stays opt-in (`reactx::reflection`, native builds) and outside this promise until the compilers agree on it. The libraries in `library/` (`reactx::charts`, `reactx::i18n`) are a preview: their API may still change in a MINOR release (noted in the CHANGELOG) until it is declared stable.
 
 ---
 

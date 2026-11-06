@@ -60,10 +60,15 @@ include/reactx/   public headers (the module re-exports them)
 src/              implementation; utility_hooks.cpp = timers, window size, storage
 modules/          reactx.cppm — `import reactx;`
 tools/            reactx.cpp (the CLI, its project templates are string literals in it), serve.cpp
+library/          libraries that come with ReactX: charts/, i18n/ (reactx::charts, reactx::i18n)
 examples/         demos and the website (site.cpp + site_docs.hpp + web/site_shell.html)
 tests/            one executable per area; test_cli.cpp runs the real CLI
 web/              HTML shells for the web builds
 ```
+
+## Libraries (`library/`)
+
+Each library is a folder `library/<name>/` with `CMakeLists.txt` (target `reactx_<name>`, alias `reactx::<name>`, linked to `reactx`), `include/rx/<name>.hpp` (namespace `rx::<name>`), `src/` and a README (English and Russian); add it to `library/CMakeLists.txt`. It goes into the web build, so the WebAssembly rules above apply. Libraries are a preview, outside `api/reactx.api`: their API may change in a MINOR release, with a CHANGELOG entry. In an app's build they are `EXCLUDE_FROM_ALL`: only linked ones compile.
 
 ## Changes that need more than code
 

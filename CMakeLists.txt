@@ -118,6 +118,15 @@ if(REACTX_STACKTRACE)
   endif()
 endif()
 
+# ---- libraries that come with ReactX (library/): reactx::charts, reactx::i18n ----
+# In an app's build they are compiled only when the app links them. Both the
+# web and the native build have them (the targets they link are defined below).
+if(PROJECT_IS_TOP_LEVEL)
+  add_subdirectory(library)
+else()
+  add_subdirectory(library EXCLUDE_FROM_ALL)
+endif()
+
 if(EMSCRIPTEN)
   # ---- Web build (emcmake cmake ...): core + DOM backend ----
   add_library(reactx

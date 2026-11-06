@@ -6,9 +6,11 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ## [Не выпущено]
 
-### Изменено
+### Добавлено
 
-- Документация: [rx-charts](https://github.com/sargisis/rx-charts), первая библиотека для ReactX (столбцы, линии, круговые графики; SVG в браузере, символы в терминале), — в README, на сайте и в llms.txt.
+- Библиотеки, которые идут вместе с ReactX, в папке `library/`: подключаются через `target_link_libraries(my_app PRIVATE reactx::charts reactx::i18n)`, без скачивания. Собираются только подключённые, а неиспользуемая ничего не добавляет к `.wasm`. Это предварительная версия: их API ещё может меняться в MINOR-релизе.
+  - `reactx::charts` (`rx/charts.hpp`): столбцы, линии и круговые графики — SVG в браузере, блочные символы и Брайль в терминале. Переехала сюда из [rx-charts](https://github.com/sargisis/rx-charts) 0.1.0 (тот же код; старый репозиторий продолжает работать).
+  - `reactx::i18n` (`rx/i18n.hpp`): переводы с `{name}`, множественным числом (правила CLDR) и `select`; `useTranslation()`, `setLanguage()` (запоминается, `<html lang>` следует за ним), `languagePicker()`; числа, проценты, деньги, даты, время и «5 минут назад» на en, ru, uk, hy, de, fr, es, it, pt, pl; сообщения из JSON-файлов (`loadMessages`).
 
 ## [1.1.0] — 2026-11-03
 

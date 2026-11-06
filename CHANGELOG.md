@@ -6,9 +6,11 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
-### Changed
+### Added
 
-- Docs: [rx-charts](https://github.com/sargisis/rx-charts), the first ReactX library (bar, line and pie charts; SVG in the browser, characters in a terminal), in README, the site and llms.txt.
+- Libraries that come with ReactX, in `library/`: link them with `target_link_libraries(my_app PRIVATE reactx::charts reactx::i18n)`, no download. Only linked ones are compiled, and an unused one adds nothing to a `.wasm`. They are a preview: their API may still change in a MINOR release.
+  - `reactx::charts` (`rx/charts.hpp`): bar, line and pie charts — SVG in the browser, block and braille characters in a terminal. It moved here from [rx-charts](https://github.com/sargisis/rx-charts) 0.1.0 (same code; the old repository keeps working).
+  - `reactx::i18n` (`rx/i18n.hpp`): translations with `{name}`, plurals (CLDR rules) and `select`; `useTranslation()`, `setLanguage()` (remembered, `<html lang>` follows it), `languagePicker()`; numbers, percents, money, dates, times and "5 minutes ago" in en, ru, uk, hy, de, fr, es, it, pt, pl; messages from JSON files (`loadMessages`).
 
 ## [1.1.0] — 2026-11-03
 

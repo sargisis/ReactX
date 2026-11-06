@@ -267,7 +267,10 @@ server.run();
 
 ## Libraries
 
-`reactx add <name> <git-url> --rev <tag> --target <cmake-target>` adds a library. Charts that work in both backends: `reactx add rx-charts https://github.com/sargisis/rx-charts.git --rev v0.1.0 --target rx::charts`, then `#include "rx/charts.hpp"` and `rx::charts::bar({.labels = {"Mon", "Tue"}, .series = {{.name = "Steps", .values = {6200, 8100}}}, .title = "Steps", .unit = ""})`, `charts::line({.labels, .series, .height /*px*/, .rows /*terminal*/})`, `charts::pie({.labels, .values, .donut = true})` — SVG in the browser, block and braille characters in a terminal (https://github.com/sargisis/rx-charts).
+`reactx add <name> <git-url> --rev <tag> --target <cmake-target>` adds a library from git. Libraries that come with ReactX (since v1.2, in `library/`; a preview, the API may still change in a minor release) need no download: add them to the app's `target_link_libraries` in CMakeLists.txt.
+
+- Charts, both backends — `reactx::charts`, `#include "rx/charts.hpp"`: `rx::charts::bar({.labels = {"Mon", "Tue"}, .series = {{.name = "Steps", .values = {6200, 8100}}}, .title = "Steps", .unit = ""})`, `charts::line({.labels, .series, .height /*px*/, .rows /*terminal*/})`, `charts::pie({.labels, .values, .donut = true})` — SVG in the browser, block and braille characters in a terminal.
+- Translations — `reactx::i18n`, `#include "rx/i18n.hpp"`: in main() `rx::i18n::setup({.languages = {{.code = "en", .name = "English", .messages = {{"cart", "{n, plural, one {# item} other {# items}}"}}}, {.code = "ru", .name = "Русский", .messages = {...}}}})`; in a component `auto t = rx::i18n::useTranslation();` then `t("cart", {{"n", 3}})`, `t.number(x)`, `t.currency(x, "EUR")`, `t.date(std::chrono::year{2026} / 11 / 6, rx::i18n::DateStyle::Long)`, `t.time(14, 5)`, `t.relative(-300s)`. Messages: `{name}`, `{n, plural, =0 {..} one {..} few {..} many {..} other {..}}` (`#` = n), `{x, select, a {..} other {..}}`. `rx::i18n::setLanguage("ru")` re-renders and remembers the choice; `rx::i18n::languagePicker({.label = "Language"})` is a ready select; `rx::i18n::loadMessages(lang, "/locales/ru.json")` fetches nested JSON. Built-in formats: en ru uk hy de fr es it pt pl. No std::format inside.
 
 ## Rules that keep code correct
 

@@ -164,9 +164,11 @@ inline const std::vector<Page>& pagesEn() {
                  "reactx build\n# index.wasm: 122 KB (the page shows nothing until it is downloaded)\n"
                  "#   biggest parts: src/app.cpp 23%, ReactX reconciler.cpp 15%, the C++ library 12%, ..."},
                 {"Libraries", "reactx add records a git repository in reactx.json; CMake fetches it on the next build, "
-                              "and --target links it to your app. rx-charts (bar, line and pie charts: SVG in the browser, "
-                              "characters in a terminal) is a ReactX library added this way.",
-                 "reactx add rx-charts https://github.com/sargisis/rx-charts.git --rev v0.1.0 --target rx::charts\n"
+                              "and --target links it to your app. (v1.2) Libraries that come with ReactX, in library/, need no "
+                              "download: link them in CMakeLists.txt. reactx::charts draws bar, line and pie charts (SVG in the "
+                              "browser, characters in a terminal); reactx::i18n gives translations, plurals, numbers, money and "
+                              "dates in 10 languages. They are a preview: the API may still change in a minor release.",
+                 "# CMakeLists.txt\ntarget_link_libraries(my_app PRIVATE reactx::charts reactx::i18n)\n\n"
                  "reactx add fmt https://github.com/fmtlib/fmt.git --rev 11.0.2 --target fmt::fmt\nreactx remove fmt"},
                 {"reactx update", "Moves your project to the newest ReactX release. --check only tells you whether there is one.",
                  "reactx update --check   # ReactX v1.0.1 -> v1.1.0 is available\n"

@@ -553,7 +553,7 @@ ctest --preset debug -LE slow                       # быстрые тесты;
 <details>
 <summary><b>Публикация сайта на GitHub Pages</b></summary>
 
-Сайт собирается и публикуется автоматически ([.github/workflows/pages.yml](.github/workflows/pages.yml)) при каждом push в `main`: нативные тесты (GCC 16), санитайзеры, сборка Emscripten, веб-тесты под Node; если всё прошло — `build/pages/site` записывается в ветку **`gh-pages`**. Один раз: **Settings → Pages → Deploy from a branch → `gh-pages` / `(root)`**.
+Сайт собирается и публикуется автоматически ([.github/workflows/pages.yml](.github/workflows/pages.yml)) при каждом push в `main`: когда прошли нативные тесты (GCC 16) и сборка Emscripten с веб-тестами под Node, `build/pages/site` публикуется в GitHub Pages через `actions/deploy-pages` (**Settings → Pages → Source: GitHub Actions**) — примерно через две минуты после push. Санитайзеры, анализатор и e2e-проверка CLI идут параллельно. Скомпилированные файлы (ccache) и Emscripten сохраняются между запусками.
 
 Сайт ([examples/site.cpp](examples/site.cpp), [web/site_shell.html](web/site_shell.html)) — на ReactX: главная с живым примером, документация ([examples/site_docs.hpp](examples/site_docs.hpp)) с поиском и оглавлением, демо, `llms.txt`. `404.html` — копия сайта, поэтому прямые ссылки вида `/ReactX/docs/hooks` открываются. Проверить локально как на Pages:
 

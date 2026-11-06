@@ -1,8 +1,9 @@
 # Builds and tests ReactX (GCC 16 and Emscripten; ASan+UBSan+LSan and TSan),
 # then publishes the site to GitHub Pages:
 #   https://sargisis.github.io/ReactX/
-# The site is pushed to the gh-pages branch; in Settings -> Pages choose
-# "Deploy from a branch" -> gh-pages / (root).
+# The deploy job publishes it with actions/deploy-pages (Settings -> Pages ->
+# Source: GitHub Actions). Compiled files (ccache) and Emscripten are kept
+# between runs, so a push usually builds only what changed.
 name: Build, test and publish the site
 
 on:
@@ -15,6 +16,10 @@ on:
 
 permissions:
   contents: read
+
+# The site is live after the native and web jobs (~1-2 min); the sanitizers,
+# the analyzer and the CLI end-to-end run go on in parallel and turn the run
+# red if they find something, but don't hold the publish back.
 
 concurrency:
   group: pages-${{ github.ref }}
@@ -51,8 +56,37 @@ jobs:
           -DCMAKE_CXX_FLAGS="-Wall -Wextra -Wpedantic -Werror"
       - name: Build
         run: cmake --build build -j
-      - name: Test (including the slow end-to-end CLI run)
-        run: ctest --test-dir build --output-on-failure
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -LE "slow|fuzz"  # fuzzing: the ASan job
+
+  # The reactx CLI end to end: makes real projects and builds them (slow, so a
+  # job of its own that the publish doesn't wait for).
+  cli-e2e:
+    name: CLI end to end
+    runs-on: ubuntu-24.04
+    container: gcc:16
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: |
+          apt-get update && apt-get install -y --no-install-recommends cmake ninja-build ccache
+          echo "CCACHE_DIR=$GITHUB_WORKSPACE/.ccache" >> "$GITHUB_ENV"; echo "CCACHE_MAXSIZE=500M" >> "$GITHUB_ENV"
+      - name: Restore the compiler cache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-e2e-${{ github.sha }}
+          restore-keys: |
+            ccache-e2e-
+            ccache-native-
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_FLAGS="-Wall -Wextra -Wpedantic -Werror"
+      - name: Build
+        run: cmake --build build -j
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -L slow
 
   # Memory errors, leaks and undefined behaviour stop the run on the first
   # finding: -fno-sanitize-recover makes UBSan fatal (by default it only
@@ -204,37 +238,24 @@ jobs:
           ctest --preset pages
 
       - name: Keep the site for the publish job
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-pages-artifact@v3
         with:
-          name: site
           path: build/pages/site
-          if-no-files-found: error
 
+  # Straight to GitHub Pages (Settings -> Pages -> Source: GitHub Actions):
+  # no gh-pages branch and no separate "pages build and deployment" run.
   deploy:
-    name: Publish to the gh-pages branch
+    name: Publish to GitHub Pages
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    needs: [native, sanitize-address, sanitize-thread, analyze, site]
+    needs: [native, site]
     runs-on: ubuntu-24.04
     permissions:
-      contents: write  # push the gh-pages branch with the built-in token
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Get the site
-        uses: actions/download-artifact@v4
-        with:
-          name: site
-          path: site
-
-      # A fresh one-commit branch each time: only the built files, no history.
-      - name: Push to gh-pages
-        env:
-          TOKEN: ${{ github.token }}
-        run: |
-          cd site
-          touch .nojekyll
-          git init -q -b gh-pages
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -q -m "Publish ${GITHUB_SHA::7}"
-          git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
-          echo "Published ${GITHUB_SHA::7}: https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"
+      - name: Publish
+        id: deployment
+        uses: actions/deploy-pages@v4

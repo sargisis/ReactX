@@ -565,7 +565,7 @@ With the Makefiles generator the module turns itself off and everything builds t
 <details>
 <summary><b>Publishing the site on GitHub Pages</b></summary>
 
-The site is built and published automatically ([.github/workflows/pages.yml](.github/workflows/pages.yml)) on every push to `main`: native tests (GCC 16), sanitizers, the Emscripten build and web tests under Node; if all pass, `build/pages/site` is written to the **`gh-pages`** branch. Once: **Settings → Pages → Deploy from a branch → `gh-pages` / `(root)`**.
+The site is built and published automatically ([.github/workflows/pages.yml](.github/workflows/pages.yml)) on every push to `main`: once the native tests (GCC 16) and the Emscripten build with its web tests under Node pass, `build/pages/site` goes to GitHub Pages with `actions/deploy-pages` (**Settings → Pages → Source: GitHub Actions**), about two minutes after the push. The sanitizers, the analyzer and the CLI end-to-end run go on in parallel. Compiled files (ccache) and Emscripten are kept between runs.
 
 The site ([examples/site.cpp](examples/site.cpp), [web/site_shell.html](web/site_shell.html)) is ReactX: a home page with a live example, docs ([examples/site_docs.hpp](examples/site_docs.hpp)) with search and a table of contents, demos, `llms.txt`. `404.html` is a copy of the site, so direct links like `/ReactX/docs/hooks` open. Check it locally the way Pages serves it:
 

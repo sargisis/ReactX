@@ -1,8 +1,8 @@
 # Builds and tests ReactX (GCC 16 and Emscripten; ASan+UBSan+LSan and TSan),
 # then publishes the site to GitHub Pages:
 #   https://sargisis.github.io/ReactX/
-# The deploy job publishes it with actions/deploy-pages (Settings -> Pages ->
-# Source: GitHub Actions). Compiled files (ccache) and Emscripten are kept
+# The site is pushed to the gh-pages branch (Settings -> Pages -> Deploy from a
+# branch -> gh-pages / (root)). Compiled files (ccache) and Emscripten are kept
 # between runs, so a push usually builds only what changed.
 name: Build, test and publish the site
 
@@ -246,24 +246,39 @@ jobs:
           ctest --preset pages
 
       - name: Keep the site for the publish job
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
+          name: site
           path: build/pages/site
+          if-no-files-found: error
 
-  # Straight to GitHub Pages (Settings -> Pages -> Source: GitHub Actions):
-  # no gh-pages branch and no separate "pages build and deployment" run.
   deploy:
-    name: Publish to GitHub Pages
+    name: Publish to the gh-pages branch
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     needs: [native, site]
     runs-on: ubuntu-24.04
     permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      contents: write  # push the gh-pages branch with the built-in token
     steps:
-      - name: Publish
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Get the site
+        uses: actions/download-artifact@v4
+        with:
+          name: site
+          path: site
+
+      # A fresh one-commit branch each time: only the built files, no history.
+      # GitHub then publishes the branch in its own "pages build and deployment"
+      # run (1-3 min), which this run doesn't wait for (deploy-pages did: 3-5 min).
+      - name: Push to gh-pages
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          cd site
+          touch .nojekyll
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Publish ${GITHUB_SHA::7}"
+          git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+          echo "Published ${GITHUB_SHA::7}: https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"

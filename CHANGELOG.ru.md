@@ -8,6 +8,7 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ### Добавлено
 
+- `reactx::query` в `library/query` (`rx/query.hpp`): данные с сервера с общим кэшем, как React Query / SWR. `useQuery({.key, .url})` даёт `data`, `error`, `loading`, `fetching`, `refetch()`; компоненты с одним ключом делят один запрос; данные из кэша показываются сразу и обновляются в фоне; повторы с паузами, `staleTime`, `cacheTime`, `refetchInterval`, `enabled`, свой тип данных через `.parse`, свой загрузчик через `.load`. `useMutation` для POST/PUT/DELETE с `invalidates` и оптимистичными обновлениями (`onMutate` возвращает откат); `invalidate`, `setData`, `getData`, `updateData`, `remove`, `clear` работают откуда угодно. Подключение: `reactx::query`.
 - Сборка быстрее с [ccache](https://ccache.dev): если он установлен, ReactX и приложения из `reactx_add_app` компилируются через него, и повторная сборка того же кода (чистая `build/`, новый проект) занимает секунды — сборка нового web-проекта с нуля 13 → 6 с, самого ReactX 37 → 15 с. `-DREACTX_CCACHE=OFF` выключает; свой `CMAKE_CXX_COMPILER_LAUNCHER` важнее. Код самого ReactX больше не сканируется на C++-модули (ccache не кэширует такую компиляцию); `import reactx;` работает как раньше.
 
 ## [1.2.0] — 2026-11-06

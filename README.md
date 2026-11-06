@@ -183,7 +183,7 @@ For a terminal: `#include "reactx/terminal.hpp"` and `TerminalApp().run(h(App))`
 | **Browser** | WebAssembly + DOM, controlled inputs, SVG, event delegation |
 | **Components** | `rx::ui`: buttons, inputs, checkboxes, tabs, modals, lists — themed |
 | **Apps** | a router (History API), `useFetch`, `useWebSocket`, JSON with reflection, an HTTP server in C++ (with WebSockets), a REST API |
-| **Libraries** | `library/`, link what you use: `reactx::charts` (bar, line and pie charts — SVG in the browser, characters in a terminal), `reactx::i18n` (translations, plurals, numbers, money and dates in 10 languages) |
+| **Libraries** | `library/`, link what you use: `reactx::charts` (bar, line and pie charts — SVG in the browser, characters in a terminal), `reactx::i18n` (translations, plurals, numbers, money and dates in 10 languages), `reactx::query` (next release: server data with a shared cache, like React Query: retries, invalidation, optimistic updates) |
 | **Tools** | the `reactx` CLI (`new`, `dev`, `build`, `test`, `add`, `remove`, `update`), the `import reactx;` module, `reactx/testing.hpp` (`Screen`: `click`, `type`, `press`, `shows`) and `TextRenderer` for tests |
 
 ## Reference
@@ -565,7 +565,7 @@ With the Makefiles generator the module turns itself off and everything builds t
 <details>
 <summary><b>Publishing the site on GitHub Pages</b></summary>
 
-The site is built and published automatically ([.github/workflows/pages.yml](.github/workflows/pages.yml)) on every push to `main`: once the native tests (GCC 16) and the Emscripten build with its web tests under Node pass, `build/pages/site` goes to GitHub Pages with `actions/deploy-pages` (**Settings → Pages → Source: GitHub Actions**), about two minutes after the push. The sanitizers, the analyzer and the CLI end-to-end run go on in parallel. Compiled files (ccache) and Emscripten are kept between runs.
+The site is built and published automatically ([.github/workflows/pages.yml](.github/workflows/pages.yml)) on every push to `main`: once the native tests (GCC 16) and the Emscripten build with its web tests under Node pass, `build/pages/site` is pushed to the **`gh-pages`** branch about two minutes after the push (**Settings → Pages → Deploy from a branch → `gh-pages` / `(root)`**); GitHub publishes it a minute or two later. The sanitizers, the analyzer and the CLI end-to-end run go on in parallel. Compiled files (ccache) and Emscripten are kept between runs.
 
 The site ([examples/site.cpp](examples/site.cpp), [web/site_shell.html](web/site_shell.html)) is ReactX: a home page with a live example, docs ([examples/site_docs.hpp](examples/site_docs.hpp)) with search and a table of contents, demos, `llms.txt`. `404.html` is a copy of the site, so direct links like `/ReactX/docs/hooks` open. Check it locally the way Pages serves it:
 
@@ -686,7 +686,7 @@ at your option.
 
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in ReactX by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
 
-**API stability.** The public API is what `include/reactx/` declares outside `detail` namespaces, the `reactx` CLI commands and options, `reactx.json`, and the CMake functions and targets (`reactx_add_app`, `reactx::reactx`, `reactx::testing`, ...). Since 1.0 it changes only in MAJOR releases. Names are never renamed in place: a better name is added and the old one is marked deprecated (in the code comment, the docs and the CHANGELOG's "Deprecated" section) and keeps working until 2.0. The test `reactx_api_check` holds the public headers to a snapshot (`api/reactx.api`), so no change slips in unnoticed. Deprecated so far: `ui::ListProps::items` (use `.children`) and `ui::RadioGroupProps::row` (use `.direction = ui::Direction::Row`). C++26 reflection stays opt-in (`reactx::reflection`, native builds) and outside this promise until the compilers agree on it. The libraries in `library/` (`reactx::charts`, `reactx::i18n`) are a preview: their API may still change in a MINOR release (noted in the CHANGELOG) until it is declared stable.
+**API stability.** The public API is what `include/reactx/` declares outside `detail` namespaces, the `reactx` CLI commands and options, `reactx.json`, and the CMake functions and targets (`reactx_add_app`, `reactx::reactx`, `reactx::testing`, ...). Since 1.0 it changes only in MAJOR releases. Names are never renamed in place: a better name is added and the old one is marked deprecated (in the code comment, the docs and the CHANGELOG's "Deprecated" section) and keeps working until 2.0. The test `reactx_api_check` holds the public headers to a snapshot (`api/reactx.api`), so no change slips in unnoticed. Deprecated so far: `ui::ListProps::items` (use `.children`) and `ui::RadioGroupProps::row` (use `.direction = ui::Direction::Row`). C++26 reflection stays opt-in (`reactx::reflection`, native builds) and outside this promise until the compilers agree on it. The libraries in `library/` (`reactx::charts`, `reactx::i18n`, `reactx::query`) are a preview: their API may still change in a MINOR release (noted in the CHANGELOG) until it is declared stable.
 
 ---
 

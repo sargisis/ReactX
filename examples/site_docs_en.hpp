@@ -167,7 +167,8 @@ inline const std::vector<Page>& pagesEn() {
                               "and --target links it to your app. (v1.2.0+) Libraries that come with ReactX, in library/, need no "
                               "download: link them in CMakeLists.txt. reactx::charts draws bar, line and pie charts (SVG in the "
                               "browser, characters in a terminal); reactx::i18n gives translations, plurals, numbers, money and "
-                              "dates in 10 languages. They are a preview: the API may still change in a minor release.",
+                              "dates in 10 languages; (in the next release) reactx::query loads server data with a shared cache, "
+                              "like React Query. They are a preview: the API may still change in a minor release.",
                  "# CMakeLists.txt\ntarget_link_libraries(my_app PRIVATE reactx::charts reactx::i18n)\n\n"
                  "reactx add fmt https://github.com/fmtlib/fmt.git --rev 11.0.2 --target fmt::fmt\nreactx remove fmt"},
                 {"reactx update", "Moves your project to the newest ReactX release. --check only tells you whether there is one.",

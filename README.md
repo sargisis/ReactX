@@ -183,7 +183,7 @@ For a terminal: `#include "reactx/terminal.hpp"` and `TerminalApp().run(h(App))`
 | **Browser** | WebAssembly + DOM, controlled inputs, SVG, event delegation |
 | **Components** | `rx::ui`: buttons, inputs, checkboxes, tabs, modals, lists — themed |
 | **Apps** | a router (History API), `useFetch`, `useWebSocket`, JSON with reflection, an HTTP server in C++ (with WebSockets), a REST API |
-| **Libraries** | `library/`, link what you use: `reactx::charts` (bar, line and pie charts — SVG in the browser, characters in a terminal), `reactx::i18n` (translations, plurals, numbers, money and dates in 10 languages), `reactx::query` (next release: server data with a shared cache, like React Query: retries, invalidation, optimistic updates), `reactx::markdown` (next release: Markdown as HTML in the browser, colors in a terminal) |
+| **Libraries** | `library/`, link what you use: `reactx::charts` (bar, line and pie charts — SVG in the browser, characters in a terminal), `reactx::i18n` (translations, plurals, numbers, money and dates in 10 languages), `reactx::query` (server data with a shared cache, like React Query: retries, invalidation, optimistic updates), `reactx::markdown` (Markdown as HTML in the browser, colors in a terminal) |
 | **Tools** | the `reactx` CLI (`new`, `dev`, `build`, `test`, `add`, `remove`, `update`), the `import reactx;` module, `reactx/testing.hpp` (`Screen`: `click`, `type`, `press`, `shows`) and `TextRenderer` for tests |
 
 ## Reference

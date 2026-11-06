@@ -6,6 +6,12 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ## [Не выпущено]
 
+## [1.3.0] — 2026-11-06
+
+Ещё две библиотеки, которые идут вместе с ReactX, — данные с сервера с кэшем и Markdown — и более быстрая сборка с ccache. В существующих приложениях ничего не меняется.
+
+**Обновление:** `reactx upgrade`, затем `reactx update` в каждом проекте; потом `target_link_libraries(my_app PRIVATE reactx::query reactx::markdown)` для нужных библиотек.
+
 ### Добавлено
 
 - `reactx::markdown` в `library/markdown` (`rx/markdown.hpp`): `view({.text})` показывает Markdown — семантический HTML в браузере (с небольшим CSS, который легко перебить), цвета и отступы в терминале. Основы CommonMark плюс таблицы, списки задач, зачёркивание и голые ссылки из GitHub; HTML показывается как текст, ссылки `javascript:` отбрасываются, так что текст от пользователей безопасен. `.link` делает внутренние ссылки ссылками роутера; `parse()` даёт документ (заголовки с id — для оглавления), `plainText()` убирает разметку. Подключение: `reactx::markdown`.
@@ -561,7 +567,8 @@ ReactX без установки компиляторов: готовый `react
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v1.2.0...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/sargisis/ReactX/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/sargisis/ReactX/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/sargisis/ReactX/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/sargisis/ReactX/compare/v1.0.0...v1.0.1

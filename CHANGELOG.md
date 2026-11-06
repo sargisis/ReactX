@@ -6,6 +6,12 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-11-06
+
+Two more libraries that come with ReactX — server data with a cache and Markdown — and faster builds with ccache. Nothing changes for existing apps.
+
+**Update:** `reactx upgrade`, then `reactx update` in each project; then `target_link_libraries(my_app PRIVATE reactx::query reactx::markdown)` for the ones you want.
+
 ### Added
 
 - `reactx::markdown` in `library/markdown` (`rx/markdown.hpp`): `view({.text})` shows Markdown — semantic HTML in the browser (with a little overridable CSS), colors and indents in a terminal. CommonMark basics plus GitHub tables, task lists, strikethrough and bare links; raw HTML is shown as text and `javascript:` links are dropped, so text from users is safe. `.link` makes internal links router links; `parse()` gives the document (headings with ids, for a table of contents), `plainText()` strips the markup. Link `reactx::markdown`.
@@ -561,7 +567,8 @@ The first release.
 - **A documentation site** built with ReactX: https://sargisis.github.io/ReactX/, published by GitHub Actions through the `gh-pages` branch.
 - The version in one place (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; new projects from `reactx new` use ReactX by release tag.
 
-[Unreleased]: https://github.com/sargisis/ReactX/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/sargisis/ReactX/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/sargisis/ReactX/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/sargisis/ReactX/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/sargisis/ReactX/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/sargisis/ReactX/compare/v1.0.0...v1.0.1

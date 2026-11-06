@@ -21,7 +21,7 @@ Element Counter(const CounterProps& props) {
                          {"onClick", [setCount] { setCount([](int c) { return c + 1; }); }}}, {"+1"}),
             h("button", {{"id", "reset"}, {"onClick", [setCount] { setCount(0); }}}, {"reset"}),
         }),
-        h("p", {{"className", "hint"}}, {"C++26 → WebAssembly. No JavaScript written by hand."}),
+        h("p", {{"className", "hint"}}, {"C++ → WebAssembly. No JavaScript written by hand."}),
     });
 }
 

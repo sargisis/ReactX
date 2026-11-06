@@ -442,7 +442,7 @@ Element About(const AboutProps&) {
     useTitle("About");  // the tab's title on this page (prerendered pages get it too)
     return h("section", {{"className", "page"}}, {
         h("h1", {}, {"About"}),
-        h("p", {}, {"Made with ReactX: React-like UI in C++26, compiled to WebAssembly."}),
+        h("p", {}, {"Made with ReactX: React-like UI in C++, compiled to WebAssembly."}),
     });
 }
 
@@ -633,7 +633,7 @@ No GCC 16 or Emscripten here? Open the folder in VS Code and "Reopen in Containe
 // For AI coding agents working in the project (and for people).
 constexpr std::string_view kAgents = R"md(# {{name}} — notes for coding agents
 
-A [ReactX](https://sargisis.github.io/ReactX/) {{kind}} app in C++26. ReactX is React for C++: function
+A [ReactX](https://sargisis.github.io/ReactX/) {{kind}} app in C++ (a C++26 compiler: GCC 16+, Emscripten 6+). ReactX is React for C++: function
 components, hooks, a reconciler. The full API and the usual mistakes are in
 https://sargisis.github.io/ReactX/llms.txt — read it before writing code.
 

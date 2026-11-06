@@ -4,7 +4,7 @@
 
 # ReactX
 
-**React in C++26. The same component code runs in a terminal and in a browser.**
+**React in C++. The same component code runs in a terminal and in a browser.**
 
 [Русский](README.ru.md) · **English**
 
@@ -28,7 +28,7 @@
 New to ReactX? Make a project and open its folder in Codex, Cursor or Claude Code: every project from `reactx new` has an `AGENTS.md` they read on their own. In a plain chat (ChatGPT), start with:
 
 ```text
-We're using ReactX, a C++26 UI framework (not JavaScript): https://github.com/sargisis/ReactX.
+We're using ReactX, a C++ UI framework (not JavaScript): https://github.com/sargisis/ReactX.
 Read https://sargisis.github.io/ReactX/llms.txt first — it has the whole API.
 Don't invent anything that isn't there.
 ```
@@ -38,8 +38,8 @@ Don't invent anything that isn't there.
 - **Like React, but C++.** Components are plain functions, state lives in hooks, and a reconciler with keys and batched updates applies the changes.
 - **One codebase, two worlds.** A terminal (ANSI, Flexbox on Yoga, focus, keyboard) and a browser (WebAssembly + DOM). The ready-made `rx::ui` components look at home in both.
 - **Types catch mistakes.** Props are your own struct: `h(Counter, {.start = 5})`. A typo in a field name or a wrong type is found by the compiler, not by your users.
-- **The whole stack in C++.** A router, `useFetch`, its own JSON (with C++26 reflection), an HTTP server and the `reactx` CLI — no Node, npm or webpack. A counter in the browser is a 93 KB `.wasm` (41 KB over the network, gzip).
-- **Modern, strict C++.** C++26 contracts, `std::expected` for errors, a hardened standard library; every push runs under ASan, UBSan and ThreadSanitizer.
+- **The whole stack in C++.** A router, `useFetch`, its own JSON (with reflection), an HTTP server and the `reactx` CLI — no Node, npm or webpack. A counter in the browser is a 93 KB `.wasm` (41 KB over the network, gzip).
+- **Modern, strict C++.** Contracts, `std::expected` for errors, a hardened standard library; every push runs under ASan, UBSan and ThreadSanitizer.
 - **This site is built with ReactX too:** [sargisis.github.io/ReactX](https://sargisis.github.io/ReactX/).
 
 ### ReactX or Preact?
@@ -50,7 +50,7 @@ If you write a web app and your team writes JavaScript, take Preact (or React): 
 |---|---|---|
 | A counter app, over the network (gzip) | ~47 KB (41 KB `.wasm` + 6 KB `.js`) | ~5 KB (the library and hooks are ~4–5 KB) |
 | Before the first paint | the `.wasm` is downloaded and compiled; prerendering (`renderToString`, below) hides it | the JS is parsed and run |
-| Language, types | C++26: props are structs the compiler checks | JavaScript / TypeScript |
+| Language, types | C++: props are structs the compiler checks | JavaScript / TypeScript |
 | Also runs in a terminal | yes, the same components | no |
 | JavaScript libraries | through `useNodeRef` + `rx::domElement` ([Chart.js demo](examples/web_chart.cpp)) | directly, npm |
 | Server rendering | `renderToString` (no hydration yet) | `preact-render-to-string` + hydration |
@@ -183,7 +183,7 @@ For a terminal: `#include "reactx/terminal.hpp"` and `TerminalApp().run(h(App))`
 | **Browser** | WebAssembly + DOM, controlled inputs, SVG, event delegation |
 | **Components** | `rx::ui`: buttons, inputs, checkboxes, tabs, modals, lists — themed |
 | **Apps** | a router (History API), `useFetch`, `useWebSocket`, JSON with reflection, an HTTP server in C++ (with WebSockets), a REST API |
-| **Libraries** | `library/`, link what you use: `reactx::charts` (bar, line and pie charts — SVG in the browser, characters in a terminal), `reactx::i18n` (translations, plurals, numbers, money and dates in 10 languages), `reactx::query` (server data with a shared cache, like React Query: retries, invalidation, optimistic updates), `reactx::markdown` (Markdown as HTML in the browser, colors in a terminal), `reactx::icons` (next release: 51 line icons, SVG in the browser, symbols in a terminal) |
+| **Libraries** | `library/`, link what you use: `reactx::charts` (bar, line and pie charts — SVG in the browser, characters in a terminal), `reactx::i18n` (translations, plurals, numbers, money and dates in 10 languages), `reactx::query` (server data with a shared cache, like React Query: retries, invalidation, optimistic updates), `reactx::markdown` (Markdown as HTML in the browser, colors in a terminal), `reactx::icons` (51 line icons, SVG in the browser, symbols in a terminal) |
 | **Tools** | the `reactx` CLI (`new`, `dev`, `build`, `test`, `add`, `remove`, `update`), the `import reactx;` module, `reactx/testing.hpp` (`Screen`: `click`, `type`, `press`, `shows`) and `TextRenderer` for tests |
 
 ## Reference

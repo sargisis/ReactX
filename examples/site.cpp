@@ -580,14 +580,14 @@ Element code(std::string s) { return h("code", {}, {std::move(s)}); }
 
 Element Home(const Props&) {
     bool en = useEnglish();
-    useTitle(tr(en, "ReactX — React for C++26", "ReactX — React на C++26"));
+    useTitle(tr(en, "ReactX — React for C++", "ReactX — React на C++"));
     return h("div", {{"className", "wrap"}}, {
         h(Spotlight, {.className = "hero", .children = {
             h("div", {}, {
                 h("a", {{"className", "eyebrow"}, {"href", "https://github.com/sargisis/ReactX/releases/tag/v" + std::string(rx::version())}},
                   {h("b", {}, {"●"}), "v" + std::string(rx::version()) + tr(en, " is out — what's new →", " вышла — что нового →")}),
-                en ? h("h1", {}, {"React", h("br"), "for ", h("em", {}, {"C++26"}), "."})
-                   : h("h1", {}, {"React", h("br"), "на ", h("em", {}, {"C++26"}), "."}),
+                en ? h("h1", {}, {"React", h("br"), "for ", h("em", {}, {"C++"}), "."})
+                   : h("h1", {}, {"React", h("br"), "на ", h("em", {}, {"C++"}), "."}),
                 h("p", {{"className", "lead"}},
                   {tr(en, "Components, hooks and a reconciler — like React, in C++. The same code draws in the terminal and in the browser.",
                       "Компоненты, хуки и reconciler — как в React. Один и тот же код рисуется в терминале и в браузере.")}),
@@ -621,7 +621,7 @@ Element Home(const Props&) {
                 Feature(tr(en, "Two backends", "Два бэкенда"), {tr(en, "Terminal (ANSI, Flexbox layout) and browser (the DOM through WebAssembly).",
                                                                   "Терминал (ANSI, Flexbox на Yoga) и браузер (DOM через WebAssembly).")}),
                 Feature(tr(en, "Router and data", "Роутер и данные"), {tr(en, "Pages, links, ", "Страницы, ссылки, "), code("useFetch"),
-                                                                       tr(en, ", JSON with C++26 reflection.", ", свой JSON с рефлексией C++26.")}),
+                                                                       tr(en, ", JSON with reflection.", ", свой JSON с рефлексией.")}),
                 Feature(tr(en, "C++ dev server", "Сервер на C++"), {code("reactx dev"), tr(en, " rebuilds and reloads the page on every save; ", " пересобирает и обновляет страницу при сохранении; "),
                                                                     code("--proxy"), tr(en, " for your own backend.", " — для своего бэкенда.")}),
                 Feature(tr(en, "Safe by default", "Надёжность"), {tr(en, "Error boundaries, ", "Границы ошибок, "), code("std::expected"),
@@ -1167,7 +1167,7 @@ Element Site(const Props&) {
         }),
         h("footer", {{"className", "footer"}}, {
             h("div", {{"className", "wrap"}}, {
-                h("span", {}, {"ReactX v" + std::string(rx::version()) + " · C++26 → WebAssembly"}),
+                h("span", {}, {"ReactX v" + std::string(rx::version()) + " · C++ → WebAssembly"}),
                 h("span", {}, {tr(en, "This site is built with ReactX · ", "Этот сайт написан на ReactX · "),
                                h("a", {{"href", "https://github.com/sargisis/ReactX"}}, {tr(en, "source", "исходники")})}),
             }),
@@ -1202,7 +1202,7 @@ int main() {
 // app then replaces it with the same markup, so pages show long before
 // index.wasm arrives (and search engines read them).
 std::string titleOf(std::string_view route, bool en) {
-    if (route == "/") return tr(en, "ReactX — React for C++26", "ReactX — React на C++26");
+    if (route == "/") return tr(en, "ReactX — React for C++", "ReactX — React на C++");
     if (route == "/docs") return tr(en, "Documentation — ReactX", "Документация — ReactX");
     if (route == "/demos") return tr(en, "Demos — ReactX", "Демо — ReactX");
     const auto* page = findPage(route.substr(std::string_view("/docs/").size()), en);

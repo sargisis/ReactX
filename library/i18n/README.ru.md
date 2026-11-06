@@ -1,6 +1,6 @@
 # reactx::i18n
 
-Переводы, множественное число, числа и даты для приложений на [ReactX](https://github.com/sargisis/ReactX) (C++26) — в браузере и в терминале, без ICU и без `std::format` (он добавил бы к `.wasm` ~100 КБ).
+Переводы, множественное число, числа и даты для приложений на [ReactX](https://github.com/sargisis/ReactX) — в браузере и в терминале, без ICU и без `std::format` (он добавил бы к `.wasm` ~100 КБ).
 
 In English: [README.md](README.md).
 

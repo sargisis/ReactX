@@ -118,7 +118,7 @@ Element App(const Props& props) {
     // ---- About tab ----
     std::vector<Element> aboutTab = {
         ui::card({.title = "ReactX", .children = {
-            ui::text({.text = "A React-like UI framework in C++26, drawn in your terminal."}),
+            ui::text({.text = "A React-like UI framework in C++, drawn in your terminal."}),
             ui::text({.text = "Layout by Yoga (Flexbox), components from rx::ui.", .muted = true}),
         }}),
         ui::button({.label = "say hi", .onClick = [] { ui::toast({.text = "Hi from rx::ui", .variant = ui::Variant::Primary}); }}),

@@ -1,6 +1,6 @@
 # reactx::i18n
 
-Translations, plurals, numbers and dates for [ReactX](https://github.com/sargisis/ReactX) apps in C++26 — in the browser and in a terminal, with no ICU and no `std::format` (it would add ~100 KB to a `.wasm`).
+Translations, plurals, numbers and dates for [ReactX](https://github.com/sargisis/ReactX) apps — in the browser and in a terminal, with no ICU and no `std::format` (it would add ~100 KB to a `.wasm`).
 
 На русском: [README.ru.md](README.ru.md).
 

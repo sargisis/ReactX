@@ -6,6 +6,12 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ## [Не выпущено]
 
+## [1.4.0] — 2026-11-06
+
+Иконки, страница со всеми библиотеками вживую и более лёгкая `reactx::i18n`. В существующих приложениях ничего не меняется.
+
+**Обновление:** `reactx upgrade`, затем `reactx update` в каждом проекте; `target_link_libraries(my_app PRIVATE reactx::icons)` для иконок.
+
 ### Добавлено
 
 - На сайте есть страница с библиотеками вживую — `web_libraries.html` (ссылка с /demos; `#icons` и подобные открывают вкладку): `reactx::query` с кэшем на два списка, оптимистичным обновлением и его откатом, редактор Markdown с предпросмотром, графики, все иконки и форматы i18n на 10 языках. Это отдельная страница, поэтому `.wasm` сайта библиотеки не несёт.
@@ -13,6 +19,7 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ### Изменено
 
+- ReactX представляется как «React на C++» (сайт, README, демо, шаблоны проектов, описание репозитория); C++26 называется там, где это важно, — нужные компиляторы и используемые возможности (контракты, рефлексия).
 - `reactx::i18n` стоит меньше в `.wasm`: встроенные данные 10 языков — постоянные таблицы, `Locale` создаётся только для запрошенного языка, а `parseMessages` / `loadMessages` / `languagePicker` лежат в отдельных файлах, так что приложение, которое их не вызывает, больше не тянет `rx::fetch`, JSON-парсер и `rx::ui` (сайт ReactX: +2,5 КБ gzip за переключатель языка, а не +22 КБ). Сайт хранит язык в `reactx::i18n`.
 
 ### Исправлено
@@ -580,7 +587,8 @@ ReactX без установки компиляторов: готовый `react
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v1.3.0...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/sargisis/ReactX/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/sargisis/ReactX/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/sargisis/ReactX/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/sargisis/ReactX/compare/v1.0.1...v1.1.0

@@ -1,6 +1,6 @@
 # reactx::charts
 
-Charts for [ReactX](https://github.com/sargisis/ReactX) apps in C++26. One call draws SVG in the browser and block and braille characters in a terminal: bars, lines and pies.
+Charts for [ReactX](https://github.com/sargisis/ReactX) apps. One call draws SVG in the browser and block and braille characters in a terminal: bars, lines and pies.
 
 ```cpp
 #include "rx/charts.hpp"

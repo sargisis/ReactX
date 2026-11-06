@@ -89,7 +89,7 @@ inline const std::vector<Page>& pagesEn() {
                 {"Writing it with an AI assistant", "AI models don't know ReactX yet: it is new. Every project made by reactx new "
                                                     "has an AGENTS.md that tools like Codex, Cursor and Claude Code read on their own. "
                                                     "In a plain chat, start with this sentence:",
-                 "We're using ReactX, a C++26 UI framework (not JavaScript): https://github.com/sargisis/ReactX.\n"
+                 "We're using ReactX, a C++ UI framework (not JavaScript): https://github.com/sargisis/ReactX.\n"
                  "Read https://sargisis.github.io/ReactX/llms.txt first — it has the whole API.\n"
                  "Don't invent anything that isn't there."},
                 {"Building ReactX itself", "Only if you want to change the framework: it needs GCC 16, CMake 3.28+ and Ninja.",
@@ -169,18 +169,18 @@ inline const std::vector<Page>& pagesEn() {
                               "browser, characters in a terminal); reactx::i18n gives translations, plurals, numbers, money and "
                               "dates in 10 languages; (v1.3.0+) reactx::query loads server data with a shared cache, "
                               "like React Query, and reactx::markdown shows Markdown (HTML in the browser, colors in a terminal); "
-                              "(in the next release) reactx::icons draws 51 line icons. They are a preview: the API may still change in a minor release.",
+                              "(v1.4.0+) reactx::icons draws 51 line icons. They are a preview: the API may still change in a minor release.",
                  "# CMakeLists.txt\ntarget_link_libraries(my_app PRIVATE reactx::charts reactx::i18n)\n\n"
                  "reactx add fmt https://github.com/fmtlib/fmt.git --rev 11.0.2 --target fmt::fmt\nreactx remove fmt"},
                 {"reactx update", "Moves your project to the newest ReactX release. --check only tells you whether there is one.",
-                 "reactx update --check   # ReactX v1.2.0 -> v1.3.0 is available\n"
+                 "reactx update --check   # ReactX v1.3.0 -> v1.4.0 is available\n"
                  "reactx update\n"
                  "reactx build"},
                 {"reactx.json", "Everything about the project in one file.",
                  "{\n"
                  "  \"name\": \"my-app\",\n"
                  "  \"template\": \"web\",\n"
-                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v1.3.0\" },\n"
+                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v1.4.0\" },\n"
                  "  \"dependencies\": { \"fmt\": { \"git\": \"...\", \"rev\": \"11.0.2\", \"target\": \"fmt::fmt\" } },\n"
                  "  \"web\": { \"base\": \"/\", \"proxy\": { \"/api\": \"http://127.0.0.1:5000\" } }\n"
                  "}"},
@@ -207,14 +207,14 @@ inline const std::vector<Page>& pagesEn() {
                  "cd my-app && reactx update && reactx build"},
                 {"Upgrading a project", "reactx update finds the newest release and writes it into reactx.json; the next build downloads it. "
                               "By hand: change rev to the new tag.",
-                 "reactx update\n# or in reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v1.3.0\" }"},
+                 "reactx update\n# or in reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v1.4.0\" }"},
                 {"The version in code", "",
-                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"1.3.0\"\n"
+                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"1.4.0\"\n"
                  "static_assert(REACTX_VERSION_MAJOR == 1);"},
             },
         },
         {
-            "safety", "C++26 and safety", "Modern C++, errors as values, checks that catch bugs early.",
+            "safety", "Modern C++ and safety", "Modern C++, errors as values, checks that catch bugs early.",
             {
                 {"Modern C++", "ReactX uses what the C++ standard library already has instead of reinventing it: "
                                "std::expected, std::flat_map, std::format, std::print and more. Terminal builds also use "

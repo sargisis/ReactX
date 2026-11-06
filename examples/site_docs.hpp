@@ -101,7 +101,7 @@ inline const std::vector<Page>& pages() {
                  "int main() { mountDom(h(Counter, {.start = 0})); }"},
                 {"С ИИ-помощником", "Нейросети ReactX пока не знают: он новый. В каждом проекте из reactx new есть AGENTS.md — "
                                     "Codex, Cursor и Claude Code читают его сами. В обычном чате начните с этой фразы:",
-                 "Пишем на ReactX — это C++26-фреймворк (не JavaScript): https://github.com/sargisis/ReactX.\n"
+                 "Пишем на ReactX — это фреймворк на C++ (не JavaScript): https://github.com/sargisis/ReactX.\n"
                  "Сначала прочитай https://sargisis.github.io/ReactX/llms.txt — там весь API.\n"
                  "Ничего, чего там нет, не придумывай."},
                 {"Сборка самого ReactX", "Только если хотите менять фреймворк: нужны GCC 16, CMake 3.28+ и Ninja.",
@@ -186,22 +186,22 @@ inline const std::vector<Page>& pages() {
                                 "рисует столбцы, линии и круговые графики (SVG в браузере, символы в терминале); reactx::i18n — "
                                 "переводы, множественное число, числа, деньги и даты на 10 языках; (v1.3.0+) reactx::query — "
                                 "данные с сервера с общим кэшем, как React Query, и reactx::markdown — Markdown (HTML в браузере, цвета "
-                                "в терминале); (в следующем релизе) reactx::icons — 51 линейная иконка. Это предварительная версия: "
+                                "в терминале); (v1.4.0+) reactx::icons — 51 линейная иконка. Это предварительная версия: "
                                 "API ещё может меняться в минорном релизе.",
                  "# CMakeLists.txt\ntarget_link_libraries(my_app PRIVATE reactx::charts reactx::i18n)\n\n"
                  "reactx add fmt https://github.com/fmtlib/fmt.git --rev 11.0.2 --target fmt::fmt\nreactx remove fmt"},
                 {"reactx update", "Переводит проект на новейший релиз ReactX: находит теги в репозитории из reactx.json, "
                                   "выбирает самый новый по SemVer (без -rc) и записывает его в rev. --check только проверяет, "
                                   "--to — конкретная версия. Следующий reactx build скачает её сам.",
-                 "reactx update --check   # ReactX v1.2.0 → v1.3.0 is available\n"
-                 "reactx update           # записывает v1.3.0 в reactx.json\n"
+                 "reactx update --check   # ReactX v1.3.0 → v1.4.0 is available\n"
+                 "reactx update           # записывает v1.4.0 в reactx.json\n"
                  "reactx update --to v0.3.0\n"
                  "reactx build"},
                 {"reactx.json", "Всё, что нужно проекту, в одном файле.",
                  "{\n"
                  "  \"name\": \"my-app\",\n"
                  "  \"template\": \"web\",\n"
-                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v1.3.0\" },\n"
+                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v1.4.0\" },\n"
                  "  \"dependencies\": { \"fmt\": { \"git\": \"...\", \"rev\": \"11.0.2\", \"target\": \"fmt::fmt\" } },\n"
                  "  \"web\": { \"base\": \"/\", \"proxy\": { \"/api\": \"http://127.0.0.1:5000\" } }\n"
                  "}"},
@@ -223,7 +223,7 @@ inline const std::vector<Page>& pages() {
                                      "остаётся опциональной (reactx::reflection, нативные сборки) и пока вне этого обещания.", ""},
                 {"Версия в коде", "Номер версии записан в одном месте — project(ReactX VERSION ...) в CMakeLists.txt; "
                                   "из него генерируется reactx/version.hpp.",
-                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"1.3.0\"\n"
+                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"1.4.0\"\n"
                  "static_assert(REACTX_VERSION_MAJOR == 1);"},
                 {"Обновить reactx", "Два шага: сам инструмент, потом каждый проект. reactx upgrade заменяет reactx новейшим релизом "
                                     "(проверяя SHA-256); до v0.14.0 — запустите установщик ещё раз. Раз в день reactx сам проверяет "
@@ -233,11 +233,11 @@ inline const std::vector<Page>& pages() {
                  "cd my-app && reactx update && reactx build"},
                 {"Обновить проект", "reactx update находит новейший релиз и записывает его в reactx.json; reactx build скачивает его. "
                                "Вручную — поменяйте rev на новый тег.",
-                 "reactx update\n# или в reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v1.3.0\" }"},
+                 "reactx update\n# или в reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v1.4.0\" }"},
             },
         },
         {
-            "safety", "Стандарт C++ и безопасность", "C++26, hardening, предусловия, std::expected, санитайзеры.",
+            "safety", "Стандарт C++ и безопасность", "Современный C++, hardening, предусловия, std::expected, санитайзеры.",
             {
                 {"Режим C++26", "Берём из стандартной библиотеки всё, что в ней есть, и не пишем замен тому, чего нет. "
                                 "Везде: std::expected, std::flat_map, std::flat_set, std::format, std::print, std::from_chars. "

@@ -113,7 +113,7 @@ reactx build                        # build/web/dist — файлы для лю�
                                     # (v1.1) set(REACTX_WEB_LTO ON) в CMakeLists.txt: на ~5% меньше, пересборка дольше
 reactx test                         # собрать и запустить tests/*.cpp (reactx/testing.hpp); reactx test <имя> — часть
 reactx add magic_enum https://github.com/Neargye/magic_enum.git --rev v0.9.8 --target magic_enum::magic_enum
-# (v1.2) библиотеки из library/: target_link_libraries(<app> PRIVATE reactx::charts reactx::i18n) в CMakeLists.txt
+# (v1.2.0+) библиотеки из library/: target_link_libraries(<app> PRIVATE reactx::charts reactx::i18n) в CMakeLists.txt
 reactx update                       # перевести проект на новейший релиз ReactX
 reactx upgrade                      # заменить сам reactx новейшим релизом
 reactx install [--check]            # скачать Emscripten (+ CMake, Ninja, если их нет) в ~/.reactx

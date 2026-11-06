@@ -6,6 +6,12 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ## [Не выпущено]
 
+## [1.2.0] — 2026-11-06
+
+Библиотеки, которые идут вместе с ReactX: графики и переводы, подключаются одной строкой в CMakeLists.txt. В существующих приложениях ничего не меняется.
+
+**Обновление:** `reactx upgrade`, затем `reactx update` в каждом проекте; потом `target_link_libraries(my_app PRIVATE reactx::charts reactx::i18n)` для нужных библиотек.
+
 ### Добавлено
 
 - Библиотеки, которые идут вместе с ReactX, в папке `library/`: подключаются через `target_link_libraries(my_app PRIVATE reactx::charts reactx::i18n)`, без скачивания. Собираются только подключённые, а неиспользуемая ничего не добавляет к `.wasm`. Это предварительная версия: их API ещё может меняться в MINOR-релизе.
@@ -549,7 +555,8 @@ ReactX без установки компиляторов: готовый `react
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v1.1.0...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/sargisis/ReactX/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/sargisis/ReactX/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/sargisis/ReactX/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/sargisis/ReactX/compare/v0.21.0...v1.0.0

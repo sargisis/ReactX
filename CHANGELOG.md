@@ -6,6 +6,12 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-11-06
+
+Libraries that come with ReactX: charts and translations, linked with one line in CMakeLists.txt. Nothing changes for existing apps.
+
+**Update:** `reactx upgrade`, then `reactx update` in each project; then `target_link_libraries(my_app PRIVATE reactx::charts reactx::i18n)` for the ones you want.
+
 ### Added
 
 - Libraries that come with ReactX, in `library/`: link them with `target_link_libraries(my_app PRIVATE reactx::charts reactx::i18n)`, no download. Only linked ones are compiled, and an unused one adds nothing to a `.wasm`. They are a preview: their API may still change in a MINOR release.
@@ -549,7 +555,8 @@ The first release.
 - **A documentation site** built with ReactX: https://sargisis.github.io/ReactX/, published by GitHub Actions through the `gh-pages` branch.
 - The version in one place (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; new projects from `reactx new` use ReactX by release tag.
 
-[Unreleased]: https://github.com/sargisis/ReactX/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/sargisis/ReactX/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/sargisis/ReactX/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/sargisis/ReactX/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/sargisis/ReactX/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/sargisis/ReactX/compare/v0.21.0...v1.0.0

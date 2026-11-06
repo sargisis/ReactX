@@ -6,6 +6,10 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ## [Не выпущено]
 
+### Добавлено
+
+- `reactx::forms` в `library/forms` (`rx/forms.hpp`): правила проверки (`required`, `minLength`, `maxLength`, `email`, `url`, `digits`, `oneOf`, `min`, `max`, `accepted`, свои через `rule`) и `Schema<T>` для структуры — `.field(name, &T::member, {правила})`, `.check(name, f)` для нескольких полей, `.validator()` для `ui::useForm` — плюс `JsonSchema` для JSON от клиента (типы, необязательные поля, `toJson` для ответа 422). Сообщения меняются один раз (`messages()`). Подключение: `reactx::forms`.
+
 ## [1.4.0] — 2026-11-06
 
 Иконки, страница со всеми библиотеками вживую и более лёгкая `reactx::i18n`. В существующих приложениях ничего не меняется.

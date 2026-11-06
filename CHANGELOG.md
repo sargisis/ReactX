@@ -6,6 +6,10 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Added
+
+- `reactx::forms` in `library/forms` (`rx/forms.hpp`): validation rules (`required`, `minLength`, `maxLength`, `email`, `url`, `digits`, `oneOf`, `min`, `max`, `accepted`, your own with `rule`) and `Schema<T>` for a struct — `.field(name, &T::member, {rules})`, `.check(name, f)` for several fields, `.validator()` for `ui::useForm` — plus `JsonSchema` for JSON from a client (types, optional fields, `toJson` for a 422 answer). Messages can be changed once (`messages()`). Link `reactx::forms`.
+
 ## [1.4.0] — 2026-11-06
 
 Icons, a page with all the libraries live, and a lighter `reactx::i18n`. Nothing changes for existing apps.

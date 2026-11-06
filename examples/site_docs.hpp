@@ -187,7 +187,8 @@ inline const std::vector<Page>& pages() {
                                 "переводы, множественное число, числа, деньги и даты на 10 языках; (v1.3.0+) reactx::query — "
                                 "данные с сервера с общим кэшем, как React Query, и reactx::markdown — Markdown (HTML в браузере, цвета "
                                 "в терминале); (v1.4.0+) reactx::icons — 51 линейная иконка; (в следующем релизе) "
-                                "reactx::forms — проверка форм и JSON, reactx::api — JSON API на HttpServer. Это предварительная версия: "
+                                "reactx::forms — проверка форм и JSON, reactx::api — JSON API на HttpServer, "
+                                "reactx::auth — вход (пароли, сессии, CSRF). Это предварительная версия: "
                                 "API ещё может меняться в минорном релизе.",
                  "# CMakeLists.txt\ntarget_link_libraries(my_app PRIVATE reactx::charts reactx::i18n)\n\n"
                  "reactx add fmt https://github.com/fmtlib/fmt.git --rev 11.0.2 --target fmt::fmt\nreactx remove fmt"},

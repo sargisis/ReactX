@@ -1,0 +1,377 @@
+# ReactX
+
+> ReactX is a React-like UI framework in modern C++: function components, hooks, a reconciler and keyed lists. The same component code renders in a terminal (ANSI + Flexbox on Yoga) and in the browser (WebAssembly + DOM, via Emscripten). It also has a router, `useFetch`, its own JSON library and an HTTP server, all in C++. Projects are created and built with the `reactx` CLI.
+
+Native (terminal) builds need GCC 16+ (the C++26 standard library); browser builds need only Emscripten 6+, CMake and Ninja, no GCC 16 (`reactx new` makes a browser project; `reactx dev` / `reactx build` build it with Emscripten). Code that also builds for the browser may only use what Emscripten's libc++ has (no reflection, `std::generator`, `<stacktrace>`). Docs: https://sargisis.github.io/ReactX/docs. Source: https://github.com/sargisis/ReactX.
+
+## Which version has what
+
+`reactx new` pins the project to the CLI's release (`"rev"` in `reactx.json`). Everything in this file is in v1.4.0 (from 1.0 on the API changes only in MAJOR releases: nothing in this file is renamed or removed before 2.0): `ui::input` `.type` (`ui::InputType::Password`, ...), `.error` on `ui::slider`, `router::redirectedFrom()`, the `arrowKeys` terminal prop, arrows in a terminal `radioGroup` and a click on a label focusing its field came in v1.0.0 (the v1.0.1+ notes below are behaviour fixed in v1.0.1, the v1.1.0+ ones are new: controlled `ui::tabs`, `REACTX_WEB_LTO`; the libraries `reactx::charts` and `reactx::i18n` came in v1.2.0, `reactx::query` and `reactx::markdown` in v1.3.0, `reactx::icons` in v1.4.0); `HttpServer` answering only known hosts (`allowHosts`, `--allow-host`), `setRequestTimeout` / `setMaxConnections` and `ui::card` `.level` came in v0.21.0; `.disabled` on form fields, `ui::list` `.children` and `radioGroup` `.direction` came in v0.20.0; nested routes (`/*`), `.allow` / `.redirect`, `router::redirect` and `link` `.exact` / `.replace` came in v0.19.0; `reactx test` and `reactx/testing.hpp` came in v0.18.0; the terminal `textarea`, editing at the cursor and wide characters came in v0.17.0; `ui::useForm`, `.error` on fields, `ui::textarea`, `radioGroup`, `slider` and `progress` came in v0.16.0; `ui::table`, `useTitle` and `mountDom` replacing the app in its container came in v0.15.0; `ui::useVirtualList`, `labelAbove`, `reactx upgrade`, `useCallback` with any signature, `ui::checkbox` `.onChange(bool)`, `FetchResponse::errorText()` and `useState` of types without `==` came in v0.14.0; `useWebSocket` and `HttpServer::webSocket` came in v0.13.0; prerendering from `reactx.json`, `ref.scrollTo` / `scrollBy` / `scrollMetrics`, the `scrollIntoView` prop and `HttpServer::onFile` came in v0.12.0; scrolling in the terminal (`overflow: "scroll"`, `ui::list({.scroll = true})`, `position: "fixed"`, `onScroll`) and `ref.scrollIntoView()` came in v0.11.0; the rx::ui components (`select`, `confirm`, `toast`/`toaster`, `tooltip`, `card`, `stack`, `text`) came in v0.10.0; `useNodeRef` / the `ref` prop / `ref.focus()`, `reactx/js.hpp`, pointer and hover events and the mouse in the terminal in v0.9.0; `renderToString` in v0.8.3. If a name from this file doesn't exist ("'useNodeRef' was not declared in this scope", "'confirm' is not a member of 'rx::ui'"), the project is on an older release: `reactx update` moves it to the newest one (`reactx --version` shows the CLI's).
+
+## A complete program
+
+Every file needs the includes, `using namespace rx;` and a `main`. A component alone does not build.
+
+`reactx/reactx.hpp` is the core only: `Element`, `h`, hooks, context, `memo`, stores, `Root`. Everything else has its own header: `router.hpp`, `ui.hpp`, `fetch.hpp`, `websocket.hpp` (`useWebSocket`), `json.hpp`, `dom.hpp` (`mountDom`), `terminal.hpp` (`TerminalApp`), `html.hpp` (`renderToString`), `js.hpp` (`domElement`, browser only), `text_renderer.hpp` (tests), `http.hpp` (server), `path.hpp` (`urlEncode`), `parse.hpp` (`parseNumber`), all under `reactx/`.
+
+```cpp
+// Browser app (reactx new my-app)
+#include <string>
+#include "reactx/dom.hpp"     // mountDom
+#include "reactx/reactx.hpp"  // Element, h, hooks, context, memo
+using namespace rx;
+
+struct CounterProps {
+    int start = 0;                                      // give every field a default
+    bool operator==(const CounterProps&) const = default;  // only needed for memo<Counter>
+};
+
+Element Counter(const CounterProps& p) {
+    auto [count, setCount] = useState(p.start);
+    return h("div", {{"className", "counter"}}, {
+        h("p", {}, {"Count: " + std::to_string(count)}),
+        h("button", {{"onClick", [setCount] { setCount([](int c) { return c + 1; }); }}}, {"+1"}),
+    });
+}
+
+int main() { mountDom(h(Counter, {.start = 5})); }
+```
+
+```cpp
+// Terminal app (reactx new my-tui --terminal)
+#include "reactx/reactx.hpp"
+#include "reactx/terminal.hpp"  // TerminalApp
+using namespace rx;
+
+struct AppProps { Callback onQuit{}; };
+Element App(const AppProps& p) { return h("box", {{"border", true}}, {h("button", {{"onClick", p.onQuit}}, {"quit"})}); }
+
+int main() {
+    if (!Terminal::isInteractive()) return 1;
+    TerminalApp app;
+    app.run(h(App, {.onQuit = [&app] { app.quit(); }}));
+}
+```
+
+## Elements and components
+
+- `h("tag", {{"prop", value}, ...}, {children...})` — a host element. Prop values: `bool`, numbers, `std::string`, handlers. A string child is a text node. `"key"` in props is the list key.
+- Components are plain functions. Preferred: a props struct — `Element Card(const CardProps&)`, called as `h(Card, {.title = "Hi"})` (C++20 designated initializers; a typo is a compile error). A `key` field becomes the element key; a `children` field (`std::vector<Element>`) receives children: `h(Card, {.title = "Hi"}, {h("p", {}, {"body"})})`. `h(Card)` uses default props. Give every field a default (`{}`), or `-Wextra` warns about omitted fields. A captureless lambda works the same way: `const auto Card = [](const CardProps& p) -> Element { ... };` then `h(Card, {.title = "Hi"})` (a lambda with captures can't be a component: pass the data in props).
+- Older style, still supported: `Element Card(const Props& p)` with `p.get<std::string>("title", "fallback")`, `p.children()`, called as `h(Card, {{"title", "Hi"}})`.
+- `fragment({children...})`, `text("...")`. DSL (optional, `using namespace rx::dsl;`): `tag::div.cls("card").id("x")("text", tag::button.onClick(f)("OK"))`, custom tags `"my-tag"_tag`.
+- `memo<Card>` skips re-rendering when props are equal (props struct: its `operator==`; `Props`: values with `==`, handlers equal only if from the same `useCallback`).
+
+## Hooks (call at the top level of a component, in the same order every render)
+
+- `auto [v, setV] = useState(initial);` — `setV(x)` or `setV([](const T& old) { return ...; })`; an equal value doesn't re-render (a type without `==`, e.g. `std::vector<MyStruct>`, re-renders on every set; before v0.14.0 it didn't compile — add `bool operator==(const MyStruct&) const = default;`). Capture setters by value in lambdas.
+- `useEffect(fn)`, `useEffect(fn, deps(a, b))`, `useEffect(fn, deps())` (once). `fn` may return a cleanup lambda.
+- `T& r = useRef(initial);` — mutable, no re-render. `auto el = useNodeRef();` + `{"ref", el}` — the element's node: `el.get()` is its `NodeHandle` (0 until committed, 0 again after removal), set before effects run; `el.focus()` focuses it; `el.scrollIntoView()` scrolls the containers around it so it shows (the least needed; both backends); on a scroll container `el.scrollMetrics()` (`std::optional<ScrollEvent>`: `top`, `scrollHeight`, `clientHeight`, ...), `el.scrollTo(top)`, `el.scrollBy(delta)` — e.g. keep the reader's place when older messages are added above: read `scrollMetrics()` before, then in an effect `scrollBy(now->scrollHeight - before->scrollHeight)`; in the browser `rx::domElement(el)` is the DOM element itself (see "JavaScript and the DOM"). `const auto& x = useMemo([&] { ... }, deps(a));` `useCallback(handler, deps(...))` — any handler: `Callback`, `KeyHandler`, `PointerHandler`, ... or (v0.14.0+) a lambda of its own signature, `std::function<void(int)> open = useCallback([setOpen](int id) { setOpen(id); }, deps());` for a memo row's `onOpen(id)`; write the parameter types out.
+- Context: `const auto Theme = createContext<std::string>("dark");` → `Theme.provide(value, {children})`, `useContext(Theme)`.
+- `useDebounce(value, 300ms)` — the value after it stopped changing (timers run on the UI thread).
+- `auto [v, setV] = useLocalStorage("key", default);` — `std::string`, `bool` or numbers; localStorage in the browser; natively only in memory (lost when the program exits). A third argument `[](const std::string& why) { ... }` is called when saving fails (quota, private mode); without it the value silently stays in memory only. Direct access with errors as values: `rx::storageRead(key)` → `std::expected<std::optional<std::string>, std::string>` (missing key = `std::nullopt`), `rx::storageWrite(key, value)`, `rx::storageRemove(key)` → `std::expected<void, std::string>`.
+- `WindowSize s = useWindowSize();` — browser window (px) or terminal (cells); re-renders on resize.
+- `useTitle("Orders (" + std::to_string(n) + ")");` (v0.15.0+) — the browser tab's title while the component is mounted; the previous title comes back on unmount (one per route page). Natively it only keeps the text; prerendered pages get it in their `<title>`.
+- `auto [state, dispatch] = useReducer([](const State& s, Action a) { ...; return next; }, State{});` — `dispatch(action)`; the newest reducer is used.
+- `useTimeout(fn, std::optional(5s))` once, `useInterval(fn, 1s)` repeatedly; `std::nullopt` switches off; unmounting cancels.
+- Shared state outside the tree (like Zustand): `const auto Cart = createStore<std::vector<Item>>({});` at namespace scope; `Cart.set(v)` / `Cart.update([](auto items) { items.push_back(x); return items; })` on the UI thread (handlers, effects, fetch callbacks); `const auto& items = useStore(Cart);` re-renders on every change, `auto n = useStore(Cart, [](const auto& c) { return c.size(); });` only when that part changes. Outside components read it directly: `const auto& items = Cart.get();` (the current value, no re-render) — e.g. in a `setLocalFetch` handler that answers with live data.
+- `std::string id = useId();` — app-unique and stable across renders, for `<label for>` / `aria-*`.
+- `errorBoundary([](const RenderError& e) { return h("p", {}, {e.message}); }, {children})` — if the children throw while rendering (on mount or a later update) the fallback shows instead; `e.retry()` renders them again. It shows the fallback until then, also when its route's parameters change: on a route page key it by the path, `{"/items/:id", errorBoundary(fallback, {h(Item)}, router::useLocation())}`, so another address starts fresh. Not for exceptions in event handlers or effects.
+- `useKeyboard([](const KeyEvent& k) { if (k.ctrl && k.key == "z") { undo(); return true; } return false; });` — app-wide shortcuts, wherever the focus is; runs before the focused element's `onKey`, `true` consumes the key. Keys that type text don't reach it while a text field has focus.
+
+## Events
+
+Handler props: `onClick` (`Callback = std::function<void()>`), `onInput` / `onChange` (`InputHandler`, gets the text; a checkbox's onChange gets "true"/"false"; `rx::boolHandler([setDone](bool on) { setDone(on); })` turns it into a bool), `onKey` (`KeyHandler`, gets `KeyEvent{.key, .ctrl, .alt, .shift}`; keys like "Enter", "Escape", "Up", "a"), `onSubmit` (forms), `onFocus` / `onBlur` (`Callback`; browser, and terminal focus moves), `onScroll` (`ScrollHandler`, gets `ScrollEvent{.top, .left, .scrollHeight, .scrollWidth, .clientHeight, .clientWidth}` with `nearBottom(margin = 100)`; pixels in the browser, rows on an `overflow: "scroll"` box in a terminal — there `nearBottom(3)`; doesn't bubble). The fields are `top` / `left`; `e.scrollTop()` / `e.scrollLeft()` return the same. Other events bubble to ancestors. `onPointerDown` / `onPointerMove` / `onPointerUp` (`PointerHandler`, gets `PointerEvent{.x, .y, .localX, .localY, .button, .buttons, .type}`; pixels in the browser, cells in a terminal, bubble) and `onMouseEnter` / `onMouseLeave` (`Callback`, don't bubble) work in the browser and in `TerminalApp` (mouse on by default; `app.setMouse(false)`). `{"pointerCapture", true}` on an element: after a press there, moves and the release stay on it (sliders); without it they go to the element under the pointer (drop targets). Give draggable elements `touch-action: none` (CSS) for phones. `ref.focus()` (a `NodeRef` from `useNodeRef`) focuses an element from code, in both backends. `{"scrollIntoView", selected}` on any element scrolls it into view when it becomes `true` (a selected row in a long list; no ref needed; in the browser not while the page is first built).
+
+Drag and drop (one source works in both backends; see `examples/kanban.cpp`): the item's `onPointerDown` remembers what is dragged, the target's `onMouseEnter` marks where it would land, the target's `onPointerUp` drops it; no `pointerCapture`, so the release reaches the target. A slider is the other case: `pointerCapture` on the knob, position from `e.x - grab` in `onPointerMove` while `e.buttons != 0`.
+
+```cpp
+h("div", {{"className", "card"}, {"style", "touch-action: none"},
+          {"onPointerDown", [setDragging, id](const PointerEvent& e) { if (e.button == 0) setDragging(id); }}}, {title});
+h("div", {{"onMouseEnter", [setOver, col] { setOver(col); }},
+          {"onPointerUp", [drop, col](const PointerEvent&) { drop(col); }}}, std::move(cards));  // drop(col) moves the card, clears dragging
+```
+
+Focus on open: `auto field = useNodeRef(); useEffect([field] { field.focus(); }, deps()); return h("input", {{"ref", field}});`
+
+Controlled input: `h("input", {{"value", text}, {"onInput", [setText](const std::string& t) { setText(t); }}})`. `checked` and a `<select>`'s `value` are controlled too: if the handler doesn't change the state, the page goes back to it. `href` / `src` with a `javascript:` URL are blocked.
+
+## Browser specifics
+
+Any HTML tag; `className`, `style` (a CSS string), `id`, any attribute. SVG works: `svg`, `rect`, `circle`, `path`, `g`, ... get the SVG namespace; write `svg:text` / `svg:a` for the tags HTML also has. `data-rx-self` on an element: its onClick only fires for clicks on itself (dialog backdrops). `data-rx-trap`: keeps Tab focus inside (dialogs). Styles go in `public/style.css` of the project.
+
+## Terminal specifics
+
+Tags: `box` (flex container, column by default), `text` (wraps; `wrap=false` truncates), `input` (`value`, `placeholder`), (v0.17.0+) `textarea` (`value`, `placeholder`, `rows`), `button`. Flexbox props like CSS in cells: `direction`, `justifyContent`, `alignItems`, `flexGrow`, `width`/`height` (number or "50%"), `padding`, `margin`, `gap`, `position` (`absolute`, or `fixed`: placed on the screen and drawn over everything — `ui::modal` and `ui::toaster` use it), `overflow` (`hidden`, or `scroll`). Content taller than the terminal is cut off, so long lists go in a scroll box: `h("box", {{"overflow", "scroll"}}, rows)` in a column is as tall as its rows, or takes the rows that are left when they don't fit (no height needed; (v1.0.1+) also inside a box or a `ui::tabs` tab that isn't stretched — before, it showed no rows there), the mouse wheel and PageUp/PageDown scroll it, moving the focus keeps the focused node visible, a border shows the position, `onScroll` reports it; or `ui::list({.children = items, .scroll = true})`. Look: `border`, `title`, `color`, `bg`, `bold`, `dim`, `underline`. Colors: black red green yellow blue magenta cyan white gray, `bright-<color>`. `input`, `textarea`, `button` and `focusable=true` take focus; Tab/arrows move it, Enter clicks. `trapFocus=true` keeps Tab inside (modals). (v1.0.0+) `arrowKeys=true`: while focused, Up/Down go to the element's `onKey` instead of moving the focus (a widget of your own that uses the arrows; Left/Right always reach `onKey`). A click on a `ui::` field's label focuses the field, as in the browser. Text fields (v0.17.0+) edit where the cursor is: Left/Right, Home/End, Ctrl+Left/Right by words, Backspace/Delete; a `textarea` also takes Enter (a new line) and Up/Down (between lines; past the first or last line the focus moves), wraps long lines and scrolls to the cursor. Wide characters (emoji, Chinese/Japanese/Korean) take two columns, so borders and columns stay in line; a character with its marks (👍🏽, é, a flag, a family emoji) is one for the cursor and Backspace.
+
+## One project, browser and terminal
+
+`mountDom` (`reactx/dom.hpp`) exists only in the browser build; natively it is a compile error that says so. `reactx build` / `reactx dev` build a web project for the browser; `--native` builds the same sources with GCC, which needs a native `main`. Components are shared as they are; only `main` differs:
+
+```cpp
+#ifdef __EMSCRIPTEN__
+#include "reactx/dom.hpp"
+#else
+#include "reactx/terminal.hpp"
+#endif
+int main() {
+#ifdef __EMSCRIPTEN__
+    mountDom(h(App));
+#else
+    TerminalApp app;
+    app.run(h(App));
+#endif
+}
+```
+
+A server (`rx::net::HttpServer`) is native-only: keep it in its own CMake target, not in the app's `main`. In a web project, after `reactx_add_app(...)` in CMakeLists.txt (`reactx build` makes the web app, the server is built with CMake natively, GCC 16+):
+
+```cmake
+if(NOT EMSCRIPTEN)
+  add_executable(api server/main.cpp)          # server/main.cpp: HttpServer, routes, run()
+  target_link_libraries(api PRIVATE reactx::reactx)
+endif()
+```
+
+```sh
+cmake -S . -B build/server -G Ninja -DCMAKE_CXX_COMPILER=g++-16 && cmake --build build/server --target api
+build/server/api                               # and, in another terminal: reactx dev --proxy http://127.0.0.1:8095
+```
+
+Code both use (a struct and its JSON) goes in a header under `src/` that the server includes too.
+
+## Ready components (`reactx/ui.hpp`, same code in terminal and browser)
+
+`ui::button({.label, .onClick, .variant = ui::Variant::Primary|Danger|Success, .disabled})`, `ui::input({.value, .onChange, .onSubmit, .placeholder, .label})` ((v1.0.0+) `.type = ui::InputType::Password` after `.error`: dots in a terminal, a password field in the browser; also `Email`, `Number`, `Search`, `Tel`, `Url` for the phone's keyboard), `ui::checkbox({.label, .checked, .onToggle})` (`onToggle` is a `Callback` with no argument: `[setOn] { setOn([](bool v) { return !v; }); }`; (v0.14.0+) `.onChange = [setOn](bool on) { setOn(on); }` gets the new state), `ui::tabs({.tabs = {{.label = "A", .content = {elements}}}, .initial = 0})` (`.content` is a list of elements; the tabs keep the open one themselves; (v1.1.0+) `.active = tab, .onChange = [setTab](int i) { setTab(i); }` after `.key` keeps it in your state, so a shortcut or code can switch it), `ui::modal({.title, .open, .onClose, .children})`, `ui::list({.title, .children, .scroll})` with `ui::listItem({.label, .detail, .selected, .onSelect})` (a newly selected item scrolls into view; `.scroll = true` makes a long list scroll inside itself instead of growing). `ui::input`'s `onChange` and `onSubmit` (Enter) both get the text: `.onSubmit = [](const std::string& text) { ... }`. (v0.14.0+) In a `ui::stack` row an input takes the free room (a search box next to a button). Every `ui::...Props` has a `key` (for lists); it is the last field (except `ListProps`, where `.scroll` comes after it, and `TableRow`: `.cells, .key, .onSelect, .selected`), so with designated initializers it comes after the others: `ui::stack({.direction = ui::Direction::Row, .children = {...}, .key = id})`. Rows of a form or list that can be added or removed need keys, or a row inserted above the focused field takes its place and the focus moves. Theme: `ui::themeProvider(ui::Theme{.accent = "blue"}, {children})` (in the browser a color name has a light and a dark shade, both readable; prefer names to `"#rrggbb"`); `ui::useTheme()` reads it in your own components.
+
+Also (v0.10.0+): `ui::select({.label, .value, .options = {{"m", "Medium"}, ...}, .onChange})` (`onChange` gets the value; an option is `ui::Option{.value, .label}`, so a list built in a loop is `std::vector<ui::Option>`; `{"", "All"}` works as "no filter"), `ui::confirm({.title, .message, .open, .confirmLabel, .cancelLabel, .danger, .onConfirm, .onCancel})` (a ready yes/no modal; Escape and a click outside call `onCancel`), `ui::toast({.text, .variant, .duration = 4s})` from any handler/effect/fetch callback (UI thread) + one `ui::toaster()` in the app (anywhere: it is drawn over the screen in both backends; `duration = 0ms` stays until clicked), `ui::tooltip({.text, .children})`, `ui::card({.title, .children})` ((v0.21.0+) `.level = 2` after `.key`: an `<h2>` title for cards right under the page's `<h1>`, `<h3>` by default), `ui::stack({.direction = ui::Direction::Row, .gap = 1, .align = ui::Align::Center, .justify = ui::Justify::Between, .wrap, .children})` (gap in cells / 8px steps), `ui::text({.text, .muted})`. Prefer `ui::stack` / `ui::card` / `ui::text` over raw tags when the code must run in both backends: they pick `div`/`p` or `box`/`text` themselves. (v0.14.0+) `ui::input` / `ui::select` with `.labelAbove = true` put the label on its own line, so the fields of a form line up.
+
+Long lists (v0.14.0+): `ui::useVirtualList` draws only the rows on screen — 100,000 rows cost what 40 do, in both backends. Every row has the same height (`.rowHeight` px in the browser, `.rowLines` in a terminal). Build the rows yourself, in the same render (no callback that outlives it):
+
+```cpp
+auto list = ui::useVirtualList({.count = static_cast<int>(lines.size()), .follow = atEnd, .border = true,
+                                .onScroll = [setAtEnd](const ScrollEvent& e) { setAtEnd(e.nearBottom(1)); }});
+std::vector<Element> rows;
+for (int i = list.first; i < list.last; ++i) rows.push_back(h(LogLine, {.line = lines[static_cast<std::size_t>(i)]}));
+return h("box", {{"flexGrow", 1}}, {header, list.view(std::move(rows))});
+```
+
+`.follow = true` keeps the end in view while rows are added (a log, a chat); the user scrolling up turns it off through `onScroll`. In a terminal it takes the rows left in a column; in the browser give it `.height` (px) or a flex parent with a height. Rows that aren't drawn can't take the focus. The rows are `div`s: use CSS grid/flex for columns, not `<table>` — or `ui::table` below.
+
+Tables (v0.15.0+): `ui::table` lines up columns in both backends (CSS grid in the browser, fixed cells in a terminal). The rows are yours — sort them yourself in `onSort`; the table shows the arrow:
+
+```cpp
+std::vector<ui::TableRow> rows;
+for (const auto& it : sorted) rows.push_back({.cells = {it.name, std::to_string(it.qty)}, .key = it.id,
+                                              .onSelect = [setPicked, id = it.id] { setPicked(id); }, .selected = picked == it.id});
+return ui::table({.columns = {{.title = "Name", .sortable = true},
+                              {.title = "Qty", .width = 6, .align = ui::Align::End, .sortable = true}},
+                  .rows = std::move(rows), .sortColumn = sortBy, .sortDescending = desc,
+                  .onSort = [setSortBy](int column) { setSortBy(column); }, .emptyText = "No items"});
+```
+
+Consistent names (v0.20.0+): elements inside a component always go in `.children` — `ui::list({.title, .children = items})` (`.items` is the old name, still works), like `card`, `stack`, `modal`, `tooltip`; `ui::radioGroup` lays out with `.direction = ui::Direction::Row` like `stack` (`.row = true` is the old way); (v1.0.0+) in a terminal it is one Tab stop, like in the browser, and the arrows pick the option. Every form field (`input`, `textarea`, `select`, `checkbox`, `radioGroup`, `slider`, like `button`) takes `.disabled = true`: shown, not editable, skipped by Tab. API promise: nothing is renamed in place; deprecated names work until 2.0.
+
+Forms (v0.16.0+): `ui::useForm<T>` keeps a form's values in your struct and checks them with your function; a field's error shows once that field changed, or after a submit was tried. Every field takes `.error` (shown under it, marked invalid; `slider` since v1.0.0):
+
+```cpp
+struct Signup { std::string name, plan = "free"; int seats = 1; std::string note; bool agree = false; };
+auto form = ui::useForm<Signup>({.validate = [](const Signup& s) {
+                                     ui::FormErrors e;              // std::map<std::string, std::string>
+                                     if (s.name.empty()) e["name"] = "Required";
+                                     if (!s.agree) e["agree"] = "Please agree";
+                                     return e;
+                                 },
+                                 .onSubmit = [](const Signup& s) { save(s); }});   // only when valid
+const Signup& v = form.values;
+ui::input({.value = v.name, .onChange = form.set("name", &Signup::name), .label = "Name", .error = form.error("name")})
+ui::radioGroup({.label = "Plan", .value = v.plan, .options = {{"free", "Free"}, {"pro", "Pro"}}, .onChange = form.set("plan", &Signup::plan), .direction = ui::Direction::Row})
+ui::slider({.label = "Seats", .value = v.seats, .min = 1, .max = 10, .onChange = form.set("seats", &Signup::seats)})  // also .step = 5, .showValue = false
+ui::textarea({.value = v.note, .onChange = form.set("note", &Signup::note), .label = "Note", .rows = 3})
+ui::checkbox({.label = "I agree", .checked = v.agree, .onChange = form.set("agree", &Signup::agree), .error = form.error("agree")})
+ui::progress({.value = v.seats, .max = 10, .label = "Seats used"})
+ui::button({.label = "Sign up", .onClick = form.submit})   // also form.reset, form.valid(), form.setValues(loaded)
+```
+
+`set("name", &T::field)` returns an onChange that writes the field and marks it changed; the name is the key of `FormErrors`. `textarea` edits several lines in a terminal too (v0.17.0+). `slider` gives an `int`; a `ui::input` for a number gives text — parse it with `rx::parseNumber<int>`.
+
+`TableColumn{.title, .width (characters; 0 = share the room left), .align, .sortable}`, `TableRow{.cells (text or any element), .key, .onSelect (click / Enter), .selected}`. Long tables: `auto list = ui::useVirtualList({.count = n, .rowHeight = 36, .height = 480});`, build only rows `list.first`..`list.last-1` and pass `.list = list` (a copy; the header stays on top).
+
+## Router (`reactx/router.hpp`, namespace `rx::router`)
+
+`routes({{"/", h(Home)}, {"/todos/:id", h(TodoPage)}, {"*", h(NotFound)}})`, `link({.to = "/todos/7", .label = "Open"})`, `navigate("/x")` (`navigate("/x", true)` replaces the history entry), `back()`, hooks `useLocation()` (path without the query), `useParam("id")`, `useParams()` (all of them, a map), `useQuery("q")`. Not hooks: `currentPath()` (path with the query, for handlers), `reset("/")` (clears the history; tests and terminal apps), `base()` / `href("/x")` (the URL with the base: "/ReactX/x"). `link` puts `activeClassName` (`"active"` by default) on the link to the current path; (v1.0.1+) a link with a query (`/?tag=work`) only while the page's query has those values (filter links), a link without one ignores the query. Paths never include the `<base href>` (e.g. /ReactX/ on GitHub Pages); the router adds it.
+
+(v0.19.0+) Nested routes: a route ending in `/*` matches its path and everything under it, and the `routes()` inside its element match the rest — a layout that stays mounted while its pages change; parameters of the outer routes are seen inside:
+
+```cpp
+router::routes({
+    {"/", router::redirect("/inbox")},                                   // goes there, replacing the history entry
+    {"/inbox", h(Inbox)},
+    {"/login", h(Login)},
+    {.path = "/teams/:team/*", .element = h(Team), .allow = loggedIn, .redirect = "/login"},   // a guard
+    {.path = "/beta", .element = h(Beta), .allow = betaOn},              // not allowed, no redirect: the next route
+    {"*", h(NotFound)},
+});
+Element Team(const Props&) {            // at /teams/a, /teams/a/members/7, ...
+    return h("div", {}, {
+        router::link({.to = "/teams/" + router::useParam("team"), .label = "Overview", .exact = false}),  // active under it too
+        router::routes({{"/", h(Overview)}, {"/members/:id", h(Member)}, {"*", h(NoSuchPage)}}),            // relative to /teams/a
+    });
+}
+```
+
+A route with `.allow` / `.redirect` names every field (C++ doesn't mix positional and designated initializers). `.allow` is a plain `bool`: compute it in the component that calls `routes()` (from `useStore` / state), so the routes follow it. `link` also takes `.replace = true`. (v1.0.0+) `router::redirectedFrom()` is the path (with its query) a guard's `.redirect` turned the user away from — after logging in, `router::navigate(from.empty() ? "/" : from, true)` with `from` read in the handler; it is `""` again after any other navigation.
+
+## Data (`reactx/fetch.hpp`, `reactx/json.hpp`)
+
+- `FetchState f = useFetch("/api/todos");` → `f.loading`, `f.ok()`, `f.tryJson()` (`std::expected`), `f.errorText()`, `f.reload()`. While a reload is loading, `f.ok()` is false but the previous answer stays in `f.response`: show `f.response.ok()` data to avoid a flash of empty content. `fetch({.method = "POST", .url = "/api/todos", .body = json.dump()}, [](const FetchResponse& r) { ... })` (`FetchRequest{.method = "GET", .url, .body, .contentType = "application/json", .headers = {{"Authorization", "Bearer " + t}}, .timeout = 5s}`, `FetchResponse{.status, .body, .error, .headers}` with `ok()`, `tryJson()`, `header("etag")` (any case), (v0.14.0+) `errorText()` ("network error: ..." / "HTTP 422")). A timeout answers with status 0 and `error == "timeout after N ms"`. `fetch` returns a `FetchHandle`: `h.cancel()` (or `h()`, so `useEffect([&] { return fetch(...); }, deps(x))` cancels on cleanup) means the callback never runs. `useFetch(FetchRequest{...})` takes a whole request (headers, timeout, method) and refetches when it changes; `useFetch` cancels replaced and unmounted requests.
+- `setLocalFetch(handler)` answers requests inside the app (no server; static sites, tests). The handler is `std::function<std::optional<FetchResponse>(const FetchRequest&)>`: return a response to answer, `std::nullopt` to let the request go to the network; `setLocalFetch({})` removes it. The answer arrives later in the browser (like a network one) and right away natively.
+
+```cpp
+setLocalFetch([](const FetchRequest& r) -> std::optional<FetchResponse> {
+    if (r.method == "GET" && r.url == "/api/todos")
+        return FetchResponse{.status = 200, .body = json::array({json::object({{"id", 1}, {"title", "Milk"}})}).dump()};
+    return std::nullopt;
+});
+```
+
+- Build query strings with `rx::urlEncode` (`reactx/path.hpp`): `"/api/logs?q=" + rx::urlEncode(text)`; `rx::urlDecode` / `rx::queryParam` read them. Terminal build: a full `http://host:port/...` URL (no https); the answer arrives on the UI thread at the next flush.
+- JSON: `auto v = json::tryParse(text);` (`std::expected<Value, Error>`), `v["title"].asString()`, `v.get<int>("count", 0)` (a fallback for missing or wrong-typed keys; 2.9 becomes 2), a value itself: `asNumber()` (double), `asInt()`, `asBool()`, `asString()`, `isNumber()` / `isString()` / ..., `json::object({{"id", 1}})`, `json::array({...})`, `v.push(x)`, `v.dump(2)`. Arrays: `for (const json::Value& t : v.asArray()) t["title"].asString();`, `v.size()`, `v[0]`; objects: `for (const auto& [key, item] : v.asObject())`. `as*()` throw `json::Error` on another type.
+- Data from outside (imports, servers): `v.require<int>("id")` → `std::expected<int, json::Error>`; a missing key, another type, 2.9 for an int or a number that doesn't fit is an error naming the field. Works in the browser build too.
+- Natively with reflection (link `reactx::reflection` in CMake): `json::to(myStruct)`, `json::from<MyStruct>(value)` → `std::expected<MyStruct, json::Error>` with a path in the error.
+
+## Live data (`reactx/websocket.hpp`)
+
+`auto live = useWebSocket("/ws/chat", {.onMessage = [dispatch](const std::string& text) { ... }});` — a hook; `onMessage` / `onOpen` / `onClose(code)` run on the UI thread (they may set state). `live.status` (`WebSocketStatus::Connecting` / `Open` / `Closed`), `live.open()`, `live.error` (why it closed), `live.send(text)` (`false` unless open), `live.reconnect()`. It connects on mount and when the URL changes, closes on unmount and reconnects after a drop (`.reconnect = true`, `.retryDelay = 1s` doubling up to 30 s). Text messages (send JSON as text). Browser: a relative URL is `ws://` / `wss://` on the page's host; `reactx dev --proxy` passes WebSockets through. Terminal build: a full `ws://host:port/path` (no `wss`). Messages sent while disconnected are lost: fetch what was missed in `onOpen` if it matters.
+
+## Server (native, `reactx/http.hpp`)
+
+```cpp
+rx::net::HttpServer server("127.0.0.1", 8090);
+server.get("/api/todos/:id", [](const rx::net::Request& r) { return rx::net::Response::json(..., 201); });  // r.pathParam("id"), r.body; r.param("q") is std::optional<std::string>: r.param("q").value_or("")
+server.post("/api/todos", handler);  server.put(...);  server.patch(...);  server.del(...);  // or server.route("METHOD", path, handler); r.header("x-token")
+server.setNotFoundPage("404.html");  server.setLogging(true);                                // 404 page for unknown GET paths; one log line per request
+server.serveDirectory("build/web/dist", /*spaFallback=*/true);  // "/docs/faq" -> docs/faq.html if there is one; unknown routes -> 200.html, else index.html
+server.setUrlPrefix("/repo");                                    // the site lives under /repo/ (like GitHub Pages)
+server.onFile([](const std::filesystem::path& file, rx::net::Response& r) { /* change r.body / r.headers of served files */ });
+server.webSocket("/ws/chat", {                                   // WebSocket; handlers run on the connection's thread (use a mutex)
+    .onOpen = [](const rx::net::WebSocketPtr& ws) { ws->send("hi"); },       // ws->request() is the upgrade request (query, headers)
+    .onMessage = [&server](const rx::net::WebSocketPtr&, const std::string& text) {
+        for (const auto& peer : server.webSockets("/ws/chat")) peer->send(text);  // broadcast; send/close from any thread
+    },
+    .onClose = [](const rx::net::WebSocketPtr&, int code) {}});
+server.proxy("/api", *rx::net::parseUpstream("http://127.0.0.1:5000"));   // forward /api/... to another backend
+server.allowHosts({"api"});  // (v0.21.0+) answers only localhost, *.localhost and IPs, else 403 (DNS rebinding); a POST or WebSocket from another site's page (Origin) gets 403 too
+if (auto ok = server.tryStart(); !ok) std::println("{}", ok.error());
+server.run();
+```
+
+## Libraries
+
+`reactx add <name> <git-url> --rev <tag> --target <cmake-target>` adds a library from git. (v1.2.0+) Libraries that come with ReactX (in `library/`; a preview, the API may still change in a minor release) need no download: add them to the app's `target_link_libraries` in CMakeLists.txt.
+
+- Charts, both backends — `reactx::charts`, `#include "rx/charts.hpp"`: `rx::charts::bar({.labels = {"Mon", "Tue"}, .series = {{.name = "Steps", .values = {6200, 8100}}}, .title = "Steps", .unit = ""})`, `charts::line({.labels, .series, .height /*px*/, .rows /*terminal*/})`, `charts::pie({.labels, .values, .donut = true})` — SVG in the browser, block and braille characters in a terminal.
+- Translations — `reactx::i18n`, `#include "rx/i18n.hpp"`: in main() `rx::i18n::setup({.languages = {{.code = "en", .name = "English", .messages = {{"cart", "{n, plural, one {# item} other {# items}}"}}}, {.code = "ru", .name = "Русский", .messages = {...}}}})`; in a component `auto t = rx::i18n::useTranslation();` then `t("cart", {{"n", 3}})`, `t.number(x)`, `t.currency(x, "EUR")`, `t.date(std::chrono::year{2026} / 11 / 6, rx::i18n::DateStyle::Long)`, `t.time(14, 5)`, `t.relative(-300s)`. Messages: `{name}`, `{n, plural, =0 {..} one {..} few {..} many {..} other {..}}` (`#` = n), `{x, select, a {..} other {..}}`. `rx::i18n::setLanguage("ru")` re-renders and remembers the choice; `rx::i18n::languagePicker({.label = "Language"})` is a ready select; `rx::i18n::loadMessages(lang, "/locales/ru.json")` fetches nested JSON. Built-in formats: en ru uk hy de fr es it pt pl. No std::format inside.
+- (v1.3.0+) Server data with a cache — `reactx::query`, `#include "rx/query.hpp"`: `auto q = rx::query::useQuery({.key = "todos", .url = "/api/todos"});` gives `q.data` (`std::shared_ptr<const json::Value>`, nullptr until loaded), `q.error`, `q.loading` (first load), `q.fetching`, `q.refetch()`; typed: `useQuery<std::vector<Todo>>({.key, .url, .parse = [](const json::Value&) -> std::vector<Todo> {...}})`; options `.request` (a FetchRequest), `.load` (own loader), `.staleTime`, `.cacheTime` (5 min), `.refetchInterval`, `.retry` (2, backoff 0.5 s, 1 s, ...), `.enabled`. Same key = one request and shared data. Changes: `auto add = rx::query::useMutation<std::string>({.request = [](const std::string& t) { return FetchRequest{.method = "POST", .url = "/api/todos", .body = ...}; }, .invalidates = {"todos"}});` then `add.mutate("x")`, `add.pending`, `add.error`; `.onMutate` changes the cache first and returns the undo (optimistic). Anywhere: `rx::query::invalidate("todos")` (also "todos/..."), `setData<T>(key, v)`, `getData<T>(key)`, `updateData<T>(key, f)`, `remove(key)`, `clear()`.
+- (v1.3.0+) Markdown — `reactx::markdown`, `#include "rx/markdown.hpp"`: `rx::markdown::view({.text = md})` shows it (browser: `<div class="rx-md">` with h1-h6, p, lists, tasks, code, quotes, tables, links, images; terminal: colors and indents). Raw HTML is shown as text and `javascript:` links are dropped, so user text is safe. In apps with rx::router: `.link = [](std::string to, std::vector<Element> label) { return to.starts_with('/') ? router::link({.to = to, .children = std::move(label)}) : rx::markdown::anchor(to, std::move(label)); }`. `rx::markdown::parse(md)` gives Blocks (headings have `.id`, for a table of contents); `rx::markdown::plainText(md)` strips the markup.
+- (v1.4.0+) Icons — `reactx::icons`, `#include "rx/icons.hpp"`: `rx::icons::icon({.name = "search"})` (browser: inline SVG in the text color, 1em; terminal: a one-cell symbol); fields `.name, .size (px, 0 = 1em), .label (for screen readers; without it the icon is aria-hidden), .color (palette name or CSS), .spin, .key`. Names: check x plus minus search edit trash copy download upload send refresh filter settings more menu external link loader arrow-left/right/up/down chevron-left/right/up/down info warning error success bell lock unlock eye eye-off star heart home user mail calendar clock file folder image sun moon play pause stop; `rx::icons::names()`; own ones: `rx::icons::add("bolt", "M13 3L5 13h6l-1 8 8-10h-6z", "ϟ")` (SVG path on 24x24, terminal symbol).
+- (next release) Validation — `reactx::forms`, `#include "rx/forms.hpp"`: `const auto schema = rx::forms::Schema<Signup>().field("email", &Signup::email, {rx::forms::required(), rx::forms::email()}).field("password", &Signup::password, {rx::forms::minLength(8)}).check("confirm", [](const Signup& s) { return s.confirm == s.password ? "" : "The passwords differ"; });` then `ui::useForm<Signup>({.validate = schema.validator()})`. Rules: `required, minLength, maxLength, email, url, digits, oneOf({...}), min(n), max(n), accepted(), rule<V>(ok, "message")`; text rules except required() pass empty text. Messages: `rx::forms::messages().required = "..."` ({n} = the number). JSON on a server: `rx::forms::JsonSchema().text("title", {required()}).number("qty", {min(1.0)}, /*optional*/ false, /*whole*/ true).boolean("done", {}, true).validate(json)` -> field -> message; `JsonSchema::toJson(errors)` = {"errors": {...}} for a 422.
+- (next release) A JSON API on the server — `reactx::api` (native), `#include "rx/api.hpp"`: `rx::api::Router api(server, "/api"); api.use(rx::api::catchErrors()).use(rx::api::cors({.origins = {"https://app.example.com"}})).use(rx::api::rateLimit({.requests = 60})).use(rx::api::log());` then `api.post("/todos", [&](const rx::net::Request& r) { auto body = rx::api::body(r, schema); if (!body) return body.error(); return rx::api::ok(json, 201); });` — `body` gives 400 / 415 / 422 {"errors": {...}} as the answer; `rx::api::intParam(r, "id")`, `rx::api::error(404, "msg")` = {"error": "msg"}, `rx::api::noContent()`. CORS origins also need `server.allowHosts`. Middleware: `Response(const Request&, const rx::api::Next& next)`. (v1.5) `Request::remote` is the client's IP.
+- (next release) Sign-in on the server — `reactx::auth` (native), `#include "rx/auth.hpp"`: `rx::auth::hashPassword(pw)` -> "pbkdf2-sha256$600000$salt$hash" (store it), `rx::auth::verifyPassword(attempt, stored)`, `needsRehash(stored)`; `rx::auth::Sessions sessions({.secure = true});` then in /login `sessions.start(response, userId)` (sets an HttpOnly SameSite=Lax cookie, new id each time), `sessions.get(request)` -> optional Session{id, user, data, csrf}, `sessions.end(request, response)`, `sessions.endAll(user)`; middleware `api.use(rx::auth::requireLogin(sessions)).use(rx::auth::csrf(sessions))` — unsafe requests then need header X-CSRF-Token = session.csrf. Also `randomToken()`, `sha256Hex`, `hmacSha256Hex`, `constantTimeEquals`.
+- (next release) Logs — `reactx::log`, `#include "rx/log.hpp"`: `rx::log::info("signed in", {{"user", 42}, {"ip", r.remote}})` -> `2026-11-06T14:05:07Z INFO  signed in user=42 ip=...`; `rx::log::setup({.level = rx::log::levelFromEnv(), .json = true})` for JSON lines; debug/info/warn/error; thread-safe.
+- (next release) Settings — `reactx::config` (native), `#include "rx/config.hpp"`: `auto c = rx::config::load({.args = {argc, argv}, .envPrefix = "APP_", .file = "app.json"});` (std::expected), then `c->number("port", 8080)` (--port 9000 > APP_PORT > {"port": ...} > 8080), `c->text("db.path", "app.db")` (APP_DB_PATH, {"db": {"path": ...}}), `c->flag("verbose")`, `c->require("session.secret")` (std::expected with where it looked), `c->positional()`.
+
+## Rules that keep code correct
+
+- Errors that happen at run time (input, network, files) are values: `std::expected`. `REACTX_PRE(cond)` is only for programmer errors.
+- Numbers from text: `rx::parseNumber<int>(s)` / `rx::parsePort(s)` (`reactx/parse.hpp`), not `std::stoi`.
+- Never change state from another thread (natively a setter called off the UI thread stops the program with `precondition failed: ... onOwnThread()`). Timers: `useTimeout`, `useInterval`, `useDebounce`; the UI thread runs them.
+- Prefer the standard library (`std::format`, `std::print`, `std::ranges`, `std::flat_map`, `std::expected`) over hand-written helpers or extra libraries.
+- Code built for the browser: build strings with `+` and `std::to_string`, not `std::format` / `std::print` — any use adds ~100 KB to the `.wasm` (a whole counter app is 93 KB without it). Natively `std::format` is fine. `reactx build` prints the `.wasm` size, (v0.15.0+) its biggest parts (`biggest parts: src/app.cpp 23%, ReactX reconciler.cpp 15%, ...`), and names the files that pull these in (`reactx: size: ...`). (v1.1.0+) `set(REACTX_WEB_LTO ON)` in CMakeLists.txt, above `FetchContent_MakeAvailable(reactx)`: link-time optimization, a ~5% smaller `.wasm` (gzip), but each rebuild in `reactx dev` takes ~2 s longer.
+- Code built for the browser must not use reflection, `std::generator`, `<stacktrace>`, threads, sockets or the file system.
+
+## JavaScript and the DOM (browser build)
+
+`#include "reactx/js.hpp"` and link `reactx::js` (CMake: `target_link_libraries(app PRIVATE reactx::js)`, adds embind). `rx::domElement(ref)` is the page's element as `emscripten::val` (undefined until the element is on the page, so use it in `useEffect` or handlers); `rx::jsValue(json::Value)` is a JS object for a library's options. Keep a JS object between renders in `useRef(emscripten::val::undefined())`; free it in the effect's cleanup. Natively the header is a compile error: keep it under `#ifdef __EMSCRIPTEN__`.
+
+## HTML without a browser (prerender)
+
+Prerendered pages show before the `.wasm` arrives (and work for search engines): list the routes in `reactx.json`, `"web": {"prerender": ["/", "/docs/faq"]}`. `reactx build` (and `dev`) then runs the same program under Node, where `mountDom` writes each route's HTML into `dist/index.html`, `dist/docs/faq.html`, ... (with rx::ui's CSS) and stops; no code changes. In the browser `mountDom` replaces it with the live app (no hydration). Effects don't run there (`useFetch` shows its loading state), and code before `mountDom` must not touch `document`/`window`. Other routes get `404.html` / `200.html`, the page without content (hosts that rewrite every path should rewrite to `/200.html`). `rx::renderToString(h(Home))` (`reactx/html.hpp`) is the function behind it: the HTML string of components, `className` -> `class`, text escaped, handlers left out. Use it in the browser build (or under Node): a native build draws `ui::` and `router::link` in their terminal form.
+
+## Testing components (no terminal, no browser)
+
+(v0.18.0+) `reactx test` builds every `tests/*.cpp` of the project natively, with the app's sources except `main.cpp`, and runs them; `reactx test <name>` runs the tests whose name contains it; the exit code says if they passed. `reactx new` makes `src/app.cpp` + `app.hpp` (the components), a `main.cpp` that only starts `App`, and `tests/app_tests.cpp`. Keep components out of `main.cpp`: tests can't include it. A test draws the app on an in-memory terminal and acts like a user (`reactx/testing.hpp`, no `main` needed):
+
+```cpp
+#include "app.hpp"
+#include "reactx/testing.hpp"
+using namespace rx;
+
+RX_TEST(saving_a_note) {
+    testing::Screen s(h(App));          // 80x24; Screen(h(App), 40, 10) for another size
+    CHECK(s.shows("No notes yet"));
+    s.click("New");                     // a mouse click on the first place showing this text
+    s.type("Milk 🥛");                  // into the focused field
+    s.press("Ctrl+s");                  // through useKeyboard, then the focused element: "Enter", "Tab", "Up", "Escape", ...
+    CHECK(s.shows("Milk 🥛"));
+    s.settle(std::chrono::milliseconds(300));  // waits, then runs due timers (useDebounce, useTimeout) and redraws
+}
+```
+
+`s.click(text)` clicks the first place that shows the text, top to bottom: when a title and a button say the same ("Log in"), click the button's own text, `s.click("[ Log in ]")`, or a field's label (it focuses the field). `s.text()` / `s.lines()` give the screen, `s.render(h(App, {...}))` new props, `s.resize(w, h)` (`useWindowSize()` is the screen's size; (v1.0.1+) before, always 80x24), `s.root()` / `s.renderer()` the parts. A failed `CHECK` prints the expression and its line and the test goes on. In a web project `ui::` components show their terminal form there and `mountDom`, `document`, `window` don't exist. Projects made before v0.18.0: `reactx update`, then move the components out of `main.cpp` and add `src/app.cpp` to `SOURCES`.
+
+The tree itself, without a screen:
+
+```cpp
+#include "reactx/reactx.hpp"
+#include "reactx/text_renderer.hpp"
+rx::TextRenderer r;
+rx::Root root(r);
+root.render(h(Counter, {.start = 1}));
+root.dispatch(*r.findByProp("id", "inc"), "onClick");   // or "onInput", std::string("text")
+assert(r.toString().find("Count: 2") != std::string::npos);
+```
+
+`dispatch` and `render` re-render on their own. After a setter or `Store::set` called outside them (a captured setter, a `setLocalFetch` answer, a timer) call `root.flush()` before reading `r.toString()`, or the test checks the old tree.
+
+## Known limits
+
+- No hydration: `mountDom` replaces prerendered HTML with a fresh render.
+- No wheel, double-click or drag-and-drop-API (`dragstart`) events; use pointer events.
+- C++26 reflection (`json::to` / `json::from`, `reactx::reflection`) is native-only: Emscripten has none. In code built for the browser read JSON with `get` / `require`.
+- In the terminal the mouse is on by default; selecting text then needs Shift (or `app.setMouse(false)`).
+- Terminal scrolling is vertical only (`overflow: "scroll"`); no horizontal scroll.
+
+## Common errors
+
+- `'router' is not a member of 'rx'` (or `ui`, `json`, `mountDom`, ...): include its header (see "A complete program").
+- `missing initializer for member ...` under `-Wextra -Werror`: give every props field a default (`Callback onClick{};`).
+- `memo<C>: the props struct needs operator==`: `= default` doesn't work when the struct holds handlers (`std::function` has no `==`); write `operator==` comparing the data fields only and make handlers with `useCallback`.
+- A long error about `TypedComponent` / `h(...)`: the component is a lambda with captures; pass the data in props.
+- `cannot convert initializer list argument to 'RowProps'` on `h(Row, {.key = ..., ...})`: the props struct has no such field — a list key needs `std::string key{};` in the struct (or check the other field names).
+- `std::println` not found: `#include <print>`. `size_t` in props: `static_cast<std::int64_t>(n)`.
+- `component called more hooks than on its previous render`: a hook inside an `if` or a loop.
+- A handler prop that doesn't compile ("no matching constructor ... PropValue" / ambiguous): write the parameter type out — `[](const PointerEvent& e)`, `[](const KeyEvent& k)`, `[](const std::string& t)` — not `auto`.
+- `'useWebSocket' was not declared`: `#include "reactx/websocket.hpp"`. `useWebSocket` closed with `can't connect`/1006 in the browser behind `reactx dev`: the path must be under a `--proxy` prefix (`/api/ws` with `--proxy http://127.0.0.1:8097`).
+- `rx::domElement(ref)` is `undefined`: it was called during render or before the commit; use it in `useEffect` or a handler.
+- `undefined symbol: _emval_...` when linking: the app uses `reactx/js.hpp` but doesn't link `reactx::js`.
+- `#error "reactx/js.hpp works only in the browser build"`: the header was included in a native build; guard it with `#ifdef __EMSCRIPTEN__`.
+
+## CLI
+
+`reactx new <name> [--terminal]`, `reactx dev [--port N] [--host 0.0.0.0] [--allow-host NAME] [--proxy [PREFIX=]URL]` (C++ dev server, rebuild + page reload on save; `--proxy http://127.0.0.1:5000` forwards `/api` to a Flask/Django/Express backend, also `"web": {"proxy": {"/api": "http://..."}}` in `reactx.json`), `reactx build` (web: `build/web/dist`), (v0.18.0+) `reactx test [name]` (`tests/*.cpp`), `reactx add <name> <git-url> --rev <tag> --target <cmake-target>`, `reactx remove <name>`, `reactx update [--check] [--to vX.Y.Z]` (the project's ReactX version), (v0.14.0+) `reactx upgrade [--check]` (the reactx tool itself, from GitHub Releases; before v0.14.0 run the installer line again; reactx says once a day when a new release is out, `REACTX_NO_UPDATE_CHECK=1` turns that off), `reactx install [--check]` (downloads Emscripten, and CMake/Ninja if missing, into `~/.reactx`, no sudo; `reactx build`/`dev` then find them without `EMSDK`; it needs `curl git python3 tar xz` — on Debian/Ubuntu `xz-utils` — and ~1.5 GB free; a `tar` error means `xz` is missing, the disk is full or a download broke: delete `~/.reactx/emsdk` and run it again). New machine, Linux x86-64: `curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh`. `reactx <command> --help` explains one command. Everything about a project is in `reactx.json`. No GCC 16 or Emscripten? The image `ghcr.io/sargisis/reactx` has everything, and every project from `reactx new` has a `.devcontainer/` for it (inside a container run `reactx dev --host 0.0.0.0`).
+
+## Docs
+
+- [Quick start](https://sargisis.github.io/ReactX/docs/start)
+- [Elements and props](https://sargisis.github.io/ReactX/docs/elements)
+- [Hooks](https://sargisis.github.io/ReactX/docs/hooks)
+- [Router](https://sargisis.github.io/ReactX/docs/router)
+- [Data: fetch and JSON](https://sargisis.github.io/ReactX/docs/data)
+- [Server in C++](https://sargisis.github.io/ReactX/docs/server)
+- [C++ standard and safety](https://sargisis.github.io/ReactX/docs/safety)
+
+## Optional
+
+- [README](https://github.com/sargisis/ReactX/blob/main/README.md)
+- [CHANGELOG](https://github.com/sargisis/ReactX/blob/main/CHANGELOG.md)
+- [Examples](https://github.com/sargisis/ReactX/tree/main/examples)

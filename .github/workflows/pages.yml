@@ -13,6 +13,8 @@ on:
   pull_request:
     paths-ignore: ["**.md"]
   workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * *"  # every night: the long fuzzing run (3 min)
 
 permissions:
   contents: read
@@ -70,7 +72,10 @@ jobs:
       - name: Install tools
         run: |
           apt-get update && apt-get install -y --no-install-recommends cmake ninja-build ccache
-          echo "CCACHE_DIR=$GITHUB_WORKSPACE/.ccache" >> "$GITHUB_ENV"; echo "CCACHE_MAXSIZE=500M" >> "$GITHUB_ENV"; echo "CCACHE_BASEDIR=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+          echo "CCACHE_DIR=$GITHUB_WORKSPACE/.ccache" >> "$GITHUB_ENV"; echo "CCACHE_MAXSIZE=500M" >> "$GITHUB_ENV"; echo "CCACHE_BASEDIR=/" >> "$GITHUB_ENV"; echo "CCACHE_NOHASHDIR=1" >> "$GITHUB_ENV"
+          # The test projects live in new temporary folders every run: with paths
+          # made relative (BASEDIR=/) and the folder left out of the hash, their
+          # copies of ReactX come from the cache instead of being compiled again.
       - name: Restore the compiler cache
         uses: actions/cache@v4
         with:
@@ -124,8 +129,10 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure -LE "slow|fuzz"
       # Random inputs to the JSON, HTTP and URL parsers; a new seed every run.
-      - name: Fuzz the input parsers (30 s)
-        run: cd build && ./reactx_fuzz_tests 30
+      # A push runs the regular tests only; the night run fuzzes for 3 minutes.
+      - name: Fuzz the input parsers (3 min)
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: cd build && ./reactx_fuzz_tests 180
       - name: Keep the input that crashed the fuzzer
         if: failure()
         uses: actions/upload-artifact@v4
@@ -246,7 +253,7 @@ jobs:
   # no gh-pages branch and no separate "pages build and deployment" run.
   deploy:
     name: Publish to GitHub Pages
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     needs: [native, site]
     runs-on: ubuntu-24.04
     permissions:

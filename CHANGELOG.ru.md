@@ -8,6 +8,8 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ### Добавлено
 
+- `reactx::api` в `library/api` (`rx/api.hpp`, нативная): JSON API на `HttpServer` — `Router` (маршруты под префиксом, middleware, маршруты `OPTIONS` для preflight), `catchErrors`, `cors`, `rateLimit` (429 с `Retry-After`), `log`, `body(request, schema)` (400 / 415 / 422 с ошибками полей), `intParam`, `clientAddress` и ответы `ok` / `error` / `invalid` / `noContent`. Подключение: `reactx::api`.
+- `net::Request::remote`: IP-адрес клиента.
 - `reactx::forms` в `library/forms` (`rx/forms.hpp`): правила проверки (`required`, `minLength`, `maxLength`, `email`, `url`, `digits`, `oneOf`, `min`, `max`, `accepted`, свои через `rule`) и `Schema<T>` для структуры — `.field(name, &T::member, {правила})`, `.check(name, f)` для нескольких полей, `.validator()` для `ui::useForm` — плюс `JsonSchema` для JSON от клиента (типы, необязательные поля, `toJson` для ответа 422). Сообщения меняются один раз (`messages()`). Подключение: `reactx::forms`.
 
 ## [1.4.0] — 2026-11-06

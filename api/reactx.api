@@ -632,6 +632,7 @@ std::flat_map<std::string, std::string, std::less<>> headers{};
 std::string body{};
 std::map<std::string, std::string> pathParams{};
 std::string target{};
+std::string remote{};
 std::string header(std::string_view name) const;
 std::optional<std::string> param(const std::string& name) const;
 std::string pathParam(const std::string& name) const;

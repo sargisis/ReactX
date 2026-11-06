@@ -8,6 +8,8 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ### Added
 
+- `reactx::api` in `library/api` (`rx/api.hpp`, native): a JSON API on `HttpServer` — `Router` (routes under a prefix, middleware, `OPTIONS` routes for preflights), `catchErrors`, `cors`, `rateLimit` (429 with `Retry-After`), `log`, `body(request, schema)` (400 / 415 / 422 with the field errors), `intParam`, `clientAddress`, and answers `ok` / `error` / `invalid` / `noContent`. Link `reactx::api`.
+- `net::Request::remote`: the client's IP address.
 - `reactx::forms` in `library/forms` (`rx/forms.hpp`): validation rules (`required`, `minLength`, `maxLength`, `email`, `url`, `digits`, `oneOf`, `min`, `max`, `accepted`, your own with `rule`) and `Schema<T>` for a struct — `.field(name, &T::member, {rules})`, `.check(name, f)` for several fields, `.validator()` for `ui::useForm` — plus `JsonSchema` for JSON from a client (types, optional fields, `toJson` for a 422 answer). Messages can be changed once (`messages()`). Link `reactx::forms`.
 
 ## [1.4.0] — 2026-11-06

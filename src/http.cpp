@@ -626,6 +626,17 @@ void HttpServer::run() {
     for (int n = active_.load(); n != 0; n = active_.load()) active_.wait(n);  // C++20 atomic wait
 }
 
+namespace {
+// The address of the other end of a connection, "" if unknown.
+std::string peerAddress(int fd) {
+    sockaddr_in a{};
+    socklen_t len = sizeof a;
+    if (::getpeername(fd, reinterpret_cast<sockaddr*>(&a), &len) != 0 || a.sin_family != AF_INET) return {};
+    char text[INET_ADDRSTRLEN]{};
+    return ::inet_ntop(AF_INET, &a.sin_addr, text, sizeof text) ? std::string(text) : std::string();
+}
+}  // namespace
+
 void HttpServer::serveConnection(int fd) {
     std::string data;
     char buf[8192];
@@ -668,6 +679,7 @@ void HttpServer::serveConnection(int fd) {
         method = req->method;
         path = req->path;
         headOnly = req->method == "HEAD";
+        req->remote = peerAddress(fd);
         if (auto refusal = refused(*req)) {
             response = std::move(*refusal);
         } else {

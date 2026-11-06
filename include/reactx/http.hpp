@@ -56,6 +56,9 @@ struct Request {
     std::string body{};
     std::map<std::string, std::string> pathParams{};  // from a route like "/api/todos/:id"
     std::string target{};  // as sent, not decoded: "/api/a%2Fb?page=2" (what a proxy forwards)
+    // (v1.5) The client's IP address ("127.0.0.1"); behind a reverse proxy it is
+    // the proxy's (the client is then in its X-Forwarded-For header).
+    std::string remote{};
 
     std::string header(std::string_view name) const;
     // Decoded value of a query parameter: query "q=milk%20tea" -> param("q") == "milk tea".

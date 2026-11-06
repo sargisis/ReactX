@@ -165,6 +165,9 @@ public:
     // Not an object at all: {"": "Must be a JSON object"}.
     Errors validate(const json::Value& value) const;
 
+    // No fields and no checks: validate() then only checks that it is an object.
+    bool empty() const { return checks_.empty(); }
+
     // Errors as JSON, for an HTTP 422 answer: {"errors": {"email": "Not an email address"}}.
     static json::Value toJson(const Errors& errors);
 

@@ -169,7 +169,8 @@ inline const std::vector<Page>& pagesEn() {
                               "browser, characters in a terminal); reactx::i18n gives translations, plurals, numbers, money and "
                               "dates in 10 languages; (v1.3.0+) reactx::query loads server data with a shared cache, "
                               "like React Query, and reactx::markdown shows Markdown (HTML in the browser, colors in a terminal); "
-                              "(v1.4.0+) reactx::icons draws 51 line icons; (in the next release) reactx::forms validates forms and JSON. They are a preview: the API may still change in a minor release.",
+                              "(v1.4.0+) reactx::icons draws 51 line icons; (in the next release) reactx::forms validates forms and JSON, "
+                              "and reactx::api builds a JSON API on HttpServer. They are a preview: the API may still change in a minor release.",
                  "# CMakeLists.txt\ntarget_link_libraries(my_app PRIVATE reactx::charts reactx::i18n)\n\n"
                  "reactx add fmt https://github.com/fmtlib/fmt.git --rev 11.0.2 --target fmt::fmt\nreactx remove fmt"},
                 {"reactx update", "Moves your project to the newest ReactX release. --check only tells you whether there is one.",

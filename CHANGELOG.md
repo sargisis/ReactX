@@ -6,6 +6,10 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Added
+
+- `reactx::icons` in `library/icons` (`rx/icons.hpp`): `icon({.name})` — 51 line icons drawn for ReactX (actions, arrows, status, things, media): an inline SVG in the browser that takes the text color and size (`.size`, `.color`, `.label` for screen readers, `.spin` for loaders), a one-cell symbol in a terminal. `names()` lists them, `add(name, path, symbol)` adds your own. Link `reactx::icons`.
+
 ## [1.3.0] — 2026-11-06
 
 Two more libraries that come with ReactX — server data with a cache and Markdown — and faster builds with ccache. Nothing changes for existing apps.

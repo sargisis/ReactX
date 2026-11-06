@@ -186,7 +186,7 @@ inline const std::vector<Page>& pages() {
                                 "рисует столбцы, линии и круговые графики (SVG в браузере, символы в терминале); reactx::i18n — "
                                 "переводы, множественное число, числа, деньги и даты на 10 языках; (v1.3.0+) reactx::query — "
                                 "данные с сервера с общим кэшем, как React Query, и reactx::markdown — Markdown (HTML в браузере, цвета "
-                                "в терминале). Это предварительная версия: "
+                                "в терминале); (в следующем релизе) reactx::icons — 51 линейная иконка. Это предварительная версия: "
                                 "API ещё может меняться в минорном релизе.",
                  "# CMakeLists.txt\ntarget_link_libraries(my_app PRIVATE reactx::charts reactx::i18n)\n\n"
                  "reactx add fmt https://github.com/fmtlib/fmt.git --rev 11.0.2 --target fmt::fmt\nreactx remove fmt"},

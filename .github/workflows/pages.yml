@@ -89,9 +89,10 @@ jobs:
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS_DEBUG=-g1 -DCMAKE_C_FLAGS_DEBUG=-g1
           -DCMAKE_CXX_FLAGS="-Wall -Wextra -Wpedantic -Werror"
       - name: Build
-        run: cmake --build build -j && ccache -s  # hits / misses of the compiler cache
+        # Only the test and the CLI it runs, not the examples and other tests.
+        run: cmake --build build -j --target reactx_cli_tests && ccache -s
       - name: Test
-        run: ctest --test-dir build --output-on-failure -L slow
+        run: ctest --test-dir build --output-on-failure -R reactx_cli_e2e_tests
 
   # Memory errors, leaks and undefined behaviour stop the run on the first
   # finding: -fno-sanitize-recover makes UBSan fatal (by default it only

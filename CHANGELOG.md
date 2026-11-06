@@ -8,7 +8,16 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ### Added
 
+- The site has a page with the libraries live — `web_libraries.html` (linked from /demos; `#icons` and the like open a tab): `reactx::query` with a cache shared by two lists, an optimistic update and its rollback, a Markdown editor with preview, charts, all icons, and i18n formats in 10 languages. It is a page of its own, so the site's `.wasm` doesn't carry the libraries.
 - `reactx::icons` in `library/icons` (`rx/icons.hpp`): `icon({.name})` — 51 line icons drawn for ReactX (actions, arrows, status, things, media): an inline SVG in the browser that takes the text color and size (`.size`, `.color`, `.label` for screen readers, `.spin` for loaders), a one-cell symbol in a terminal. `names()` lists them, `add(name, path, symbol)` adds your own. Link `reactx::icons`.
+
+### Changed
+
+- `reactx::i18n` costs less in a `.wasm`: the built-in data of the 10 languages is constant tables, a `Locale` is made only for a language that is asked for, and `parseMessages` / `loadMessages` / `languagePicker` live in files of their own, so an app that doesn't call them no longer links `rx::fetch`, the JSON parser and `rx::ui` (the ReactX site: +2.5 KB gzip for its language switch, not +22 KB). The site keeps its language in `reactx::i18n`.
+
+### Fixed
+
+- `reactx::i18n` in the browser: the JavaScript of `systemLanguage()` and of `<html lang>` didn't parse (`!==` had been split by a code formatter), so a web build with i18n failed to link. The JavaScript in the libraries is now kept out of formatting.
 
 ## [1.3.0] — 2026-11-06
 

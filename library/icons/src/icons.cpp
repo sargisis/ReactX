@@ -103,6 +103,7 @@ constexpr const char* kCss = R"css(
 @media (prefers-reduced-motion: reduce) { .rx-icon--spin { animation-duration: 2.7s; } }
 )css";
 
+// clang-format off  (JavaScript: a formatter would split === into == =)
 EM_JS(int, rx_icons_install_styles, (const char* css), {
     if (typeof document === "undefined") return 0;
     if (document.getElementById("rx-icons-styles")) return 1;
@@ -112,6 +113,7 @@ EM_JS(int, rx_icons_install_styles, (const char* css), {
     document.head.prepend(style);
     return 1;
 });
+// clang-format on
 
 void ensureStyles() {
     static bool done = false;

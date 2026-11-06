@@ -221,6 +221,12 @@ if(EMSCRIPTEN)
          _rx_shell "${_rx_shell}")
   file(WRITE ${PROJECT_BINARY_DIR}/chart_shell.html "${_rx_shell}")
   # The kanban board: the same source as the terminal example `kanban`.
+  # The libraries in library/, live (linked from the site's /demos): a page of
+  # its own, so the site's .wasm doesn't carry them.
+  add_executable(web_libraries examples/web_libraries.cpp)
+  target_link_libraries(web_libraries PRIVATE reactx reactx_charts reactx_i18n reactx_icons reactx_markdown reactx_query)
+  set_target_properties(web_libraries PROPERTIES SUFFIX ".html")
+  target_link_options(web_libraries PRIVATE "SHELL:--shell-file ${PROJECT_SOURCE_DIR}/web/shell.html")
   add_executable(web_kanban examples/kanban.cpp)
   target_link_libraries(web_kanban PRIVATE reactx)
   set_target_properties(web_kanban PROPERTIES SUFFIX ".html")
@@ -257,12 +263,14 @@ if(EMSCRIPTEN)
   # static host: the site is the start page and also 404.html, so direct links
   # like /ReactX/docs/hooks open it (GitHub Pages has no other fallback).
   reactx_web_page(website examples/site.cpp site_app ${PROJECT_BINARY_DIR}/site_shell.html)
+  # The site's language lives in reactx::i18n.
+  target_link_libraries(website PRIVATE reactx_i18n)
   # The same site under Node: puts the HTML of the home page and of every docs
   # page (renderToString) into site/index.html, site/docs/index.html and
   # site/docs/<page>.html, so they show before index.wasm arrives. 404.html,
   # which opens every other path, keeps the loading text.
   add_executable(site_prerender examples/site.cpp)
-  target_link_libraries(site_prerender PRIVATE reactx)
+  target_link_libraries(site_prerender PRIVATE reactx reactx_i18n)
   target_compile_definitions(site_prerender PRIVATE REACTX_SITE_PRERENDER)
   target_link_options(site_prerender PRIVATE "SHELL:-sENVIRONMENT=node" "SHELL:-sNODERAWFS=1")
   add_custom_target(site ALL
@@ -278,13 +286,14 @@ if(EMSCRIPTEN)
             ${PROJECT_BINARY_DIR}/web_ui_demo.html ${PROJECT_BINARY_DIR}/web_ui_demo.js ${PROJECT_BINARY_DIR}/web_ui_demo.wasm
             ${PROJECT_BINARY_DIR}/web_chart.html ${PROJECT_BINARY_DIR}/web_chart.js ${PROJECT_BINARY_DIR}/web_chart.wasm
             ${PROJECT_BINARY_DIR}/web_kanban.html ${PROJECT_BINARY_DIR}/web_kanban.js ${PROJECT_BINARY_DIR}/web_kanban.wasm
+            ${PROJECT_BINARY_DIR}/web_libraries.html ${PROJECT_BINARY_DIR}/web_libraries.js ${PROJECT_BINARY_DIR}/web_libraries.wasm
             ${PROJECT_BINARY_DIR}/site/
     # The API summary for AI assistants: https://sargisis.github.io/ReactX/llms.txt
     COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_SOURCE_DIR}/llms.txt ${PROJECT_BINARY_DIR}/site/
     # The installer: curl -fsSL https://sargisis.github.io/ReactX/install.sh | sh
     COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_SOURCE_DIR}/install.sh ${PROJECT_BINARY_DIR}/site/
     COMMAND ${CMAKE_COMMAND} -E touch ${PROJECT_BINARY_DIR}/site/.nojekyll
-    DEPENDS website site_prerender web_counter web_ui_demo web_chart web_kanban ${PROJECT_SOURCE_DIR}/llms.txt ${PROJECT_SOURCE_DIR}/install.sh
+    DEPENDS website site_prerender web_counter web_ui_demo web_chart web_kanban web_libraries ${PROJECT_SOURCE_DIR}/llms.txt ${PROJECT_SOURCE_DIR}/install.sh
     COMMENT "Assembling the website in ${PROJECT_BINARY_DIR}/site")
   # Start page with links to the demos (http://localhost:8090/).
   configure_file(${PROJECT_SOURCE_DIR}/web/index.html ${PROJECT_BINARY_DIR}/index.html COPYONLY)

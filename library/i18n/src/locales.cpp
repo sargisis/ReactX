@@ -1,6 +1,9 @@
 // The built-in locale data (from CLDR, trimmed to what rx-i18n formats) and
 // the plural rules.
+#include <array>
 #include <cmath>
+#include <map>
+#include <vector>
 #include <string>
 #include <string_view>
 
@@ -22,8 +25,40 @@ std::string baseLanguage(std::string_view lang) {
     return base;
 }
 
-const Locale& english() {
-    static const Locale l{
+// The built-in data, as constants (no code runs to build them); a Locale is
+// made from it the first time a language is asked for.
+struct Data {
+    std::string_view decimal = ".";
+    std::string_view group = ",";
+    int minGrouping = 1;
+    std::string_view percent = "{0}%";
+    bool currencyAfter = false;
+    std::string_view currencyGap{};
+    std::string_view dateShort = "{M}/{d}/{y}";
+    std::string_view dateMedium = "{MMM} {d}, {y}";
+    std::string_view dateLong = "{MMMM} {d}, {y}";
+    std::string_view dateFull = "{EEEE}, {MMMM} {d}, {y}";
+    std::array<std::string_view, 12> months{};
+    std::array<std::string_view, 12> monthsShort{};
+    std::array<std::string_view, 12> monthsAlone{};
+    std::array<std::string_view, 7> weekdays{};
+    std::array<std::string_view, 7> weekdaysShort{};
+    int firstWeekday = 1;
+    bool hour12 = false;
+    std::string_view am = "AM", pm = "PM";
+    std::string_view relSeconds = "{n, plural, one {# second} other {# seconds}}";
+    std::string_view relMinutes = "{n, plural, one {# minute} other {# minutes}}";
+    std::string_view relHours = "{n, plural, one {# hour} other {# hours}}";
+    std::string_view relDays = "{n, plural, one {# day} other {# days}}";
+    std::string_view relWeeks = "{n, plural, one {# week} other {# weeks}}";
+    std::string_view relMonths = "{n, plural, one {# month} other {# months}}";
+    std::string_view relYears = "{n, plural, one {# year} other {# years}}";
+    std::string_view past = "{0} ago";
+    std::string_view future = "in {0}";
+    std::string_view now = "now";
+};
+
+constexpr Data kEnglish{
         .months = {"January", "February", "March", "April", "May", "June", "July", "August", "September",
                    "October", "November", "December"},
         .monthsShort = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"},
@@ -31,15 +66,12 @@ const Locale& english() {
         .weekdaysShort = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"},
         .firstWeekday = 0,
         .hour12 = true,
-    };
-    return l;
-}
+};
 
-const Locale& russian() {
-    static const Locale l{
+constexpr Data kRussian{
         .decimal = ",",
         .group = kNbsp,
-        .percent = std::string("{0}") + kNbsp + "%",
+        .percent = "{0}\u00A0%",
         .currencyAfter = true,
         .currencyGap = kNbsp,
         .dateShort = "{dd}.{MM}.{y}",
@@ -64,12 +96,9 @@ const Locale& russian() {
         .past = "{0} назад",
         .future = "через {0}",
         .now = "сейчас",
-    };
-    return l;
-}
+};
 
-const Locale& ukrainian() {
-    static const Locale l{
+constexpr Data kUkrainian{
         .decimal = ",",
         .group = kNbsp,
         .currencyAfter = true,
@@ -96,12 +125,9 @@ const Locale& ukrainian() {
         .past = "{0} тому",
         .future = "через {0}",
         .now = "зараз",
-    };
-    return l;
-}
+};
 
-const Locale& armenian() {
-    static const Locale l{
+constexpr Data kArmenian{
         .decimal = ",",
         .group = kNbsp,
         .currencyAfter = true,
@@ -127,15 +153,12 @@ const Locale& armenian() {
         .past = "{0} առաջ",
         .future = "{0} անց",
         .now = "հիմա",
-    };
-    return l;
-}
+};
 
-const Locale& german() {
-    static const Locale l{
+constexpr Data kGerman{
         .decimal = ",",
         .group = ".",
-        .percent = std::string("{0}") + kNbsp + "%",
+        .percent = "{0}\u00A0%",
         .currencyAfter = true,
         .currencyGap = kNbsp,
         .dateShort = "{dd}.{MM}.{y}",
@@ -158,12 +181,9 @@ const Locale& german() {
         .past = "vor {0}",
         .future = "in {0}",
         .now = "jetzt",
-    };
-    return l;
-}
+};
 
-const Locale& french() {
-    static const Locale l{
+constexpr Data kFrench{
         .decimal = ",",
         .group = " ",
         .percent = "{0} %",
@@ -189,16 +209,13 @@ const Locale& french() {
         .past = "il y a {0}",
         .future = "dans {0}",
         .now = "maintenant",
-    };
-    return l;
-}
+};
 
-const Locale& spanish() {
-    static const Locale l{
+constexpr Data kSpanish{
         .decimal = ",",
         .group = ".",
         .minGrouping = 2,
-        .percent = std::string("{0}") + kNbsp + "%",
+        .percent = "{0}\u00A0%",
         .currencyAfter = true,
         .currencyGap = kNbsp,
         .dateShort = "{d}/{M}/{y}",
@@ -220,12 +237,9 @@ const Locale& spanish() {
         .past = "hace {0}",
         .future = "dentro de {0}",
         .now = "ahora",
-    };
-    return l;
-}
+};
 
-const Locale& italian() {
-    static const Locale l{
+constexpr Data kItalian{
         .decimal = ",",
         .group = ".",
         .currencyAfter = true,
@@ -249,13 +263,10 @@ const Locale& italian() {
         .past = "{0} fa",
         .future = "tra {0}",
         .now = "ora",
-    };
-    return l;
-}
+};
 
 // Brazilian Portuguese, like CLDR's "pt".
-const Locale& portuguese() {
-    static const Locale l{
+constexpr Data kPortuguese{
         .decimal = ",",
         .group = ".",
         .currencyGap = kNbsp,
@@ -281,12 +292,9 @@ const Locale& portuguese() {
         .past = "há {0}",
         .future = "em {0}",
         .now = "agora",
-    };
-    return l;
-}
+};
 
-const Locale& polish() {
-    static const Locale l{
+constexpr Data kPolish{
         .decimal = ",",
         .group = kNbsp,
         .minGrouping = 2,
@@ -313,24 +321,68 @@ const Locale& polish() {
         .past = "{0} temu",
         .future = "za {0}",
         .now = "teraz",
-    };
+};
+
+template <std::size_t N>
+std::vector<std::string> list(const std::array<std::string_view, N>& a) {
+    if (a[0].empty()) return {};
+    return {a.begin(), a.end()};
+}
+
+Locale make(const Data& d) {
+    Locale l;
+    l.decimal = d.decimal;
+    l.group = d.group;
+    l.minGrouping = d.minGrouping;
+    l.percent = d.percent;
+    l.currencyAfter = d.currencyAfter;
+    l.currencyGap = d.currencyGap;
+    l.dateShort = d.dateShort;
+    l.dateMedium = d.dateMedium;
+    l.dateLong = d.dateLong;
+    l.dateFull = d.dateFull;
+    l.months = list(d.months);
+    l.monthsShort = list(d.monthsShort);
+    l.monthsAlone = list(d.monthsAlone);
+    l.weekdays = list(d.weekdays);
+    l.weekdaysShort = list(d.weekdaysShort);
+    l.firstWeekday = d.firstWeekday;
+    l.hour12 = d.hour12;
+    l.am = d.am;
+    l.pm = d.pm;
+    l.relSeconds = d.relSeconds;
+    l.relMinutes = d.relMinutes;
+    l.relHours = d.relHours;
+    l.relDays = d.relDays;
+    l.relWeeks = d.relWeeks;
+    l.relMonths = d.relMonths;
+    l.relYears = d.relYears;
+    l.past = d.past;
+    l.future = d.future;
+    l.now = d.now;
     return l;
 }
+
+struct Builtin {
+    std::string_view code;
+    const Data* data;
+};
+constexpr Builtin kBuiltins[] = {{"en", &kEnglish}, {"ru", &kRussian},     {"uk", &kUkrainian}, {"hy", &kArmenian},
+                                 {"de", &kGerman},  {"fr", &kFrench},      {"es", &kSpanish},   {"it", &kItalian},
+                                 {"pt", &kPortuguese}, {"pl", &kPolish}};
 
 }  // namespace
 
 const Locale& locale(std::string_view lang) {
     const std::string base = baseLanguage(lang);
-    if (base == "ru") return russian();
-    if (base == "uk") return ukrainian();
-    if (base == "hy") return armenian();
-    if (base == "de") return german();
-    if (base == "fr") return french();
-    if (base == "es") return spanish();
-    if (base == "it") return italian();
-    if (base == "pt") return portuguese();
-    if (base == "pl") return polish();
-    return english();
+    const Builtin* found = &kBuiltins[0];
+    for (const auto& b : kBuiltins)
+        if (b.code == base) found = &b;
+    // Built on first use and kept: references stay valid (std::map nodes don't move).
+    static std::map<std::string_view, Locale> made;
+    auto it = made.find(found->code);
+    if (it == made.end()) it = made.emplace(found->code, make(*found->data)).first;
+    return it->second;
 }
 
 std::string_view pluralCategory(double n, std::string_view lang) {

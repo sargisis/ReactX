@@ -14,9 +14,6 @@
 #include <utility>
 #include <vector>
 
-#include "reactx/fetch.hpp"
-#include "reactx/json.hpp"
-#include "reactx/ui.hpp"
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -27,22 +24,20 @@ namespace rx::i18n {
 namespace {
 
 #ifdef __EMSCRIPTEN__
-EM_JS(char *, rx_i18n_browser_language, (), {
-  const l = typeof navigator !=
-      = "undefined" && navigator.language ? navigator.language : "";
-  return stringToNewUTF8(l);
+// clang-format off  (JavaScript: a formatter would split === into == =)
+EM_JS(char*, rx_i18n_browser_language, (), {
+    const l = typeof navigator !== "undefined" && navigator.language ? navigator.language : "";
+    return stringToNewUTF8(l);
 });
 // <html lang dir>; not in a browser (prerendering under Node) it does nothing.
-EM_JS(void, rx_i18n_set_document_language, (const char *lang, int rtl), {
-  if (typeof document == = "undefined")
-    return;
-  const html = document.documentElement;
-  html.setAttribute("lang", UTF8ToString(lang));
-  if (rtl)
-    html.setAttribute("dir", "rtl");
-  else if (html.getAttribute("dir") == = "rtl")
-    html.removeAttribute("dir");
+EM_JS(void, rx_i18n_set_document_language, (const char* lang, int rtl), {
+    if (typeof document === "undefined") return;
+    const html = document.documentElement;
+    html.setAttribute("lang", UTF8ToString(lang));
+    if (rtl) html.setAttribute("dir", "rtl");
+    else if (html.getAttribute("dir") === "rtl") html.removeAttribute("dir");
 });
+// clang-format on
 #endif
 
 struct LanguageData {
@@ -551,51 +546,6 @@ std::string Translator::operator()(std::string_view key,
   return i18n::format(*message, args, lang_);
 }
 
-std::expected<Messages, std::string> parseMessages(std::string_view text) {
-  auto parsed = json::tryParse(text);
-  if (!parsed)
-    return std::unexpected("invalid JSON: " +
-                           std::string(parsed.error().what()));
-  if (!parsed->isObject())
-    return std::unexpected(std::string("the messages must be a JSON object"));
-  Messages out;
-  std::string error;
-  auto walk = [&](auto &self, const json::Object &object,
-                  const std::string &prefix) -> void {
-    for (const auto &[name, value] : object) {
-      const std::string key = prefix.empty() ? name : prefix + "." + name;
-      if (value.isObject())
-        self(self, value.asObject(), key);
-      else if (value.isString())
-        out.insert_or_assign(key, value.asString());
-      else if (error.empty())
-        error = "\"" + key + "\" is not a string";
-    }
-  };
-  walk(walk, parsed->asObject(), "");
-  if (!error.empty())
-    return std::unexpected(error);
-  return out;
-}
-
-FetchHandle loadMessages(std::string lang, std::string url,
-                         std::function<void(const std::string &)> done) {
-  return fetch(
-      {.url = std::move(url)},
-      [lang = std::move(lang), done = std::move(done)](const FetchResponse &r) {
-        std::string error;
-        if (!r.ok()) {
-          error = r.errorText();
-        } else if (auto messages = parseMessages(r.body)) {
-          addMessages(lang, std::move(*messages));
-        } else {
-          error = messages.error();
-        }
-        if (done)
-          done(error);
-      });
-}
-
 // ---- numbers and dates ----
 
 std::string formatNumber(double value, NumberFormat format,
@@ -753,27 +703,6 @@ Translator useTranslation() {
 std::string useLanguage() {
   (void)useStore(revision());
   return state().current;
-}
-
-namespace {
-
-Element LanguagePicker(const LanguagePickerProps &p) {
-  const std::string current = useLanguage();
-  std::vector<ui::Option> options;
-  for (auto &l : languages())
-    options.push_back({.value = l.code, .label = l.name});
-  return ui::select(
-      {.label = p.label,
-       .value = current,
-       .options = std::move(options),
-       .onChange = [](const std::string &code) { setLanguage(code); },
-       .labelAbove = p.labelAbove});
-}
-
-} // namespace
-
-Element languagePicker(LanguagePickerProps props) {
-  return h(LanguagePicker, std::move(props));
 }
 
 } // namespace rx::i18n

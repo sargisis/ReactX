@@ -33,6 +33,7 @@
 #include "reactx/router.hpp"
 #include "reactx/ui.hpp"
 #include "reactx/version.hpp"
+#include "rx/i18n.hpp"
 #include "site_docs.hpp"
 #include "site_docs_en.hpp"
 
@@ -70,11 +71,6 @@ EM_JS(char*, site_js_lang, (), {
     document.documentElement.lang = l;
     return stringToNewUTF8(l);
 });
-EM_JS(void, site_js_set_lang, (const char* lang), {
-    const l = UTF8ToString(lang);
-    document.documentElement.lang = l;
-    try { localStorage.setItem("rx-lang", l); } catch (e) {}
-});
 #else
 // The prerender (REACTX_SITE_PRERENDER, run under Node when the site is built)
 // has no page: English or Russian is chosen by main(), the theme is light, and
@@ -89,7 +85,6 @@ char* site_js_theme() { return siteDup("light"); }
 void site_js_set_theme(const char*) {}
 void site_js_scroll_to(const char*) {}
 void site_js_copy(const char*) {}
-void site_js_set_lang(const char*) {}
 #endif  // REACTX_SITE_PRERENDER
 
 std::string currentTheme() {
@@ -100,9 +95,16 @@ std::string currentTheme() {
 }
 
 // The site language, shared by every component ("en" or "ru"); main() sets it.
-const auto SiteLang = createStore(std::string("en"));
+// The site language ("en" or "ru") lives in reactx::i18n: remembered in
+// localStorage ("rx-lang", which the prerendered pages read too), <html lang>
+// follows it. The texts stay inline: tr(en, "English", "Русский").
+void setupLanguages(std::string initial) {
+    i18n::setup({.languages = {{.code = "en", .name = "English"}, {.code = "ru", .name = "Русский"}},
+                 .initial = std::move(initial),
+                 .storageKey = "rx-lang"});
+}
 
-bool useEnglish() { return useStore(SiteLang) == "en"; }
+bool useEnglish() { return i18n::useLanguage() == "en"; }
 
 // The search dialog (Ctrl+K, "/", the search buttons) is open.
 const auto SearchOpen = createStore(false);
@@ -343,8 +345,7 @@ Element LangToggle(const Props&) {
                         {"aria-label", en ? "Switch to Russian" : "Switch to English"},
                         {"onClick", [en] {
                              std::string next = en ? "ru" : "en";
-                             site_js_set_lang(next.c_str());
-                             SiteLang.set(next);
+                             i18n::setLanguage(next);
                          }}},
              {en ? "RU" : "EN"});
 }
@@ -1106,6 +1107,9 @@ Element Demos(const Props&) {
             demo("web_kanban.html", tr(en, "Kanban: drag and drop", "Канбан: перетаскивание"),
                  tr(en, "pointer events and hover; the same source runs in the terminal with the mouse",
                     "события указателя и наведение; тот же код работает в терминале с мышью")),
+            demo("web_libraries.html", tr(en, "The libraries, live", "Библиотеки вживую"),
+                 tr(en, "reactx::query with a cache and optimistic updates, markdown, charts, icons, i18n in 10 languages",
+                    "reactx::query с кэшем и оптимистичными обновлениями, markdown, графики, иконки, i18n на 10 языках")),
             demo("web_chart.html", tr(en, "Chart.js from C++", "Chart.js из C++"),
                  tr(en, "a JavaScript library on C++ state: useNodeRef and rx::domElement",
                     "JavaScript-библиотека на состоянии из C++: useNodeRef и rx::domElement")),
@@ -1185,7 +1189,7 @@ EM_JS(void, site_js_live, (), {
 
 int main() {
     char* lang = site_js_lang();
-    SiteLang.set(lang);
+    setupLanguages(lang);
     std::free(lang);
     mountDom(h(Site));
     site_js_live();
@@ -1232,6 +1236,7 @@ int main(int argc, char** argv) {
     baseAt += std::string_view("<base href=").size();
     if (shell[baseAt] == '"') ++baseAt;
     router::setBase(shell.substr(baseAt, shell.find_first_of("\" >", baseAt) - baseAt));
+    setupLanguages("en");
 
     std::filesystem::path outDir = std::filesystem::path(argv[2]).parent_path();
     std::vector<std::pair<std::string, std::filesystem::path>> routes{{"/", "index.html"}, {"/docs", "docs/index.html"},
@@ -1241,9 +1246,9 @@ int main(int argc, char** argv) {
 
     for (const auto& [route, file] : routes) {
         router::reset(route);
-        SiteLang.set("en");
+        i18n::setLanguage("en");
         std::string en = renderToString(h(Site));
-        SiteLang.set("ru");
+        i18n::setLanguage("ru");
         std::string ru = renderToString(h(Site));
 
         std::string page = shell;

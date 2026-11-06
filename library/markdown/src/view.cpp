@@ -56,6 +56,7 @@ constexpr const char* kCss = R"css(
 :where(.rx-md) :where(li.rx-md-task > input) { margin: 0 .5em 0 -1.4em; }
 )css";
 
+// clang-format off  (JavaScript: a formatter would split === into == =)
 EM_JS(int, rx_md_install_styles, (const char* css), {
     if (typeof document === "undefined") return 0;
     if (document.getElementById("rx-md-styles")) return 1;
@@ -65,6 +66,7 @@ EM_JS(int, rx_md_install_styles, (const char* css), {
     document.head.prepend(style);  // first, so the app's own CSS wins ties
     return 1;
 });
+// clang-format on
 
 void ensureStyles() {
     static bool done = false;

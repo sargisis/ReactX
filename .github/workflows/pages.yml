@@ -41,7 +41,7 @@ jobs:
       - name: Install tools
         run: |
           apt-get update && apt-get install -y --no-install-recommends cmake ninja-build ccache
-          echo "CCACHE_DIR=$GITHUB_WORKSPACE/.ccache" >> "$GITHUB_ENV"; echo "CCACHE_MAXSIZE=500M" >> "$GITHUB_ENV"
+          echo "CCACHE_DIR=$GITHUB_WORKSPACE/.ccache" >> "$GITHUB_ENV"; echo "CCACHE_MAXSIZE=500M" >> "$GITHUB_ENV"; echo "CCACHE_BASEDIR=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
       # Compiled files from earlier runs (ReactX finds ccache by itself): only
       # what changed is compiled again.
       - name: Restore the compiler cache
@@ -52,10 +52,10 @@ jobs:
           restore-keys: ccache-native-
       - name: Configure
         run: >
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS_DEBUG=-g1 -DCMAKE_C_FLAGS_DEBUG=-g1
           -DCMAKE_CXX_FLAGS="-Wall -Wextra -Wpedantic -Werror"
       - name: Build
-        run: cmake --build build -j
+        run: cmake --build build -j && ccache -s  # hits / misses of the compiler cache
       - name: Test
         run: ctest --test-dir build --output-on-failure -LE "slow|fuzz"  # fuzzing: the ASan job
 
@@ -70,7 +70,7 @@ jobs:
       - name: Install tools
         run: |
           apt-get update && apt-get install -y --no-install-recommends cmake ninja-build ccache
-          echo "CCACHE_DIR=$GITHUB_WORKSPACE/.ccache" >> "$GITHUB_ENV"; echo "CCACHE_MAXSIZE=500M" >> "$GITHUB_ENV"
+          echo "CCACHE_DIR=$GITHUB_WORKSPACE/.ccache" >> "$GITHUB_ENV"; echo "CCACHE_MAXSIZE=500M" >> "$GITHUB_ENV"; echo "CCACHE_BASEDIR=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
       - name: Restore the compiler cache
         uses: actions/cache@v4
         with:
@@ -81,10 +81,10 @@ jobs:
             ccache-native-
       - name: Configure
         run: >
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS_DEBUG=-g1 -DCMAKE_C_FLAGS_DEBUG=-g1
           -DCMAKE_CXX_FLAGS="-Wall -Wextra -Wpedantic -Werror"
       - name: Build
-        run: cmake --build build -j
+        run: cmake --build build -j && ccache -s  # hits / misses of the compiler cache
       - name: Test
         run: ctest --test-dir build --output-on-failure -L slow
 
@@ -105,7 +105,7 @@ jobs:
       - name: Install tools
         run: |
           apt-get update && apt-get install -y --no-install-recommends cmake ninja-build ccache
-          echo "CCACHE_DIR=$GITHUB_WORKSPACE/.ccache" >> "$GITHUB_ENV"; echo "CCACHE_MAXSIZE=500M" >> "$GITHUB_ENV"
+          echo "CCACHE_DIR=$GITHUB_WORKSPACE/.ccache" >> "$GITHUB_ENV"; echo "CCACHE_MAXSIZE=500M" >> "$GITHUB_ENV"; echo "CCACHE_BASEDIR=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
       # Compiled files from earlier runs (ReactX finds ccache by itself): only
       # what changed is compiled again.
       - name: Restore the compiler cache
@@ -116,11 +116,11 @@ jobs:
           restore-keys: ccache-asan-
       - name: Configure
         run: >
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS_DEBUG=-g1 -DCMAKE_C_FLAGS_DEBUG=-g1
           -DCMAKE_CXX_FLAGS="-Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined
           -fno-sanitize-recover=all -fno-omit-frame-pointer"
       - name: Build
-        run: cmake --build build -j
+        run: cmake --build build -j && ccache -s  # hits / misses of the compiler cache
       - name: Test
         run: ctest --test-dir build --output-on-failure -LE "slow|fuzz"
       # Random inputs to the JSON, HTTP and URL parsers; a new seed every run.
@@ -145,7 +145,7 @@ jobs:
       - name: Install tools
         run: |
           apt-get update && apt-get install -y --no-install-recommends cmake ninja-build ccache
-          echo "CCACHE_DIR=$GITHUB_WORKSPACE/.ccache" >> "$GITHUB_ENV"; echo "CCACHE_MAXSIZE=500M" >> "$GITHUB_ENV"
+          echo "CCACHE_DIR=$GITHUB_WORKSPACE/.ccache" >> "$GITHUB_ENV"; echo "CCACHE_MAXSIZE=500M" >> "$GITHUB_ENV"; echo "CCACHE_BASEDIR=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
       # Compiled files from earlier runs (ReactX finds ccache by itself): only
       # what changed is compiled again.
       - name: Restore the compiler cache
@@ -175,7 +175,7 @@ jobs:
       - name: Install tools
         run: |
           apt-get update && apt-get install -y --no-install-recommends cmake ninja-build ccache
-          echo "CCACHE_DIR=$GITHUB_WORKSPACE/.ccache" >> "$GITHUB_ENV"; echo "CCACHE_MAXSIZE=500M" >> "$GITHUB_ENV"
+          echo "CCACHE_DIR=$GITHUB_WORKSPACE/.ccache" >> "$GITHUB_ENV"; echo "CCACHE_MAXSIZE=500M" >> "$GITHUB_ENV"; echo "CCACHE_BASEDIR=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
       # Compiled files from earlier runs (ReactX finds ccache by itself): only
       # what changed is compiled again.
       - name: Restore the compiler cache
@@ -186,10 +186,10 @@ jobs:
           restore-keys: ccache-tsan-
       - name: Configure
         run: >
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS_DEBUG=-g1 -DCMAKE_C_FLAGS_DEBUG=-g1
           -DCMAKE_CXX_FLAGS="-Wall -Wextra -Wpedantic -Werror -fsanitize=thread"
       - name: Build
-        run: cmake --build build -j
+        run: cmake --build build -j && ccache -s  # hits / misses of the compiler cache
       - name: Test
         run: setarch "$(uname -m)" -R ctest --test-dir build --output-on-failure -LE slow
 
@@ -202,7 +202,7 @@ jobs:
       - name: Install tools
         run: |
           sudo apt-get update && sudo apt-get install -y ninja-build ccache
-          echo "CCACHE_DIR=$GITHUB_WORKSPACE/.ccache" >> "$GITHUB_ENV"; echo "CCACHE_MAXSIZE=500M" >> "$GITHUB_ENV"
+          echo "CCACHE_DIR=$GITHUB_WORKSPACE/.ccache" >> "$GITHUB_ENV"; echo "CCACHE_MAXSIZE=500M" >> "$GITHUB_ENV"; echo "CCACHE_BASEDIR=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
 
       - name: Restore the compiler cache
         uses: actions/cache@v4

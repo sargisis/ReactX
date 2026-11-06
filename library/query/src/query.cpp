@@ -8,6 +8,7 @@
 #include <string_view>
 #include <utility>
 #include <vector>
+#include <chrono>
 
 namespace rx::query::impl {
 

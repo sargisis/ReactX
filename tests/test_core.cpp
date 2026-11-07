@@ -299,6 +299,37 @@ TEST(same_state_skips_rerender) {
     CHECK(r.operationCount() == before);
 }
 
+int lazyInitCalls = 0;
+
+Element LazyState(const Props&) {
+    auto [rows, setRows] = useState([] {
+        ++lazyInitCalls;
+        return std::vector<std::string>{"a", "b"};
+    });
+    // A std::function is a value to keep, not a way to make one.
+    auto [onDone, setOnDone] = useState(std::function<int()>([] { return 7; }));
+    return h("box", {}, {h("button", {{"id", "add"}, {"onClick", Callback([setRows] {
+                                           setRows([](const std::vector<std::string>& old) {
+                                               auto next = old;
+                                               next.push_back("c");
+                                               return next;
+                                           });
+                                       })}}),
+                         "rows=" + std::to_string(rows.size()) + " done=" + std::to_string(onDone())});
+}
+
+TEST(lazy_state_builds_its_first_value_once) {
+    lazyInitCalls = 0;
+    TextRenderer r;
+    Root root(r);
+    root.render(h(LazyState));
+    CHECK(r.toString().find("rows=2 done=7") != std::string::npos);
+    CHECK(root.dispatch(byId(r, "add"), "onClick"));
+    root.render(h(LazyState));
+    CHECK(r.toString().find("rows=3 done=7") != std::string::npos);
+    CHECK(lazyInitCalls == 1);
+}
+
 TEST(keyed_children_are_moved_not_recreated) {
     CountingRenderer r;
     Root root(r);

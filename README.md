@@ -191,7 +191,7 @@ For a terminal: `#include "reactx/terminal.hpp"` and `TerminalApp().run(h(App))`
 <details>
 <summary><b>Hooks and events</b></summary>
 
-- `useState` — a value or an updater function; an equal value doesn't re-render (a type without `==`, like `std::vector<MyStruct>`, re-renders on every set).
+- `useState` — a value or an updater function; an equal value doesn't re-render (a type without `==`, like `std::vector<MyStruct>`, re-renders on every set). A lambda as the first value runs once, on the first render: `useState([] { return loadRows(); })` (next release, after v1.5.0).
 - `useEffect` — without deps (every render), `deps(a, b)` or `deps()` (once); may return a cleanup function.
 - `useRef`, `useMemo` (recomputes only when deps change), `useCallback` (a handler keeps its identity until deps change; any signature — `std::function<void(int)> open = useCallback([setOpen](int id) { setOpen(id); }, deps());` for a memo row).
 - `useReducer(reducer, initial)` → `[state, dispatch]`: state changed by actions; the newest reducer is used.

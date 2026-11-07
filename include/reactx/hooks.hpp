@@ -224,6 +224,31 @@ inline std::pair<std::string, Setter<std::string>> useState(const char* initial)
     return useState<std::string>(initial);
 }
 
+namespace detail {
+template <class T>
+inline constexpr bool isStdFunction = false;
+template <class R, class... A>
+inline constexpr bool isStdFunction<std::function<R(A...)>> = true;
+
+// A lambda (or another function object, not a std::function) that takes
+// nothing and returns the first value.
+template <class F>
+concept StateInit = std::is_class_v<F> && !isStdFunction<F> && std::invocable<F&> &&
+                    !std::is_void_v<std::invoke_result_t<F&>>;
+}  // namespace detail
+
+// Lazy first value: the function runs once, on the first render, instead of
+// the value being built on every render and thrown away.
+//   auto [rows, setRows] = useState([] { return loadRows(); });
+// (A std::function is kept as the state itself, as before.)
+template <detail::StateInit F>
+std::pair<std::decay_t<std::invoke_result_t<F&>>, Setter<std::decay_t<std::invoke_result_t<F&>>>> useState(F init) {
+    using T = std::decay_t<std::invoke_result_t<F&>>;
+    auto slot = detail::nextHook([&] { return std::make_unique<detail::StateHook<T>>(std::invoke(init)); });
+    auto& hook = detail::checkedHook<detail::StateHook<T>>(slot.hook);
+    return {hook.value, Setter<T>(slot.fiber, slot.index)};
+}
+
 // Mutable value that survives re-renders and does not trigger them.
 template <class T>
 T& useRef(T initial = T{}) {

@@ -285,8 +285,10 @@ inline const std::vector<Page>& pagesEn() {
             {
                 {"useState", "A value that survives re-renders. The setter takes a new value or a function of the old one; "
                              "setting the same value does nothing. Any type works, a std::vector of your own structs too: "
-                             "with == (its own, or of all its parts) an equal value is skipped, without it every set re-renders.",
-                 "auto [name, setName] = useState(std::string{});\nsetName(\"Ann\");\nsetCount([](int c) { return c + 1; });"},
+                             "with == (its own, or of all its parts) an equal value is skipped, without it every set re-renders. "
+                             "A costly first value goes in a lambda: it runs once, on the first render (next release, after v1.5.0).",
+                 "auto [name, setName] = useState(std::string{});\nsetName(\"Ann\");\nsetCount([](int c) { return c + 1; });\n"
+                 "auto [rows, setRows] = useState([] { return loadRows(); });  // built once"},
                 {"useEffect", "Runs after the screen updates. deps(...) says when to run it again; deps() means once. "
                               "Return a function to clean up.",
                  "useEffect([id] {\n    subscribe(id);\n    return [id] { unsubscribe(id); };\n}, deps(id));"},

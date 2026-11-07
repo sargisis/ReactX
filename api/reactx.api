@@ -420,6 +420,13 @@ return {hook.value, Setter<T>(slot.fiber, slot.index)};
 inline std::pair<std::string, Setter<std::string>> useState(const char* initial) {
 return useState<std::string>(initial);
 }
+template <detail::StateInit F>
+std::pair<std::decay_t<std::invoke_result_t<F&>>, Setter<std::decay_t<std::invoke_result_t<F&>>>> useState(F init) {
+using T = std::decay_t<std::invoke_result_t<F&>>;
+auto slot = detail::nextHook([&] { return std::make_unique<detail::StateHook<T>>(std::invoke(init)); });
+auto& hook = detail::checkedHook<detail::StateHook<T>>(slot.hook);
+return {hook.value, Setter<T>(slot.fiber, slot.index)};
+}
 template <class T>
 T& useRef(T initial = T{}) {
 auto slot = detail::nextHook(

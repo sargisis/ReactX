@@ -8,6 +8,7 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ### Added
 
+- `useState([] { return ...; })`: a lambda as the first value runs once, on the first render, instead of the value being built on every render and thrown away (a `std::function` is still kept as the state itself).
 - Build errors in plain words: `reactx build`, `dev` and `test` show only the errors in your own files (not the notes about templates, nor what follows from an earlier error), with the line of code and what usually causes it and what to do — props fields out of order, a handler with parameters it doesn't get, a setter given the wrong type, a typo (with the compiler's guess), a missing `;`, a library that isn't linked (`#include "rx/query.hpp"` or an undefined `rx::query::...` → add `reactx::query` to `target_link_libraries`), and more. Three mistakes: 562 lines of output before, 15 now. In Russian on a Russian system. Everything is in `build/<preset>/reactx-build.log`; `--verbose` (or `REACTX_VERBOSE=1`) shows it as it comes. A progress line replaces the build's own output.
 - "Hook order changed between renders" now says what causes it and how to fix it.
 

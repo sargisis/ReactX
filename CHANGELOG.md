@@ -8,6 +8,7 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ### Changed
 
+- Faster terminal apps with big trees: a commit no longer walks the whole tree twice to fix the focus (it keeps counts of nodes that can take or trap focus, and walks only when the focused node goes away or a trap appears). 20 new rows in a 10,000-row scrolling log: 32.7 → 12.0 ms.
 - Faster hooks: a hook and an effect's dependencies are checked by comparing one pointer (a tag per type) instead of `dynamic_cast` on every render; context values and typed props compare the same way. ReactX itself no longer uses `dynamic_cast`.
 
 ## [1.5.0] — 2026-11-07

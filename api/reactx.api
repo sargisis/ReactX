@@ -1233,6 +1233,7 @@ bool unicode() const { return unicode_; }
 int width() const { return width_; }
 int height() const { return height_; }
 void commit() override;
+NodeHandle createElement(std::string_view type) override;
 void destroyNode(NodeHandle node) override;
 void setProp(NodeHandle node, std::string_view name, const PropValue& value) override;
 void setText(NodeHandle node, std::string_view text) override;

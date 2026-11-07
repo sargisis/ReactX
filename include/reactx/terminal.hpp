@@ -104,6 +104,7 @@ public:
     int height() const { return height_; }
 
     void commit() override;
+    NodeHandle createElement(std::string_view type) override;
     void destroyNode(NodeHandle node) override;
     // scrollIntoView=true: the node is scrolled into view when it gets it.
     void setProp(NodeHandle node, std::string_view name, const PropValue& value) override;
@@ -213,6 +214,11 @@ private:
     std::size_t focusIndex_ = 0;  // where focus was, to recover after removal
     NodeHandle trap_ = 0;         // current focus trap
     NodeHandle savedFocus_ = 0;   // focus before the trap appeared
+    // How many nodes can take focus / trap it: with none (or a live focused
+    // node and no trap) a commit doesn't walk the whole tree for focus.
+    std::size_t focusables_ = 0;
+    std::size_t traps_ = 0;
+    bool attached(NodeHandle h) const;  // in the tree under the root
 
     // Scroll boxes: the position of each, and its sizes from the last repaint.
     struct ScrollBox {

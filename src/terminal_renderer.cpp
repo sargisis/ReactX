@@ -594,7 +594,23 @@ void TerminalRenderer::commit() {
     repaint();
 }
 
+NodeHandle TerminalRenderer::createElement(std::string_view type) {
+    NodeHandle h = TextRenderer::createElement(type);
+    if (type == "input" || type == "textarea" || type == "button") ++focusables_;
+    return h;
+}
+
 void TerminalRenderer::setProp(NodeHandle h, std::string_view name, const PropValue& value) {
+    if (name == "focusable" || name == "trapFocus") {  // keep the focus counts right
+        const Node* n = findNode(h);
+        const bool wasFocusable = n && isFocusable(*n), wasTrap = n && flag(n->props, "trapFocus");
+        TextRenderer::setProp(h, name, value);
+        n = findNode(h);
+        focusables_ += (n && isFocusable(*n)) - static_cast<std::size_t>(wasFocusable);
+        traps_ += (n && flag(n->props, "trapFocus")) - static_cast<std::size_t>(wasTrap);
+        propChanged(h, name);
+        return;
+    }
     TextRenderer::setProp(h, name, value);
     propChanged(h, name);
     if (name == "scrollIntoView" && std::holds_alternative<bool>(value) && std::get<bool>(value)) scrollRequest_ = h;
@@ -611,6 +627,16 @@ void TerminalRenderer::propChanged(NodeHandle h, std::string_view name) {
 }
 
 void TerminalRenderer::removeProp(NodeHandle h, std::string_view name) {
+    if (name == "focusable" || name == "trapFocus") {
+        const Node* n = findNode(h);
+        const bool wasFocusable = n && isFocusable(*n), wasTrap = n && flag(n->props, "trapFocus");
+        TextRenderer::removeProp(h, name);
+        n = findNode(h);
+        focusables_ += (n && isFocusable(*n)) - static_cast<std::size_t>(wasFocusable);
+        traps_ += (n && flag(n->props, "trapFocus")) - static_cast<std::size_t>(wasTrap);
+        propChanged(h, name);
+        return;
+    }
     TextRenderer::removeProp(h, name);
     propChanged(h, name);
 }
@@ -626,11 +652,27 @@ void TerminalRenderer::insertChild(NodeHandle parent, NodeHandle child, std::siz
 }
 
 void TerminalRenderer::removeChild(NodeHandle parent, NodeHandle child) {
+    // The focused node is going away with this subtree: remember where it was
+    // in the focus order (the only time that needs a walk), so the next
+    // commit focuses its neighbour.
+    if (focused_) {
+        for (NodeHandle a = focused_; a; a = findNode(a) ? findNode(a)->parent : 0)
+            if (a == child) {
+                auto list = focusable();
+                if (auto it = std::ranges::find(list, focused_); it != list.end())
+                    focusIndex_ = static_cast<std::size_t>(it - list.begin());
+                break;
+            }
+    }
     TextRenderer::removeChild(parent, child);
     layout_->childrenChanged(*this, parent);
 }
 
 void TerminalRenderer::destroyNode(NodeHandle h) {
+    if (const Node* n = findNode(h); n && !n->isText) {
+        if (isFocusable(*n)) --focusables_;
+        if (flag(n->props, "trapFocus")) --traps_;
+    }
     layout_->destroy(h);
     if (h == focused_) focused_ = 0;  // fixFocus picks a neighbour on commit
     if (h == scrolledTo_) scrolledTo_ = 0;
@@ -995,7 +1037,22 @@ std::vector<NodeHandle> TerminalRenderer::focusable() const {
     return out;
 }
 
+bool TerminalRenderer::attached(NodeHandle h) const {
+    for (const Node* n = findNode(h); n; n = findNode(n->parent))
+        if (n->parent == kRoot || h == kRoot) return true;
+    return false;
+}
+
 void TerminalRenderer::fixFocus() {
+    // The common cases need no walk of the tree: no trap anywhere and either
+    // nothing can take focus, or the focused node is still there.
+    if (traps_ == 0 && trap_ == 0) {
+        if (focusables_ == 0) {
+            focused_ = 0;
+            return;
+        }
+        if (const Node* n = focused_ ? findNode(focused_) : nullptr; n && isFocusable(*n) && attached(focused_)) return;
+    }
     // A focus trap (e.g. a modal) appeared or went away.
     if (NodeHandle trap = focusTrap(kRoot); trap != trap_) {
         if (trap && !trap_) savedFocus_ = focused_;  // to restore when it closes

@@ -310,9 +310,41 @@ void Reconciler::notifyConsumers(Fiber& provider) {
         if (auto c = weak.lock()) schedule(*c);
 }
 
+bool Reconciler::updateInPlace(Fiber& f, std::vector<Element>& elements) {
+    if (elements.size() != f.children.size()) return false;
+    for (std::size_t i = 0; i < elements.size(); ++i)
+        if (f.children[i]->key != elements[i].key || !sameType(*f.children[i], elements[i])) return false;
+    try {
+        for (std::size_t i = 0; i < elements.size(); ++i) update(*f.children[i], std::move(elements[i]));
+    } catch (...) {
+        // As in reconcileChildren: nothing half-built below `f` stays registered.
+        for (auto& child : std::exchange(f.children, {})) unmount(*child);
+        throw;
+    }
+    if (f.kind == ElementKind::Host) sync(f);
+    return true;
+}
+
+void Reconciler::reconcileOne(Fiber& f, Element element) {
+    if (f.children.size() == 1 && f.children[0]->key == element.key && sameType(*f.children[0], element)) {
+        try {
+            update(*f.children[0], std::move(element));
+        } catch (...) {
+            for (auto& child : std::exchange(f.children, {})) unmount(*child);
+            throw;
+        }
+        if (f.kind == ElementKind::Host) sync(f);
+        return;
+    }
+    std::vector<Element> one;
+    one.push_back(std::move(element));
+    reconcileChildren(f, std::move(one));
+}
+
 // Children match by key, or by position when they have no key. Old
 // children that match nothing are unmounted after the new ones rendered.
 void Reconciler::reconcileChildren(Fiber& f, std::vector<Element> elements) {
+    if (updateInPlace(f, elements)) return;
     std::vector<std::shared_ptr<Fiber>> old = std::exchange(f.children, {});
     f.children.reserve(elements.size());
     std::vector<bool> used(old.size(), false);
@@ -413,9 +445,7 @@ void Reconciler::renderComponent(Fiber& f) {
         throw std::logic_error("ReactX: component called fewer hooks than on its previous render");
     f.rendered = true;
 
-    std::vector<Element> children;
-    children.push_back(std::move(out));
-    reconcileChildren(f, std::move(children));
+    reconcileOne(f, std::move(out));
 }
 
 void Reconciler::unmount(Fiber& f) {
@@ -479,11 +509,24 @@ void Reconciler::collectNodes(const Fiber& f, std::vector<NodeHandle>& out) cons
 // moves as possible: nodes on a longest increasing run of their new positions
 // stay where they are, every other node is inserted once. Swapping two rows
 // of a long list moves two nodes, removing rows moves none.
+bool Reconciler::sameNodes(const Fiber& f, const std::vector<NodeHandle>& attached, std::size_t& at) const {
+    for (const auto& child : f.children) {
+        if (child->node) {
+            if (at >= attached.size() || attached[at] != child->node) return false;
+            ++at;
+        } else if (!sameNodes(*child, attached, at)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 void Reconciler::sync(Fiber& host) {
+    auto& attached = host.hostPart->attached;
+    // The usual case: nothing moved. Checked in place, without a list to compare.
+    if (std::size_t at = 0; sameNodes(host, attached, at) && at == attached.size()) return;
     std::vector<NodeHandle> wanted;
     collectNodes(host, wanted);
-    auto& attached = host.hostPart->attached;
-    if (wanted == attached) return;  // the usual case: nothing moved
 
     std::unordered_map<NodeHandle, std::size_t> wantedIndex;
     wantedIndex.reserve(wanted.size());

@@ -14,6 +14,7 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ### Changed
 
+- Faster re-renders: when a component or element keeps the same children (count, keys, types), they are updated where they are, and "did any node move?" is checked without building a list. Before, every fiber allocated two or three vectors on every render. 10,000 rows, re-render with nothing changed: 8.4 → 7.2 ms; select one row: 7.9 → 6.7 ms.
 - Faster terminal apps with big trees: a commit no longer walks the whole tree twice to fix the focus (it keeps counts of nodes that can take or trap focus, and walks only when the focused node goes away or a trap appears). 20 new rows in a 10,000-row scrolling log: 32.7 → 12.0 ms.
 - Faster hooks: a hook and an effect's dependencies are checked by comparing one pointer (a tag per type) instead of `dynamic_cast` on every render; context values and typed props compare the same way. ReactX itself no longer uses `dynamic_cast`.
 

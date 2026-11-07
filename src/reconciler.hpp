@@ -92,6 +92,10 @@ private:
     std::shared_ptr<Fiber> mount(Element element, Fiber& parent);
     void update(Fiber& fiber, Element element);
     void reconcileChildren(Fiber& fiber, std::vector<Element> elements);
+    // The usual re-render: the same children (count, keys, types) at the same
+    // places are updated where they are, with no new vectors. False: use the general path.
+    bool updateInPlace(Fiber& fiber, std::vector<Element>& elements);
+    void reconcileOne(Fiber& fiber, Element element);  // a component's output
     void renderComponent(Fiber& fiber);
     void renderBoundary(Fiber& boundary, std::vector<Element> children);
     void showFallback(Fiber& boundary);
@@ -99,6 +103,8 @@ private:
     void applyProps(Fiber& fiber, const Props& next);
     void sync(Fiber& host);
     void collectNodes(const Fiber& fiber, std::vector<NodeHandle>& out) const;
+    // The backend nodes under `fiber` are attached[at..] in order (advances `at`).
+    bool sameNodes(const Fiber& fiber, const std::vector<NodeHandle>& attached, std::size_t& at) const;
     Fiber& nearestHost(Fiber& fiber);
     void commit();
     void callRef(const RefHandler& ref, NodeHandle node);

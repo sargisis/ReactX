@@ -6,12 +6,19 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+## [1.5.0] — 2026-11-07
+
+Eight more libraries that come with ReactX — for the frontend (validation, a date picker, drag and drop, animations) and for servers (a JSON API, sign-in, logs, settings) — and the client's address in `net::Request`. Nothing changes for existing apps.
+
+**Update:** `reactx upgrade`, then `reactx update` in each project; link the libraries you want (`target_link_libraries(my_app PRIVATE reactx::forms reactx::calendar)`, a server: `reactx::api reactx::auth reactx::config`).
+
 ### Added
 
 - `reactx::motion` in `library/motion` (`rx/motion.hpp`): `presence` (Fade, Slide, Scale, Collapse — CSS transitions in the browser, respecting "reduce motion"; a terminal shows and hides at once), `useTween` and `useSpring` for values that move, easings. Link `reactx::motion`.
 - `reactx::dnd` in `library/dnd` (`rx/dnd.hpp`): `sortable` — reorder a list by dragging with the mouse (browser and terminal) or with Alt+Up / Alt+Down; `moved`. Link `reactx::dnd`.
 - `reactx::calendar` in `library/calendar` (`rx/calendar.hpp`): `calendar` (a month grid with min / max / disabled days, keyboard navigation, one Tab stop) and `datePicker`, in the language of `reactx::i18n`; `today()`. Link `reactx::calendar`.
 - The libraries page (`web_libraries.html`) shows forms, calendar, dnd and motion too.
+- llms.txt: the libraries in one table (header, where each runs, since which version), UI and server libraries apart.
 - `reactx::log` in `library/log` (`rx/log.hpp`): structured logs — `debug` / `info` / `warn` / `error` with `key=value` fields, as text or JSON lines (`setup({.json = true})`), a level from `LOG_LEVEL` (`levelFromEnv`), your own sink; thread-safe. Link `reactx::log`.
 - `reactx::config` in `library/config` (`rx/config.hpp`, native): settings from arguments (`--port 9000`), environment variables (`APP_PORT`) and a JSON file (nested keys as `db.path`), in that order; `text`, `number`, `flag`, `require` / `requireNumber` (`std::expected` naming where it looked), `positional`, `source`. Link `reactx::config`.
 - `reactx::auth` in `library/auth` (`rx/auth.hpp`, native): `hashPassword` / `verifyPassword` / `needsRehash` (PBKDF2-HMAC-SHA256, 600,000 rounds, a random salt, constant-time compare), `Sessions` (an HttpOnly SameSite cookie, a new id at each sign-in, idle and absolute expiry, `endAll` to sign out everywhere; thread-safe), middleware `requireLogin` and `csrf` for `reactx::api`, and `randomToken`, `sha256Hex`, `hmacSha256Hex`, `constantTimeEquals`. Checked against the NIST, RFC 4231 and RFC 7914 test vectors. Link `reactx::auth`.
@@ -600,7 +607,8 @@ The first release.
 - **A documentation site** built with ReactX: https://sargisis.github.io/ReactX/, published by GitHub Actions through the `gh-pages` branch.
 - The version in one place (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; new projects from `reactx new` use ReactX by release tag.
 
-[Unreleased]: https://github.com/sargisis/ReactX/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/sargisis/ReactX/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/sargisis/ReactX/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/sargisis/ReactX/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/sargisis/ReactX/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/sargisis/ReactX/compare/v1.1.0...v1.2.0

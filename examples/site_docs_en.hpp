@@ -169,21 +169,21 @@ inline const std::vector<Page>& pagesEn() {
                               "browser, characters in a terminal); reactx::i18n gives translations, plurals, numbers, money and "
                               "dates in 10 languages; (v1.3.0+) reactx::query loads server data with a shared cache, "
                               "like React Query, and reactx::markdown shows Markdown (HTML in the browser, colors in a terminal); "
-                              "(v1.4.0+) reactx::icons draws 51 line icons; (in the next release) reactx::forms validates forms and JSON, "
+                              "(v1.4.0+) reactx::icons draws 51 line icons; (v1.5.0+) reactx::forms validates forms and JSON, "
                               "and reactx::api builds a JSON API on HttpServer, reactx::auth adds sign-in (passwords, sessions, CSRF), "
                               "reactx::log and reactx::config give logs and settings, reactx::calendar, reactx::dnd and "
                               "reactx::motion a date picker, drag and drop and animations. They are a preview: the API may still change in a minor release.",
                  "# CMakeLists.txt\ntarget_link_libraries(my_app PRIVATE reactx::charts reactx::i18n)\n\n"
                  "reactx add fmt https://github.com/fmtlib/fmt.git --rev 11.0.2 --target fmt::fmt\nreactx remove fmt"},
                 {"reactx update", "Moves your project to the newest ReactX release. --check only tells you whether there is one.",
-                 "reactx update --check   # ReactX v1.3.0 -> v1.4.0 is available\n"
+                 "reactx update --check   # ReactX v1.4.0 -> v1.5.0 is available\n"
                  "reactx update\n"
                  "reactx build"},
                 {"reactx.json", "Everything about the project in one file.",
                  "{\n"
                  "  \"name\": \"my-app\",\n"
                  "  \"template\": \"web\",\n"
-                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v1.4.0\" },\n"
+                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v1.5.0\" },\n"
                  "  \"dependencies\": { \"fmt\": { \"git\": \"...\", \"rev\": \"11.0.2\", \"target\": \"fmt::fmt\" } },\n"
                  "  \"web\": { \"base\": \"/\", \"proxy\": { \"/api\": \"http://127.0.0.1:5000\" } }\n"
                  "}"},
@@ -210,9 +210,9 @@ inline const std::vector<Page>& pagesEn() {
                  "cd my-app && reactx update && reactx build"},
                 {"Upgrading a project", "reactx update finds the newest release and writes it into reactx.json; the next build downloads it. "
                               "By hand: change rev to the new tag.",
-                 "reactx update\n# or in reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v1.4.0\" }"},
+                 "reactx update\n# or in reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v1.5.0\" }"},
                 {"The version in code", "",
-                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"1.4.0\"\n"
+                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"1.5.0\"\n"
                  "static_assert(REACTX_VERSION_MAJOR == 1);"},
             },
         },

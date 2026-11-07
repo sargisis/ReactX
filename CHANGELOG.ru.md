@@ -6,12 +6,19 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ## [Не выпущено]
 
+## [1.5.0] — 2026-11-07
+
+Ещё восемь библиотек, которые идут вместе с ReactX, — для фронтенда (проверка форм, выбор даты, перетаскивание, анимации) и для серверов (JSON API, вход, логи, настройки) — и адрес клиента в `net::Request`. В существующих приложениях ничего не меняется.
+
+**Обновление:** `reactx upgrade`, затем `reactx update` в каждом проекте; подключите нужные библиотеки (`target_link_libraries(my_app PRIVATE reactx::forms reactx::calendar)`, сервер: `reactx::api reactx::auth reactx::config`).
+
 ### Добавлено
 
 - `reactx::motion` в `library/motion` (`rx/motion.hpp`): `presence` (Fade, Slide, Scale, Collapse — CSS-переходы в браузере с учётом «уменьшения движения»; терминал показывает и скрывает сразу), `useTween` и `useSpring` для плавно меняющихся значений, функции сглаживания. Подключение: `reactx::motion`.
 - `reactx::dnd` в `library/dnd` (`rx/dnd.hpp`): `sortable` — порядок списка перетаскиванием мышью (браузер и терминал) или Alt+↑ / Alt+↓; `moved`. Подключение: `reactx::dnd`.
 - `reactx::calendar` в `library/calendar` (`rx/calendar.hpp`): `calendar` (сетка месяца с min / max / недоступными днями, навигацией с клавиатуры, одной остановкой Tab) и `datePicker`, на языке `reactx::i18n`; `today()`. Подключение: `reactx::calendar`.
 - Страница библиотек (`web_libraries.html`) показывает также forms, calendar, dnd и motion.
+- llms.txt: библиотеки в одной таблице (заголовок, где работает, с какой версии), UI- и серверные — отдельно.
 - `reactx::log` в `library/log` (`rx/log.hpp`): структурные логи — `debug` / `info` / `warn` / `error` с полями `key=value`, текстом или строками JSON (`setup({.json = true})`), уровень из `LOG_LEVEL` (`levelFromEnv`), свой вывод; потокобезопасно. Подключение: `reactx::log`.
 - `reactx::config` в `library/config` (`rx/config.hpp`, нативная): настройки из аргументов (`--port 9000`), переменных окружения (`APP_PORT`) и JSON-файла (вложенные ключи как `db.path`) в этом порядке; `text`, `number`, `flag`, `require` / `requireNumber` (`std::expected` с тем, где искали), `positional`, `source`. Подключение: `reactx::config`.
 - `reactx::auth` в `library/auth` (`rx/auth.hpp`, нативная): `hashPassword` / `verifyPassword` / `needsRehash` (PBKDF2-HMAC-SHA256, 600 000 раундов, случайная соль, сравнение за постоянное время), `Sessions` (cookie с HttpOnly и SameSite, новый id при каждом входе, истечение по простою и общему сроку, `endAll` — выйти везде; потокобезопасно), middleware `requireLogin` и `csrf` для `reactx::api`, а также `randomToken`, `sha256Hex`, `hmacSha256Hex`, `constantTimeEquals`. Проверено на тестовых векторах NIST, RFC 4231 и RFC 7914. Подключение: `reactx::auth`.
@@ -600,7 +607,8 @@ ReactX без установки компиляторов: готовый `react
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v1.4.0...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/sargisis/ReactX/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/sargisis/ReactX/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/sargisis/ReactX/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/sargisis/ReactX/compare/v1.1.0...v1.2.0

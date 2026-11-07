@@ -93,7 +93,7 @@ const char* kindClass(Kind k) {
 Element Presence(const PresenceProps& p) {
     auto [mounted, setMounted] = useState(p.show);
     auto [from, setFrom] = useState(p.show);  // at the hidden style: entering starts there
-    useEffect(
+    rx::useEffect(
         [show = p.show, ms = p.duration.count(), setMounted, setFrom]() -> Cleanup {
             if (show) {
                 setMounted(true);
@@ -125,8 +125,6 @@ Element Presence(const PresenceProps& p) {
 
 }  // namespace
 
-// These are defined here and declared in rx/motion.hpp: no `inline` (an inline
-// function in a .cpp file isn't kept in the library, and apps fail to link).
 double linear(double t) { return t; }
 double easeIn(double t) { return t * t * t; }
 double easeOut(double t) {
@@ -146,10 +144,10 @@ Element presence(PresenceProps props) {
     if (!key.empty()) e.key = std::move(key);
     return e;
 }
-// I'll add inline that i wanna to get maximum fast performance, because this function is called every frame. I don't want to pay the cost of a function call for every frame.
+
 double useTween(double target, TweenOptions options) {
     auto [value, setValue] = useState(target);
-    useEffect(
+    rx::useEffect(
         [target, from = value, duration = options.duration, easing = options.easing, setValue]() -> Cleanup {
             if (from == target || duration.count() <= 0) {
                 setValue(target);
@@ -174,7 +172,7 @@ double useSpring(double target, SpringOptions options) {
     };
     auto [value, setValue] = useState(target);
     auto& state = useRef(std::make_shared<State>(State{target, 0, {}}));
-    useEffect(
+    rx::useEffect(
         [target, s = state, o = options, setValue]() -> Cleanup {
             s->last = Clock::now();
             return everyFrame([=] {

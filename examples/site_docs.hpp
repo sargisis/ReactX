@@ -196,15 +196,15 @@ inline const std::vector<Page>& pages() {
                 {"reactx update", "Переводит проект на новейший релиз ReactX: находит теги в репозитории из reactx.json, "
                                   "выбирает самый новый по SemVer (без -rc) и записывает его в rev. --check только проверяет, "
                                   "--to — конкретная версия. Следующий reactx build скачает её сам.",
-                 "reactx update --check   # ReactX v1.4.0 → v1.5.0 is available\n"
-                 "reactx update           # записывает v1.5.0 в reactx.json\n"
+                 "reactx update --check   # ReactX v1.5.0 → v1.6.0 is available\n"
+                 "reactx update           # записывает v1.6.0 в reactx.json\n"
                  "reactx update --to v0.3.0\n"
                  "reactx build"},
                 {"reactx.json", "Всё, что нужно проекту, в одном файле.",
                  "{\n"
                  "  \"name\": \"my-app\",\n"
                  "  \"template\": \"web\",\n"
-                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v1.5.0\" },\n"
+                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v1.6.0\" },\n"
                  "  \"dependencies\": { \"fmt\": { \"git\": \"...\", \"rev\": \"11.0.2\", \"target\": \"fmt::fmt\" } },\n"
                  "  \"web\": { \"base\": \"/\", \"proxy\": { \"/api\": \"http://127.0.0.1:5000\" } }\n"
                  "}"},
@@ -226,7 +226,7 @@ inline const std::vector<Page>& pages() {
                                      "остаётся опциональной (reactx::reflection, нативные сборки) и пока вне этого обещания.", ""},
                 {"Версия в коде", "Номер версии записан в одном месте — project(ReactX VERSION ...) в CMakeLists.txt; "
                                   "из него генерируется reactx/version.hpp.",
-                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"1.5.0\"\n"
+                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"1.6.0\"\n"
                  "static_assert(REACTX_VERSION_MAJOR == 1);"},
                 {"Обновить reactx", "Два шага: сам инструмент, потом каждый проект. reactx upgrade заменяет reactx новейшим релизом "
                                     "(проверяя SHA-256); до v0.14.0 — запустите установщик ещё раз. Раз в день reactx сам проверяет "
@@ -236,7 +236,7 @@ inline const std::vector<Page>& pages() {
                  "cd my-app && reactx update && reactx build"},
                 {"Обновить проект", "reactx update находит новейший релиз и записывает его в reactx.json; reactx build скачивает его. "
                                "Вручную — поменяйте rev на новый тег.",
-                 "reactx update\n# или в reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v1.5.0\" }"},
+                 "reactx update\n# или в reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v1.6.0\" }"},
             },
         },
         {
@@ -316,7 +316,7 @@ inline const std::vector<Page>& pages() {
                 {"useState", "Возвращает значение и setter. Setter принимает новое значение или функцию от старого. "
                              "Равное значение не вызывает перерисовку. Подходит любой тип, и std::vector своих структур тоже: "
                              "если есть == (свой или у всех частей), равное значение пропускается, если нет — каждый set перерисовывает. "
-                             "Дорогое первое значение — в лямбду: она выполнится один раз, при первой отрисовке (следующий релиз, после v1.5.0).",
+                             "Дорогое первое значение — в лямбду: она выполнится один раз, при первой отрисовке (с v1.6.0).",
                  "auto [name, setName] = useState(std::string{});\nsetName(\"Аня\");\nsetCount([](int c) { return c + 1; });\n"
                  "auto [rows, setRows] = useState([] { return loadRows(); });  // один раз"},
                 {"useEffect", "Запускается после отрисовки. deps(...) — когда перезапускать; deps() — один раз. "

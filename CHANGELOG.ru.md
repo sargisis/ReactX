@@ -6,6 +6,12 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ## [Не выпущено]
 
+## [1.6.0] — 2026-11-07
+
+Ошибки сборки человеческим языком вместо сотен строк компилятора, ленивое первое значение `useState` и более быстрое ядро: перерисовка, хуки и большие деревья в терминале. В существующих приложениях ничего не меняется.
+
+**Обновление:** `reactx upgrade`, затем `reactx update` в каждом проекте.
+
 ### Добавлено
 
 - `useState([] { return ...; })`: лямбда вместо первого значения выполняется один раз, при первой отрисовке, а не строит значение на каждой отрисовке впустую (`std::function` по-прежнему хранится как само состояние).
@@ -625,7 +631,8 @@ ReactX без установки компиляторов: готовый `react
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v1.5.0...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/sargisis/ReactX/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/sargisis/ReactX/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/sargisis/ReactX/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/sargisis/ReactX/compare/v1.2.0...v1.3.0

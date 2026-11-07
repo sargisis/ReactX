@@ -176,14 +176,14 @@ inline const std::vector<Page>& pagesEn() {
                  "# CMakeLists.txt\ntarget_link_libraries(my_app PRIVATE reactx::charts reactx::i18n)\n\n"
                  "reactx add fmt https://github.com/fmtlib/fmt.git --rev 11.0.2 --target fmt::fmt\nreactx remove fmt"},
                 {"reactx update", "Moves your project to the newest ReactX release. --check only tells you whether there is one.",
-                 "reactx update --check   # ReactX v1.4.0 -> v1.5.0 is available\n"
+                 "reactx update --check   # ReactX v1.5.0 -> v1.6.0 is available\n"
                  "reactx update\n"
                  "reactx build"},
                 {"reactx.json", "Everything about the project in one file.",
                  "{\n"
                  "  \"name\": \"my-app\",\n"
                  "  \"template\": \"web\",\n"
-                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v1.5.0\" },\n"
+                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v1.6.0\" },\n"
                  "  \"dependencies\": { \"fmt\": { \"git\": \"...\", \"rev\": \"11.0.2\", \"target\": \"fmt::fmt\" } },\n"
                  "  \"web\": { \"base\": \"/\", \"proxy\": { \"/api\": \"http://127.0.0.1:5000\" } }\n"
                  "}"},
@@ -210,9 +210,9 @@ inline const std::vector<Page>& pagesEn() {
                  "cd my-app && reactx update && reactx build"},
                 {"Upgrading a project", "reactx update finds the newest release and writes it into reactx.json; the next build downloads it. "
                               "By hand: change rev to the new tag.",
-                 "reactx update\n# or in reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v1.5.0\" }"},
+                 "reactx update\n# or in reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v1.6.0\" }"},
                 {"The version in code", "",
-                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"1.5.0\"\n"
+                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"1.6.0\"\n"
                  "static_assert(REACTX_VERSION_MAJOR == 1);"},
             },
         },
@@ -286,7 +286,7 @@ inline const std::vector<Page>& pagesEn() {
                 {"useState", "A value that survives re-renders. The setter takes a new value or a function of the old one; "
                              "setting the same value does nothing. Any type works, a std::vector of your own structs too: "
                              "with == (its own, or of all its parts) an equal value is skipped, without it every set re-renders. "
-                             "A costly first value goes in a lambda: it runs once, on the first render (next release, after v1.5.0).",
+                             "A costly first value goes in a lambda: it runs once, on the first render (since v1.6.0).",
                  "auto [name, setName] = useState(std::string{});\nsetName(\"Ann\");\nsetCount([](int c) { return c + 1; });\n"
                  "auto [rows, setRows] = useState([] { return loadRows(); });  // built once"},
                 {"useEffect", "Runs after the screen updates. deps(...) says when to run it again; deps() means once. "

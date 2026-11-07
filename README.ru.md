@@ -179,7 +179,7 @@ int main() { mountDom(h(App)); }
 <details>
 <summary><b>Хуки и события</b></summary>
 
-- `useState` — значение или функция-updater; равное значение не вызывает перерисовку (тип без `==`, например `std::vector<MyStruct>`, перерисовывается при каждом set). Лямбда вместо первого значения выполняется один раз, при первой отрисовке: `useState([] { return loadRows(); })` (следующий релиз, после v1.5.0).
+- `useState` — значение или функция-updater; равное значение не вызывает перерисовку (тип без `==`, например `std::vector<MyStruct>`, перерисовывается при каждом set). Лямбда вместо первого значения выполняется один раз, при первой отрисовке: `useState([] { return loadRows(); })` (v1.6.0).
 - `useEffect` — без deps (каждый раз), `deps(a, b)` или `deps()` (один раз); может вернуть функцию очистки.
 - `useRef`, `useMemo` (пересчёт только при смене deps), `useCallback` (обработчик сохраняет «личность», пока не сменились deps; любая сигнатура — `std::function<void(int)> open = useCallback([setOpen](int id) { setOpen(id); }, deps());` для memo-строки).
 - `useReducer(reducer, initial)` → `[state, dispatch]`: состояние, которое меняют действия; берётся самый свежий reducer.

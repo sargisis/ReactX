@@ -6,6 +6,12 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+## [1.6.0] — 2026-11-07
+
+Build errors in plain words instead of hundreds of compiler lines, a lazy first value for `useState`, and a faster core: re-renders, hooks and big terminal trees. Nothing changes for existing apps.
+
+**Update:** `reactx upgrade`, then `reactx update` in each project.
+
 ### Added
 
 - `useState([] { return ...; })`: a lambda as the first value runs once, on the first render, instead of the value being built on every render and thrown away (a `std::function` is still kept as the state itself).
@@ -625,7 +631,8 @@ The first release.
 - **A documentation site** built with ReactX: https://sargisis.github.io/ReactX/, published by GitHub Actions through the `gh-pages` branch.
 - The version in one place (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; new projects from `reactx new` use ReactX by release tag.
 
-[Unreleased]: https://github.com/sargisis/ReactX/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/sargisis/ReactX/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/sargisis/ReactX/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/sargisis/ReactX/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/sargisis/ReactX/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/sargisis/ReactX/compare/v1.2.0...v1.3.0

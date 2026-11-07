@@ -23,9 +23,16 @@ namespace {
 
 using PropMap = std::flat_map<std::string, std::string, std::less<>>;
 
-std::string prop(const PropMap& props, std::string_view name, std::string fallback = {}) {
+// A view into the node's props (no copy): valid until that prop changes.
+std::string_view prop(const PropMap& props, std::string_view name, std::string_view fallback = {}) {
     auto it = props.find(name);
-    return it == props.end() ? std::move(fallback) : it->second;
+    return it == props.end() ? fallback : std::string_view(it->second);
+}
+
+// Some prop's name starts with `prefix` ("padding" for paddingX, paddingLeft, ...): one lookup.
+bool hasPropStartingWith(const PropMap& props, std::string_view prefix) {
+    auto it = props.lower_bound(prefix);
+    return it != props.end() && std::string_view(it->first).starts_with(prefix);
 }
 
 bool flag(const PropMap& props, std::string_view name) { return prop(props, name) == "true"; }
@@ -132,11 +139,11 @@ struct Value {
     float number = 0;
 };
 
-Value parseValue(const std::string& s) {
+Value parseValue(std::string_view s) {
     if (s.empty()) return {};
     if (s == "auto") return {Value::Auto, 0};
     bool percent = s.back() == '%';
-    std::string_view digits(s.data(), s.size() - (percent ? 1 : 0));
+    std::string_view digits = s.substr(0, s.size() - (percent ? 1 : 0));
     float v = 0;
     auto [ptr, ec] = std::from_chars(digits.data(), digits.data() + digits.size(), v);
     if (ec != std::errc{} || ptr != digits.data() + digits.size()) return {};
@@ -162,16 +169,20 @@ void setEdges(YGNodeRef n, const PropMap& props, std::string_view name, SetEdge 
         {"Left", YGEdgeLeft},      {"Right", YGEdgeRight},  {"Top", YGEdgeTop},
         {"Bottom", YGEdgeBottom},
     };
+    if (!hasPropStartingWith(props, name)) return;  // most nodes have no padding / margin at all
+    std::string key(name);
     for (auto [suffix, edge] : suffixes) {
         if (suffix.empty() && !withAll) continue;
-        Value v = parseValue(prop(props, std::string(name) + std::string(suffix)));
+        key.resize(name.size());
+        key += suffix;
+        Value v = parseValue(prop(props, key));
         if (v.kind == Value::Points) points(n, edge, v.number);
         else if (v.kind == Value::Percent) percent(n, edge, v.number);
         else if (v.kind == Value::Auto && autoFn) autoFn(n, edge);
     }
 }
 
-YGAlign parseAlign(const std::string& s, YGAlign fallback) {
+YGAlign parseAlign(std::string_view s, YGAlign fallback) {
     if (s == "start" || s == "flex-start") return YGAlignFlexStart;
     if (s == "center") return YGAlignCenter;
     if (s == "end" || s == "flex-end") return YGAlignFlexEnd;
@@ -183,7 +194,7 @@ YGAlign parseAlign(const std::string& s, YGAlign fallback) {
     return fallback;
 }
 
-YGJustify parseJustify(const std::string& s) {
+YGJustify parseJustify(std::string_view s) {
     if (s == "center") return YGJustifyCenter;
     if (s == "end" || s == "flex-end") return YGJustifyFlexEnd;
     if (s == "space-between") return YGJustifySpaceBetween;
@@ -196,7 +207,7 @@ bool isRow(const PropMap& props) { return prop(props, "direction").starts_with("
 
 void applyStyle(YGNodeRef n, const PropMap& props, bool container) {
     if (container) {
-        std::string dir = prop(props, "direction");
+        std::string_view dir = prop(props, "direction");
         YGNodeStyleSetFlexDirection(n, dir == "row"              ? YGFlexDirectionRow
                                        : dir == "row-reverse"    ? YGFlexDirectionRowReverse
                                        : dir == "column-reverse" ? YGFlexDirectionColumnReverse
@@ -829,7 +840,7 @@ void TerminalRenderer::draw(const Layout& layout, NodeHandle h, float originX, f
     // Like CSS overflow: visible, except that children never draw over a
     // border; overflow="hidden" clips them to the box.
     int b = flag(n->props, "border") ? 1 : 0;
-    std::string overflow = prop(n->props, "overflow");
+    std::string_view overflow = prop(n->props, "overflow");
     bool scroll = overflow == "scroll";
     Rect inner = clip;
     if (b || overflow == "hidden" || scroll)
@@ -880,7 +891,7 @@ void TerminalRenderer::draw(const Layout& layout, NodeHandle h, float originX, f
         bs.bold = false;
         int right = x0 + w;
         int bottom = y0 + hgt - 1;
-        std::string title = prop(n->props, "title");
+        std::string title(prop(n->props, "title"));
         // Box drawing (UTF-8) or ASCII for other locales.
         std::string_view tl = unicode_ ? "┌" : "+", tr = unicode_ ? "┐" : "+", bl = unicode_ ? "└" : "+",
                          br = unicode_ ? "┘" : "+", hz = unicode_ ? "─" : "-", vt = unicode_ ? "│" : "|";
@@ -1306,7 +1317,7 @@ std::size_t TerminalRenderer::cursorIn(NodeHandle field, const std::string& valu
 bool TerminalRenderer::editKey(Root& root, NodeHandle field, const KeyEvent& key, bool multiline) {
     const Node* n = findNode(field);
     if (!n) return false;
-    std::string value = prop(n->props, "value");
+    std::string value(prop(n->props, "value"));
     std::size_t cur = cursorIn(field, value);
     Edit& e = edits_[field];
     // Set the edit state first: dispatching re-renders and repaints.
@@ -1362,7 +1373,7 @@ bool TerminalRenderer::editKey(Root& root, NodeHandle field, const KeyEvent& key
 // the cursor stays in view and shows as an inverted cell while focused.
 void TerminalRenderer::drawField(NodeHandle h, const Rect& content, const Rect& clip, Style st, bool multiline, Frame& frame) {
     const Node* n = findNode(h);
-    std::string value = prop(n->props, "value");
+    std::string value(prop(n->props, "value"));
     Rect area = content.intersect(clip);
     int width = std::max(content.right - content.left, 0);
     int height = multiline ? std::max(content.bottom - content.top, 1) : 1;
@@ -1374,7 +1385,7 @@ void TerminalRenderer::drawField(NodeHandle h, const Rect& content, const Rect& 
     if (value.empty() && !focused) {
         Style hint = field;
         hint.dim = true;
-        auto lines = multiline ? wrapText(prop(n->props, "placeholder"), width) : splitLines(prop(n->props, "placeholder"));
+        auto lines = multiline ? wrapText(std::string(prop(n->props, "placeholder")), width) : splitLines(std::string(prop(n->props, "placeholder")));
         for (int row = 0; row < height && row < static_cast<int>(lines.size()); ++row)
             put(frame, content.left, content.top + row, area, lines[static_cast<std::size_t>(row)], hint);
         return;

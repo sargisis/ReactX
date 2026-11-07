@@ -387,8 +387,8 @@ struct TypedPropsOf final : TypedProps {
     Element render() const override;
     bool equals(const TypedProps& other) const override {
         if constexpr (EqualityComparable<P>) {
-            auto* o = dynamic_cast<const TypedPropsOf*>(&other);
-            return o && o->fn == fn && o->props == props;
+            // The same component function means the same props type P.
+            return other.component() == component() && static_cast<const TypedPropsOf&>(other).props == props;
         } else {
             return false;  // can't compare: always re-render
         }

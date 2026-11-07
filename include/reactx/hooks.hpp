@@ -39,8 +39,15 @@ namespace detail {
 
 struct Fiber;
 
+// One address per type: compared instead of dynamic_cast, which costs a
+// lookup per call and needs RTTI (with RTTI off, every std::function also
+// stops carrying the type name of its lambda: ~20 KB less in a .wasm).
+template <class T>
+inline constexpr char typeTag = 0;
+
 struct HookBase {
     virtual ~HookBase() = default;
+    const void* kind = nullptr;  // &typeTag<the hook's type>, set by its first use
 };
 
 struct HookSlot {
@@ -60,9 +67,10 @@ void checkUiThread(const Fiber& fiber);
 
 template <class H>
 H& checkedHook(HookBase* hook) {
-    auto* h = dynamic_cast<H*>(hook);
-    if (!h) throw std::logic_error("ReactX: hook order changed between renders");
-    return *h;
+    // A new hook is named by its first use (nextHook just made it as an H).
+    if (!hook->kind) hook->kind = &typeTag<H>;
+    else if (hook->kind != &typeTag<H>) throw std::logic_error("ReactX: hook order changed between renders");
+    return static_cast<H&>(*hook);
 }
 
 template <class T>
@@ -80,15 +88,15 @@ struct RefHook : HookBase {
 struct DepsBase {
     virtual ~DepsBase() = default;
     virtual bool equals(const DepsBase& other) const = 0;
+    const void* kind = nullptr;  // &typeTag<the Deps type>
 };
 
 template <class Tuple>
 struct Deps : DepsBase {
     Tuple values;
-    explicit Deps(Tuple t) : values(std::move(t)) {}
+    explicit Deps(Tuple t) : values(std::move(t)) { kind = &typeTag<Deps>; }
     bool equals(const DepsBase& other) const override {
-        auto* o = dynamic_cast<const Deps*>(&other);
-        return o && o->values == values;
+        return other.kind == kind && static_cast<const Deps&>(other).values == values;
     }
 };
 

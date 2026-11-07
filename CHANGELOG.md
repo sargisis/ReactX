@@ -6,6 +6,10 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Changed
+
+- Faster hooks: a hook and an effect's dependencies are checked by comparing one pointer (a tag per type) instead of `dynamic_cast` on every render; context values and typed props compare the same way. ReactX itself no longer uses `dynamic_cast`.
+
 ## [1.5.0] — 2026-11-07
 
 Eight more libraries that come with ReactX — for the frontend (validation, a date picker, drag and drop, animations) and for servers (a JSON API, sign-in, logs, settings) — and the client's address in `net::Request`. Nothing changes for existing apps.

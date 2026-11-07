@@ -153,3 +153,13 @@ Preact — это самый компактный и чистый React-совм
 - [x] SECURITY.md (EN + RU)
 - [x] Lighthouse: 96 Performance / 100 SEO / 100 Best Practices
 - [x] 10k+ просмотров на LinkedIn за первые сутки 🚀
+
+---
+
+## 2.0: std::function lighter (measured 2026-11-07)
+
+On the site `std::function` code is ~67 KB of the .wasm (~10%): typeinfo of every lambda 18.5 KB, the calls 12 KB, copy/move 9.7 KB, clone 7 KB, target()/target_type() 3.4 KB.
+- [ ] `-fno-rtti` for web builds (~22 KB): blocked only by `std::function::target<T>()` in `src/element.cpp` (useCallback's StableFn, NodeRef) and `src/reconciler.cpp` (attaching NodeRef). Needs refs and stable handlers stored as their own `PropValue` alternatives — a change to a public type, so 2.0. dynamic_cast is already gone (v1.6).
+- [ ] `std::copyable_function` / `std::move_only_function` for stored handlers once Emscripten's libc++ has them (GCC 16 does; libc++ in Emscripten 6 has neither, nor `function_ref`).
+- `std::function_ref` doesn't fit: handlers are stored and called later; a non-owning ref would dangle.
+

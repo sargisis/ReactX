@@ -426,8 +426,8 @@ void Reconciler::unmount(Fiber& f) {
         for (Fiber* p : std::exchange(f.compPart->providers, {})) p->rare->consumers.erase(&f);
     for (auto& child : f.children) unmount(*child);
     for (auto& hook : f.compPart ? f.compPart->hooks : noHooks) {
-        if (auto* effect = dynamic_cast<EffectHook*>(hook.get()); effect && effect->cleanup)
-            std::exchange(effect->cleanup, {})();
+        if (hook->kind != &typeTag<EffectHook>) continue;
+        if (auto* effect = static_cast<EffectHook*>(hook.get()); effect->cleanup) std::exchange(effect->cleanup, {})();
     }
     if (f.node) {
         hosts_.erase(f.node);

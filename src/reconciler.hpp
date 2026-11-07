@@ -22,13 +22,17 @@ class Reconciler;
 // keep their own data in a part allocated for them. A text node (a third of
 // a typical tree) is then about half the size it would be otherwise.
 struct Fiber : std::enable_shared_from_this<Fiber> {
+    // The small fields together (no padding between them): 16 bytes less per fiber.
     ElementKind kind = ElementKind::Fragment;
+    bool rendered = false;  // component rendered at least once
+    bool dirty = false;
+    bool alive = true;
+    int depth = 0;
     std::string type;  // host tag ("box") or the text of a text node
     std::string key;
 
     Reconciler* owner = nullptr;
     Fiber* parent = nullptr;
-    int depth = 0;
     std::vector<std::shared_ptr<Fiber>> children;
     NodeHandle node = 0;  // host and text only
 
@@ -65,9 +69,6 @@ struct Fiber : std::enable_shared_from_this<Fiber> {
         return *rare;
     }
     bool failed() const { return rare && rare->error; }  // a boundary showing its fallback
-    bool rendered = false;  // component rendered at least once
-    bool dirty = false;
-    bool alive = true;
 };
 
 class Reconciler {

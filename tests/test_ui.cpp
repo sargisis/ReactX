@@ -724,6 +724,23 @@ TEST(card_and_stack_lay_out_their_children) {
     CHECK(contains(s.text(), "one  two"));  // a row, two cells apart
 }
 
+TEST(card_is_at_least_as_wide_as_its_title) {
+    // In a row a card is as wide as its content; the title used to be cut ("┌─ Resolv").
+    Screen s(ui::stack({.direction = ui::Direction::Row, .children = {
+                            ui::card({.title = "Resolved", .children = {ui::text({.text = "3"})}}),
+                            ui::card({.children = {ui::text({.text = "untitled"})}})}}));
+    CHECK(contains(s.text(), "┌─ Resolved ─┐"));
+    CHECK(contains(s.text(), "untitled"));
+    // In a narrow column it stays inside and the title is cut instead.
+    Screen narrow(h("box", {{"width", 12}}, {ui::card({.title = "A very long title", .children = {ui::text({.text = "x"})}})}));
+    for (auto part : std::views::split(narrow.text(), '\n')) {
+        std::string_view line(part.begin(), part.end());
+        int cells = 0;
+        for (char c : line) cells += (static_cast<unsigned char>(c) & 0xC0) != 0x80;
+        CHECK(cells <= 12);
+    }
+}
+
 Element SelectApp(const Props&) {
     auto [size, setSize] = useState(std::string("m"));
     return h("box", {}, {

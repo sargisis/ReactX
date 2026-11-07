@@ -591,12 +591,16 @@ void TerminalRenderer::setUnicode(bool on) {
 
 void TerminalRenderer::commit() {
     fixFocus();
+    gainedFocus_.clear();
     repaint();
 }
 
 NodeHandle TerminalRenderer::createElement(std::string_view type) {
     NodeHandle h = TextRenderer::createElement(type);
-    if (type == "input" || type == "textarea" || type == "button") ++focusables_;
+    if (type == "input" || type == "textarea" || type == "button") {
+        ++focusables_;
+        gainedFocus_.push_back(h);
+    }
     return h;
 }
 
@@ -604,9 +608,12 @@ void TerminalRenderer::setProp(NodeHandle h, std::string_view name, const PropVa
     if (name == "focusable" || name == "trapFocus") {  // keep the focus counts right
         const Node* n = findNode(h);
         const bool wasFocusable = n && isFocusable(*n), wasTrap = n && flag(n->props, "trapFocus");
+        if (h == focused_ && wasFocusable) rememberFocusPosition();  // it may stop taking focus (a radio group's stop moves)
         TextRenderer::setProp(h, name, value);
         n = findNode(h);
-        focusables_ += (n && isFocusable(*n)) - static_cast<std::size_t>(wasFocusable);
+        const bool nowFocusable = n && isFocusable(*n);
+        focusables_ += nowFocusable - static_cast<std::size_t>(wasFocusable);
+        if (nowFocusable && !wasFocusable) gainedFocus_.push_back(h);
         traps_ += (n && flag(n->props, "trapFocus")) - static_cast<std::size_t>(wasTrap);
         propChanged(h, name);
         return;
@@ -630,9 +637,12 @@ void TerminalRenderer::removeProp(NodeHandle h, std::string_view name) {
     if (name == "focusable" || name == "trapFocus") {
         const Node* n = findNode(h);
         const bool wasFocusable = n && isFocusable(*n), wasTrap = n && flag(n->props, "trapFocus");
+        if (h == focused_ && wasFocusable) rememberFocusPosition();  // it may stop taking focus (a radio group's stop moves)
         TextRenderer::removeProp(h, name);
         n = findNode(h);
-        focusables_ += (n && isFocusable(*n)) - static_cast<std::size_t>(wasFocusable);
+        const bool nowFocusable = n && isFocusable(*n);
+        focusables_ += nowFocusable - static_cast<std::size_t>(wasFocusable);
+        if (nowFocusable && !wasFocusable) gainedFocus_.push_back(h);
         traps_ += (n && flag(n->props, "trapFocus")) - static_cast<std::size_t>(wasTrap);
         propChanged(h, name);
         return;
@@ -658,9 +668,7 @@ void TerminalRenderer::removeChild(NodeHandle parent, NodeHandle child) {
     if (focused_) {
         for (NodeHandle a = focused_; a; a = findNode(a) ? findNode(a)->parent : 0)
             if (a == child) {
-                auto list = focusable();
-                if (auto it = std::ranges::find(list, focused_); it != list.end())
-                    focusIndex_ = static_cast<std::size_t>(it - list.begin());
+                rememberFocusPosition();
                 break;
             }
     }
@@ -1035,6 +1043,22 @@ std::vector<NodeHandle> TerminalRenderer::focusable() const {
     NodeHandle trap = focusTrap(kRoot);
     collectFocusable(trap ? trap : kRoot, out);
     return out;
+}
+
+// Where the focused node is in the focus order, so that when it goes away
+// (removed, or no longer focusable) the next commit focuses its neighbour.
+// Nodes that became focusable in this commit don't count: the position is
+// the one in the last commit's order (a replaced checkbox is inserted before
+// the old one is removed; its replacement must get the focus, not the next field).
+void TerminalRenderer::rememberFocusPosition() {
+    std::size_t before = 0;
+    for (NodeHandle h : focusable()) {
+        if (h == focused_) {
+            focusIndex_ = before;
+            return;
+        }
+        if (!std::ranges::contains(gainedFocus_, h)) ++before;
+    }
 }
 
 bool TerminalRenderer::attached(NodeHandle h) const {

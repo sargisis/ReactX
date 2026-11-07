@@ -55,7 +55,7 @@ charts::pie({.labels = {"Rent", "Food", "Fun"}, .values = {1200, 450, 200}, .uni
 | `title`, `unit` | a caption; text after every value (`"k"`, `" %"`) |
 | `height` | browser: px (240) |
 | `rows` (`line`) | terminal: rows (10) |
-| `width` | terminal: cells (the window's width); the browser fills the box |
+| `width` | terminal: cells (`bar`, `pie`: the width of their box; `line`: the window's width); the browser fills the box |
 | `dots` (`line`) | a dot on every value in the browser |
 | `donut` (`pie`) | a ring with the total in the middle |
 | `key` | for lists, the last field |

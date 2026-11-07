@@ -33,7 +33,7 @@ struct BarChartProps {
     std::string title{};
     std::string unit{};     // after values: "km", " %"
     int height = 0;         // browser: px (default 240); terminal: unused
-    int width = 0;          // terminal: cells (default: the window's width); browser: unused (fills its box)
+    int width = 0;          // terminal: cells (default: the width of its box); browser: unused (fills its box)
     std::string key{};
 };
 Element bar(BarChartProps props);
@@ -46,7 +46,7 @@ struct LineChartProps {
     std::string unit{};
     int height = 0;         // browser: px (default 240)
     int rows = 0;           // terminal: rows (default 10)
-    int width = 0;          // terminal: cells (default: the window's width)
+    int width = 0;          // terminal: cells (default: the window's width; inside cards, set it)
     bool dots = true;       // browser: a dot on every value
     std::string key{};
 };
@@ -60,7 +60,7 @@ struct PieChartProps {
     std::string title{};
     std::string unit{};
     bool donut = false;     // browser: a ring with the total in the middle
-    int width = 0;          // terminal: cells
+    int width = 0;          // terminal: cells (default: the width of its box)
     std::string key{};
 };
 Element pie(PieChartProps props);

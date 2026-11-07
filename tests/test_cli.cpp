@@ -380,11 +380,12 @@ void endToEnd(const fs::path& tmp) {
     CHECK(filtered.code == 0 && contains(filtered.out, "OK, 1 test passed"));
 
     std::cout << "e2e: a changed reactx.json is picked up (reactx update / add)\n";
-    CHECK(!contains(reactx({"build"}, tmp / "term-app").out, "Configuring done"));  // nothing changed
+    // --verbose: the build's own output (CMake's "Configuring done"), not just the summary.
+    CHECK(!contains(reactx({"build", "--verbose"}, tmp / "term-app").out, "Configuring done"));  // nothing changed
     std::this_thread::sleep_for(1100ms);  // a newer modification time than CMakeCache.txt
     auto text = read(tmp / "term-app/reactx.json");
     std::ofstream(tmp / "term-app/reactx.json") << text;
-    auto again = reactx({"build"}, tmp / "term-app");
+    auto again = reactx({"build", "--verbose"}, tmp / "term-app");
     CHECK(again.code == 0 && contains(again.out, "Configuring done"));
 
     std::cout << "e2e: a native build of a web project builds its tests, not the browser main\n";

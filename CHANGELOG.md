@@ -16,6 +16,11 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 - Faster terminal apps with big trees: a commit no longer walks the whole tree twice to fix the focus (it keeps counts of nodes that can take or trap focus, and walks only when the focused node goes away or a trap appears). 20 new rows in a 10,000-row scrolling log: 32.7 → 12.0 ms.
 - Faster hooks: a hook and an effect's dependencies are checked by comparing one pointer (a tag per type) instead of `dynamic_cast` on every render; context values and typed props compare the same way. ReactX itself no longer uses `dynamic_cast`.
 
+### Fixed
+
+- `reactx::charts` in a terminal: a bar chart or a pie without `.width` now takes the width of its box, not of the window, so in a card inside a card the values at the right are no longer cut ("4 incide"). With `.width` nothing changes. (Line charts still use the window's width: give them `.width` inside cards.)
+- `ui::card` in a terminal is at least as wide as its title: in a row, "Resolved" over a short value was cut to "Resolve". In a narrow column the card still fits and the title is shortened.
+
 ## [1.5.0] — 2026-11-07
 
 Eight more libraries that come with ReactX — for the frontend (validation, a date picker, drag and drop, animations) and for servers (a JSON API, sign-in, logs, settings) — and the client's address in `net::Request`. Nothing changes for existing apps.

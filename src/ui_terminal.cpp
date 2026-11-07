@@ -195,9 +195,17 @@ Element Text(const Props& p) {
 
 Element Card(const Props& p) {
     const Theme& t = useTheme();
-    return h("box", {{"border", true}, {"title", p.get<std::string>("title")}, {"color", t.muted},
-                     {"paddingX", 1}, {"gap", 1}},
-             p.children());
+    std::string title = p.get<std::string>("title");
+    if (title.empty())
+        return h("box", {{"border", true}, {"color", t.muted}, {"paddingX", 1}, {"gap", 1}}, p.children());
+    // An empty row as wide as the title, so a card sized by its content isn't
+    // narrower than its title ("Resolved" over "Done"); maxWidth keeps a card
+    // in a narrow column from growing past it (the title is cut instead).
+    int titleCells = 0;
+    for (const rx::detail::Glyph& g : rx::detail::utf8Glyphs(title)) titleCells += g.width;
+    return h("box", {{"border", true}, {"title", std::move(title)}, {"color", t.muted}, {"paddingX", 1}},
+             {h("box", {{"width", titleCells + 2}, {"maxWidth", "100%"}, {"height", 0}}),
+              h("box", {{"gap", 1}, {"flexGrow", 1}, {"flexShrink", 1}}, p.children())});
 }
 
 Element Stack(const Props& p) {

@@ -336,6 +336,17 @@ int widthFor(int wanted) {
     return wanted > 0 ? wanted : std::max(24, win.width - 4);
 }
 
+std::string percent(double share) { return fixed(std::clamp(share, 0.0, 1.0) * 100, 2) + "%"; }
+
+// `share` (0..1) of the room a box gets, without knowing that room: a row of
+// █ as long as the window, `share` wide, cut at its own width. Bars drawn
+// this way fit the box the chart is in (a card in a card), not the window.
+Element shareOfRoom(double share, const std::string& color, int fill) {
+    std::string text;
+    for (int i = 0; i < fill; ++i) text += "█";
+    return h("text", {{"width", percent(share)}, {"flexShrink", 0}, {"wrap", false}, {"color", color}}, {std::move(text)});
+}
+
 Element cell(std::string text, int width, std::string color = {}, bool dim = false) {
     return h("box", {{"width", width}, {"flexShrink", 0}},
              {h("text", {{"wrap", false}, {"color", std::move(color)}, {"dim", dim}}, {std::move(text)})});
@@ -352,13 +363,16 @@ Element legendRow(const std::vector<Series>& series) {
     return h("box", {{"direction", "row"}, {"gap", 2}}, std::move(items));
 }
 
-Element chartBox(const std::string& title, std::vector<Element> body) {
+// `fits`: the chart takes the width of its box (in a row, the free room).
+Element chartBox(const std::string& title, std::vector<Element> body, bool fits = false) {
     if (!title.empty()) body.insert(body.begin(), h("text", {{"bold", true}}, {title}));
+    if (fits) return h("box", {{"growInRow", 1}, {"minWidth", 24}}, std::move(body));
     return h("box", {}, std::move(body));
 }
 
 Element BarChart(const BarChartProps& p) {
     const int width = widthFor(p.width);
+    const bool fits = p.width <= 0;  // no width given: the bars share the room left in the box
     const std::size_t n = pointCount(p.labels, p.series);
     double top = 0;
     int labelW = 1, valueW = 1;
@@ -377,11 +391,14 @@ Element BarChart(const BarChartProps& p) {
         for (std::size_t k = 0; k < p.series.size(); ++k) {
             const Series& s = p.series[k];
             double v = i < s.values.size() && std::isfinite(s.values[i]) ? s.values[i] : 0;
-            body.push_back(row({cell(k == 0 ? labelAt(p.labels, i) : "", labelW),
-                                cell(barText(top > 0 ? std::abs(v) / top : 0, barW), barW, colorOf(s.color, k)),
+            const double share = top > 0 ? std::abs(v) / top : 0;
+            Element bar = fits ? h("box", {{"flexGrow", 1}, {"flexShrink", 1}, {"flexBasis", 0}, {"minWidth", 4}},
+                                   {shareOfRoom(share, colorOf(s.color, k), width)})
+                               : cell(barText(share, barW), barW, colorOf(s.color, k));
+            body.push_back(row({cell(k == 0 ? labelAt(p.labels, i) : "", labelW), std::move(bar),
                                 cell(shortNumber(v) + p.unit, valueW, {}, true)}));
         }
-    return chartBox(p.title, std::move(body));
+    return chartBox(p.title, std::move(body), fits);
 }
 
 // Braille: a cell holds 2x4 dots, so a line is drawn at twice/four times the cell grid.
@@ -494,13 +511,19 @@ Element PieChart(const PieChartProps& p) {
     }
     std::ranges::sort(rest, std::greater<>{});
     for (std::size_t j = 0; total > 0 && used < width && j < rest.size(); ++j, ++used) ++cells[rest[j].second];
+    const bool fits = p.width <= 0;  // no width given: the bar is as wide as the box
     std::vector<Element> bar;
     int labelW = 1, valueW = 1;
     for (std::size_t i = 0; i < p.values.size(); ++i) {
         std::string color = colorOf(i < p.colors.size() ? p.colors[i] : std::string{}, i);
-        std::string text;
-        for (int c = 0; c < cells[i]; ++c) text += "█";
-        if (!text.empty()) bar.push_back(h("text", {{"color", color}, {"wrap", false}}, {text}));
+        double v = std::isfinite(p.values[i]) ? std::max(p.values[i], 0.0) : 0;
+        if (fits) {
+            if (total > 0 && v > 0) bar.push_back(shareOfRoom(v / total, color, width));
+        } else {
+            std::string text;
+            for (int c = 0; c < cells[i]; ++c) text += "█";
+            if (!text.empty()) bar.push_back(h("text", {{"color", color}, {"wrap", false}}, {text}));
+        }
         labelW = std::max(labelW, cellsOf(labelAt(p.labels, i)));
         valueW = std::max(valueW, cellsOf(shortNumber(p.values[i]) + p.unit));
     }
@@ -512,7 +535,7 @@ Element PieChart(const PieChartProps& p) {
                             cell(shortNumber(v) + p.unit, valueW), cell(fixed(total > 0 ? v / total * 100 : 0, 1) + "%", 6, {}, true)}));
     }
     if (p.donut) body.push_back(h("text", {{"dim", true}}, {"Total " + shortNumber(total) + p.unit}));
-    return chartBox(p.title, std::move(body));
+    return chartBox(p.title, std::move(body), fits);
 }
 #endif
 

@@ -219,6 +219,8 @@ private:
     std::size_t focusables_ = 0;
     std::size_t traps_ = 0;
     bool attached(NodeHandle h) const;  // in the tree under the root
+    void rememberFocusPosition();       // the focused node's place in the focus order, before it goes away
+    std::vector<NodeHandle> gainedFocus_;  // became focusable in the current commit
 
     // Scroll boxes: the position of each, and its sizes from the last repaint.
     struct ScrollBox {

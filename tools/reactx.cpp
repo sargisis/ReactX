@@ -191,13 +191,20 @@ int runLogged(const std::vector<std::string>& args, const fs::path& cwd, std::st
             std::fflush(stdout);
             continue;
         }
-        if (!tty) continue;
-        // Ninja's "[12/40] Building CXX object ..." -> one line that updates.
         pending.append(chunk);
         for (auto nl = pending.find('\n'); nl != std::string::npos; nl = pending.find('\n')) {
             std::string line = pending.substr(0, nl);
             pending.erase(0, nl + 1);
-            if (line.starts_with("[") && line.find('/') != std::string::npos && line.find(']') != std::string::npos) {
+            // What the build made that the user wants to know: the prerendered pages.
+            if (line.starts_with("reactx: prerendered ")) {
+                if (progressShown) std::print("\r{}\r", std::string(40, ' '));
+                std::println("{}", line);
+                std::fflush(stdout);
+                progressShown = false;
+                continue;
+            }
+            // Ninja's "[12/40] Building CXX object ..." -> one line that updates.
+            if (tty && line.starts_with("[") && line.find('/') != std::string::npos && line.find(']') != std::string::npos) {
                 std::print("\r  {} {}   ", ru ? "сборка" : "building", line.substr(1, line.find(']') - 1));
                 std::fflush(stdout);
                 progressShown = true;

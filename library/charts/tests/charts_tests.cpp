@@ -88,3 +88,39 @@ RX_TEST(width_follows_the_window) {
     testing::Screen s(charts::bar({.labels = {"A"}, .series = {{.values = {1}}}}), 30, 4);
     for (const auto& l : s.lines()) CHECK(count(l, "█") <= 26);
 }
+
+namespace {
+int cells(const std::string& line) {
+    int n = 0;
+    for (char c : line) n += (static_cast<unsigned char>(c) & 0xC0) != 0x80;
+    return n;
+}
+Element framed(Element child) {  // like a ui::card: a border and a space on each side
+    return h("box", {{"border", true}, {"paddingX", 1}}, {std::move(child)});
+}
+}  // namespace
+
+RX_TEST(bars_fit_a_box_in_a_box) {
+    testing::Screen s(framed(framed(charts::bar({.labels = {"Open", "Monitoring"},
+                                                 .series = {{.values = {4, 2}}},
+                                                 .unit = " incidents"}))),
+                      80, 8);
+    CHECK(s.shows("4 incidents"));  // was cut by the border: the bars took the window's width
+    CHECK(s.shows("2 incidents"));
+    int open = 0, monitoring = 0;
+    for (const auto& l : s.lines()) {
+        CHECK(cells(l) <= 80);
+        if (l.contains("Open")) open = count(l, "█");
+        if (l.contains("Monitoring")) monitoring = count(l, "█");
+    }
+    CHECK(open > 40);  // the bars still use the room there is
+    CHECK(monitoring * 2 >= open - 1 && monitoring * 2 <= open + 1);
+}
+
+RX_TEST(pie_fills_its_box) {
+    testing::Screen s(h("box", {{"width", 40}, {"border", true}},
+                        {charts::pie({.labels = {"a", "b", "c"}, .values = {1, 1, 2}})}),
+                      60, 10);
+    CHECK(count(s.text(), "█") == 38);  // the box's inside, split between the slices
+    CHECK(s.shows("50%"));
+}

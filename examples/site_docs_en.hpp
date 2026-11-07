@@ -171,7 +171,8 @@ inline const std::vector<Page>& pagesEn() {
                               "like React Query, and reactx::markdown shows Markdown (HTML in the browser, colors in a terminal); "
                               "(v1.4.0+) reactx::icons draws 51 line icons; (in the next release) reactx::forms validates forms and JSON, "
                               "and reactx::api builds a JSON API on HttpServer, reactx::auth adds sign-in (passwords, sessions, CSRF), "
-                              "reactx::log and reactx::config give logs and settings. They are a preview: the API may still change in a minor release.",
+                              "reactx::log and reactx::config give logs and settings, reactx::calendar, reactx::dnd and "
+                              "reactx::motion a date picker, drag and drop and animations. They are a preview: the API may still change in a minor release.",
                  "# CMakeLists.txt\ntarget_link_libraries(my_app PRIVATE reactx::charts reactx::i18n)\n\n"
                  "reactx add fmt https://github.com/fmtlib/fmt.git --rev 11.0.2 --target fmt::fmt\nreactx remove fmt"},
                 {"reactx update", "Moves your project to the newest ReactX release. --check only tells you whether there is one.",

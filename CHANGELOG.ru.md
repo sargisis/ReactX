@@ -8,6 +8,10 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ### Добавлено
 
+- `reactx::motion` в `library/motion` (`rx/motion.hpp`): `presence` (Fade, Slide, Scale, Collapse — CSS-переходы в браузере с учётом «уменьшения движения»; терминал показывает и скрывает сразу), `useTween` и `useSpring` для плавно меняющихся значений, функции сглаживания. Подключение: `reactx::motion`.
+- `reactx::dnd` в `library/dnd` (`rx/dnd.hpp`): `sortable` — порядок списка перетаскиванием мышью (браузер и терминал) или Alt+↑ / Alt+↓; `moved`. Подключение: `reactx::dnd`.
+- `reactx::calendar` в `library/calendar` (`rx/calendar.hpp`): `calendar` (сетка месяца с min / max / недоступными днями, навигацией с клавиатуры, одной остановкой Tab) и `datePicker`, на языке `reactx::i18n`; `today()`. Подключение: `reactx::calendar`.
+- Страница библиотек (`web_libraries.html`) показывает также forms, calendar, dnd и motion.
 - `reactx::log` в `library/log` (`rx/log.hpp`): структурные логи — `debug` / `info` / `warn` / `error` с полями `key=value`, текстом или строками JSON (`setup({.json = true})`), уровень из `LOG_LEVEL` (`levelFromEnv`), свой вывод; потокобезопасно. Подключение: `reactx::log`.
 - `reactx::config` в `library/config` (`rx/config.hpp`, нативная): настройки из аргументов (`--port 9000`), переменных окружения (`APP_PORT`) и JSON-файла (вложенные ключи как `db.path`) в этом порядке; `text`, `number`, `flag`, `require` / `requireNumber` (`std::expected` с тем, где искали), `positional`, `source`. Подключение: `reactx::config`.
 - `reactx::auth` в `library/auth` (`rx/auth.hpp`, нативная): `hashPassword` / `verifyPassword` / `needsRehash` (PBKDF2-HMAC-SHA256, 600 000 раундов, случайная соль, сравнение за постоянное время), `Sessions` (cookie с HttpOnly и SameSite, новый id при каждом входе, истечение по простою и общему сроку, `endAll` — выйти везде; потокобезопасно), middleware `requireLogin` и `csrf` для `reactx::api`, а также `randomToken`, `sha256Hex`, `hmacSha256Hex`, `constantTimeEquals`. Проверено на тестовых векторах NIST, RFC 4231 и RFC 7914. Подключение: `reactx::auth`.

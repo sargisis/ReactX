@@ -256,7 +256,132 @@ Element I18nDemo(const Props&) {
     });
 }
 
-constexpr const char* kLibraryTabs[] = {"query", "markdown", "charts", "icons", "i18n"};
+// ---- forms ----
+
+struct Signup {
+    std::string email, password, confirm;
+    bool terms = false;
+};
+
+Element FormsDemo(const Props&) {
+    bool en = useEnglish();
+    static const auto schema = forms::Schema<Signup>()
+                                   .field("email", &Signup::email, {forms::required(), forms::email()})
+                                   .field("password", &Signup::password, {forms::required(), forms::minLength(8)})
+                                   .check("confirm", [](const Signup& s) { return s.confirm == s.password ? "" : "The passwords differ"; })
+                                   .field("terms", &Signup::terms, {forms::accepted()});
+    auto form = ui::useForm<Signup>({.validate = schema.validator(), .onSubmit = [en](const Signup& s) {
+                                         ui::toast({.text = tr(en, "Signed up: ", "Регистрация: ") + s.email, .variant = ui::Variant::Success});
+                                     }});
+    return h("div", {{"className", "live-pane"}}, {
+        h("div", {{"className", "lib-form"}}, {
+            ui::input({.value = form.values.email, .onChange = form.set("email", &Signup::email), .label = "Email",
+                       .labelAbove = true, .error = form.error("email"), .type = ui::InputType::Email}),
+            ui::input({.value = form.values.password, .onChange = form.set("password", &Signup::password),
+                       .label = tr(en, "Password", "Пароль"), .labelAbove = true, .error = form.error("password"),
+                       .type = ui::InputType::Password}),
+            ui::input({.value = form.values.confirm, .onChange = form.set("confirm", &Signup::confirm),
+                       .label = tr(en, "Repeat it", "Повторите"), .labelAbove = true, .error = form.error("confirm"),
+                       .type = ui::InputType::Password}),
+            ui::checkbox({.label = tr(en, "I accept the terms", "Принимаю условия"), .checked = form.values.terms,
+                          .onChange = form.set("terms", &Signup::terms), .error = form.error("terms")}),
+            ui::button({.label = tr(en, "Sign up", "Зарегистрироваться"), .onClick = form.submit, .variant = ui::Variant::Primary}),
+        }),
+        ui::text({.text = tr(en, "forms::Schema<T> — the same rules check JSON on the server (forms::JsonSchema, reactx::api).",
+                             "forms::Schema<T> — те же правила проверяют JSON на сервере (forms::JsonSchema, reactx::api)."),
+                  .muted = true}),
+    });
+}
+
+// ---- motion ----
+
+Element MotionDemo(const Props&) {
+    bool en = useEnglish();
+    auto [open, setOpen] = useState(true);
+    auto [done, setDone] = useState(false);
+    const double progress = motion::useTween(done ? 100.0 : 12.0, {.duration = std::chrono::milliseconds(600)});
+    const double spring = motion::useSpring(open ? 1.0 : 0.0, {.stiffness = 220, .damping = 14});
+    auto panel = [](std::string text) { return h("div", {{"className", "lib-card"}}, {h("b", {}, {std::move(text)})}); };
+    return h("div", {{"className", "live-pane"}}, {
+        ui::stack({.direction = ui::Direction::Row, .wrap = true, .children = {
+            ui::button({.label = open ? tr(en, "Hide", "Скрыть") : tr(en, "Show", "Показать"),
+                        .onClick = [setOpen] { setOpen([](bool v) { return !v; }); }, .variant = ui::Variant::Primary}),
+            ui::button({.label = tr(en, "Toggle progress", "Переключить прогресс"), .onClick = [setDone] { setDone([](bool v) { return !v; }); }}),
+        }}),
+        h("div", {{"className", "lib-grid"}}, {
+            motion::presence({.show = open, .kind = motion::Kind::Fade, .children = {panel("Fade")}}),
+            motion::presence({.show = open, .kind = motion::Kind::Slide, .duration = std::chrono::milliseconds(300), .children = {panel("Slide")}}),
+            motion::presence({.show = open, .kind = motion::Kind::Scale, .children = {panel("Scale")}}),
+            motion::presence({.show = open, .kind = motion::Kind::Collapse, .duration = std::chrono::milliseconds(300),
+                              .children = {panel("Collapse"), panel(tr(en, "…the height opens and closes", "…высота открывается и закрывается"))}}),
+        }),
+        h("div", {{"className", "lib-bar"}}, {h("div", {{"style", "width:" + std::to_string(static_cast<int>(progress)) + "%"}})}),
+        h("div", {{"className", "lib-spring"}, {"style", "transform:translateX(" + std::to_string(static_cast<int>(spring * 220)) + "px)"}}, {"spring"}),
+    });
+}
+
+// ---- dnd ----
+
+Element DndDemo(const Props&) {
+    bool en = useEnglish();
+    auto [order, setOrder] = useState(std::vector<std::string>{"design", "build", "test", "ship"});
+    auto title = [en](const std::string& id) {
+        if (id == "design") return tr(en, "Design the page", "Нарисовать страницу");
+        if (id == "build") return tr(en, "Build it in C++", "Собрать на C++");
+        if (id == "test") return tr(en, "Test in the terminal too", "Проверить и в терминале");
+        return tr(en, "Ship it", "Выпустить");
+    };
+    std::string line;
+    for (const auto& id : order) line += (line.empty() ? "" : " → ") + id;
+    return h("div", {{"className", "live-pane"}}, {
+        h("div", {{"style", "max-width:420px"}}, {
+            dnd::sortable({.ids = order,
+                           .item = [title](const std::string& id, bool) {
+                               return h("div", {{"className", "lib-card lib-drag"}}, {icons::icon({.name = "menu", .size = 16}), h("span", {}, {title(id)})});
+                           },
+                           .onChange = [setOrder](std::vector<std::string> next) { setOrder(std::move(next)); },
+                           .label = tr(en, "Tasks, drag to reorder", "Задачи, перетащите, чтобы поменять порядок"),
+                           .gap = 2})}),
+        ui::text({.text = tr(en, "Order: ", "Порядок: ") + line, .muted = true}),
+        ui::text({.text = tr(en, "Drag with the mouse, or Tab to a task and press Alt+↑ / Alt+↓.",
+                             "Тащите мышью или Tab на задачу и Alt+↑ / Alt+↓."),
+                  .muted = true}),
+    });
+}
+
+// ---- calendar ----
+
+Element CalendarDemo(const Props&) {
+    bool en = useEnglish();
+    // The next weekday (weekends are off in this demo).
+    auto [day, setDay] = useState([] {
+        auto d = std::chrono::sys_days(calendar::today());
+        while (std::chrono::weekday(d) == std::chrono::Saturday || std::chrono::weekday(d) == std::chrono::Sunday) d += std::chrono::days(1);
+        return calendar::Date(d);
+    }());
+    auto [due, setDue] = useState(calendar::Date{});
+    const std::string lang = en ? "en" : "ru";
+    return h("div", {{"className", "live-pane"}}, {
+        h("div", {{"className", "lib-split"}}, {
+            calendar::calendar({.value = day, .onChange = [setDay](calendar::Date d) { setDay(d); },
+                                .disabled = [](calendar::Date d) {
+                                    const auto wd = std::chrono::weekday(std::chrono::sys_days(d));
+                                    return wd == std::chrono::Saturday || wd == std::chrono::Sunday;
+                                },
+                                .lang = lang}),
+            h("div", {}, {
+                ui::text({.text = tr(en, "Picked: ", "Выбрано: ") + i18n::formatDate(day, i18n::DateStyle::Full, lang)}),
+                calendar::datePicker({.value = due, .onChange = [setDue](calendar::Date d) { setDue(d); },
+                                      .label = tr(en, "Due", "Срок"), .min = calendar::today(), .lang = lang}),
+            }),
+        }),
+        ui::text({.text = tr(en, "Weekends are off. Keys: arrows, PageUp / PageDown, Home / End, Enter.",
+                             "Выходные недоступны. Клавиши: стрелки, PageUp / PageDown, Home / End, Enter."),
+                  .muted = true}),
+    });
+}
+
+constexpr const char* kLibraryTabs[] = {"query", "forms", "markdown", "calendar", "dnd", "motion", "charts", "icons", "i18n"};
 
 struct LibraryDemosProps {
     int initial = 0;  // the open tab (web_libraries.html#icons opens "icons")
@@ -267,10 +392,14 @@ Element LibraryDemos(const LibraryDemosProps& p) {
     bool en = useEnglish();
     return h("div", {{"className", "live"}}, {
         ui::tabs({.tabs = {{kLibraryTabs[0], {h(QueryDemo)}},
-                           {kLibraryTabs[1], {h(MarkdownDemo)}},
-                           {kLibraryTabs[2], {h(ChartsDemo)}},
-                           {kLibraryTabs[3], {h(IconsDemo)}},
-                           {kLibraryTabs[4], {h(I18nDemo)}}},
+                           {kLibraryTabs[1], {h(FormsDemo)}},
+                           {kLibraryTabs[2], {h(MarkdownDemo)}},
+                           {kLibraryTabs[3], {h(CalendarDemo)}},
+                           {kLibraryTabs[4], {h(DndDemo)}},
+                           {kLibraryTabs[5], {h(MotionDemo)}},
+                           {kLibraryTabs[6], {h(ChartsDemo)}},
+                           {kLibraryTabs[7], {h(IconsDemo)}},
+                           {kLibraryTabs[8], {h(I18nDemo)}}},
                   .initial = p.initial}),
         ui::text({.text = tr(en, "Each library: target_link_libraries(my_app PRIVATE reactx::<name>).",
                              "Каждая библиотека: target_link_libraries(my_app PRIVATE reactx::<имя>)."),

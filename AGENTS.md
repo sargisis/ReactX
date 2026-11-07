@@ -60,7 +60,7 @@ include/reactx/   public headers (the module re-exports them)
 src/              implementation; utility_hooks.cpp = timers, window size, storage
 modules/          reactx.cppm — `import reactx;`
 tools/            reactx.cpp (the CLI, its project templates are string literals in it), serve.cpp
-library/          libraries that come with ReactX: charts/, i18n/, query/, markdown/, icons/, forms/, log/, api/, auth/, config/ (reactx::charts, ::i18n, ::query, ::markdown, ::icons, ::forms, ::log; ::api, ::auth and ::config are native-only, for servers)
+library/          libraries that come with ReactX: charts/, i18n/, query/, markdown/, icons/, forms/, log/, motion/, dnd/, calendar/, api/, auth/, config/ (reactx::charts, ::i18n, ::query, ::markdown, ::icons, ::forms, ::log, ::motion, ::dnd, ::calendar; ::api, ::auth and ::config are native-only, for servers)
 examples/         demos and the website (site.cpp + site_docs.hpp + web/site_shell.html)
 tests/            one executable per area; test_cli.cpp runs the real CLI
 web/              HTML shells for the web builds

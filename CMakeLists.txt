@@ -224,7 +224,8 @@ if(EMSCRIPTEN)
   # The libraries in library/, live (linked from the site's /demos): a page of
   # its own, so the site's .wasm doesn't carry them.
   add_executable(web_libraries examples/web_libraries.cpp)
-  target_link_libraries(web_libraries PRIVATE reactx reactx_charts reactx_i18n reactx_icons reactx_markdown reactx_query)
+  target_link_libraries(web_libraries PRIVATE reactx reactx_calendar reactx_charts reactx_dnd reactx_forms reactx_i18n reactx_icons
+                        reactx_markdown reactx_motion reactx_query)
   set_target_properties(web_libraries PROPERTIES SUFFIX ".html")
   target_link_options(web_libraries PRIVATE "SHELL:--shell-file ${PROJECT_SOURCE_DIR}/web/shell.html")
   add_executable(web_kanban examples/kanban.cpp)

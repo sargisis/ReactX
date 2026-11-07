@@ -19,10 +19,14 @@
 #include "reactx/parse.hpp"
 #include "reactx/reactx.hpp"
 #include "reactx/ui.hpp"
+#include "rx/calendar.hpp"
 #include "rx/charts.hpp"
+#include "rx/dnd.hpp"
+#include "rx/forms.hpp"
 #include "rx/i18n.hpp"
 #include "rx/icons.hpp"
 #include "rx/markdown.hpp"
+#include "rx/motion.hpp"
 #include "rx/query.hpp"
 
 using namespace rx;
@@ -55,6 +59,12 @@ body { place-items: start center; }
 .lib-icon { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 4px; border-radius: 8px; }
 .lib-icon:hover { background: var(--bg); }
 .lib-icon small, .lib-row small { font: 11px ui-monospace, Menlo, Consolas, monospace; color: var(--muted); }
+.lib-form { display: flex; flex-direction: column; gap: 14px; max-width: 420px; }
+.lib-form .rx-btn { align-self: flex-start; }
+.lib-drag { flex-direction: row; align-items: center; gap: 10px; background: var(--card); }
+.lib-bar { height: 10px; border-radius: 6px; background: var(--border); overflow: hidden; max-width: 420px; }
+.lib-bar > div { height: 100%; background: var(--accent); }
+.lib-spring { display: inline-block; padding: 4px 12px; border-radius: 99px; background: var(--accent); color: var(--accent-text); font-size: 13px; width: max-content; }
 .lib-row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 )css";
 

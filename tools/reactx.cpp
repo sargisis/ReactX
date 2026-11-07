@@ -31,6 +31,7 @@
 #include <expected>
 #include <filesystem>
 #include <fstream>
+#include <unistd.h>
 #include <iterator>
 #include <map>
 #include <optional>
@@ -50,6 +51,7 @@
 #include <generator>
 #endif
 
+#include "explain.hpp"
 #include "reactx/http.hpp"
 #include "reactx/json.hpp"
 #include "reactx/parse.hpp"
@@ -139,6 +141,99 @@ int run(const std::vector<std::string>& args, const fs::path& cwd) {
     while (::waitpid(pid, &status, 0) < 0)
         if (errno != EINTR) return 127;
     return WIFEXITED(status) ? WEXITSTATUS(status) : 128;
+}
+
+// --verbose (or REACTX_VERBOSE=1): show the build's own output as it comes,
+// instead of a progress line and, on failure, a short report.
+bool gVerbose = std::getenv("REACTX_VERBOSE") != nullptr;
+
+// Runs a build step and keeps all it prints (stdout and stderr) in `log`.
+// Shows a one-line progress ("building 12/40") on a terminal, everything
+// with --verbose.
+int runLogged(const std::vector<std::string>& args, const fs::path& cwd, std::string& log) {
+    std::fflush(stdout);
+    std::fflush(stderr);
+    int fds[2];
+    if (::pipe(fds) != 0) fail("pipe failed");
+    pid_t pid = ::fork();
+    if (pid < 0) fail("fork failed");
+    if (pid == 0) {
+        ::dup2(fds[1], STDOUT_FILENO);
+        ::dup2(fds[1], STDERR_FILENO);
+        ::close(fds[0]);
+        ::close(fds[1]);
+        if (::chdir(cwd.c_str()) != 0) ::_exit(127);
+        // The compiler in English, whatever the system's language: the report
+        // reads its messages (and explains them in the user's language).
+        ::setenv("LC_ALL", "C", 1);
+        std::vector<char*> argv;
+        for (const auto& a : args) argv.push_back(const_cast<char*>(a.c_str()));
+        argv.push_back(nullptr);
+        ::execvp(argv[0], argv.data());
+        std::println(stderr, "reactx: can't run {}", args[0]);
+        ::_exit(127);
+    }
+    ::close(fds[1]);
+    const bool tty = ::isatty(STDOUT_FILENO) != 0;
+    const bool ru = explain::russianLocale();
+    bool progressShown = false;
+    std::string pending;
+    char buf[8192];
+    for (ssize_t n; (n = ::read(fds[0], buf, sizeof buf)) != 0;) {
+        if (n < 0) {
+            if (errno == EINTR) continue;
+            break;
+        }
+        std::string_view chunk(buf, static_cast<std::size_t>(n));
+        log.append(chunk);
+        if (gVerbose) {
+            std::fwrite(chunk.data(), 1, chunk.size(), stdout);
+            std::fflush(stdout);
+            continue;
+        }
+        if (!tty) continue;
+        // Ninja's "[12/40] Building CXX object ..." -> one line that updates.
+        pending.append(chunk);
+        for (auto nl = pending.find('\n'); nl != std::string::npos; nl = pending.find('\n')) {
+            std::string line = pending.substr(0, nl);
+            pending.erase(0, nl + 1);
+            if (line.starts_with("[") && line.find('/') != std::string::npos && line.find(']') != std::string::npos) {
+                std::print("\r  {} {}   ", ru ? "сборка" : "building", line.substr(1, line.find(']') - 1));
+                std::fflush(stdout);
+                progressShown = true;
+            }
+        }
+    }
+    ::close(fds[0]);
+    if (progressShown) std::print("\r{}\r", std::string(40, ' '));
+    int status = 0;
+    while (::waitpid(pid, &status, 0) < 0)
+        if (errno != EINTR) return 127;
+    return WIFEXITED(status) ? WEXITSTATUS(status) : 128;
+}
+
+// After a failed step: a short report in plain words (explain.cpp), or the
+// output's last lines when it has nothing it understands. The full output
+// goes to build/<preset>/reactx-build.log.
+void showFailure(const fs::path& root, const std::string& preset, const std::string& log) {
+    std::error_code ec;
+    fs::path file = root / "build" / preset / "reactx-build.log";
+    fs::create_directories(file.parent_path(), ec);
+    std::ofstream(file, std::ios::binary) << log;
+    if (gVerbose) return;  // it has been shown already
+    const bool ru = explain::russianLocale();
+    std::string text = explain::report(log, {.root = root, .russian = ru});
+    if (text.empty()) {  // nothing recognized: the end of the output, where the reason usually is
+        std::vector<std::string_view> lines;
+        for (auto part : std::views::split(std::string_view(log), '\n')) lines.emplace_back(part.begin(), part.end());
+        std::size_t from = lines.size() > 30 ? lines.size() - 30 : 0;
+        for (std::size_t i = from; i < lines.size(); ++i) std::println(stderr, "{}", lines[i]);
+    } else {
+        std::print(stderr, "{}", text);
+    }
+    const std::string where = fs::relative(file, root, ec).string();
+    if (ru) std::println(stderr, "\n  Весь вывод: {}  (reactx build --verbose показывает его сразу)", where);
+    else std::println(stderr, "\n  All of it: {}  (reactx build --verbose shows it as it comes)", where);
 }
 
 // Runs a program (no shell) and returns what it printed to stdout, or why it
@@ -1013,11 +1108,20 @@ bool build(const fs::path& root, const std::string& preset, const std::string& t
         std::string_view compiler = REACTX_CXX_COMPILER;
         if (fresh && preset == "native" && !std::getenv("CXX") && !compiler.empty() && fs::exists(compiler, ec))
             configure.push_back(std::string("-DCMAKE_CXX_COMPILER=") + std::string(compiler));
-        if (run(configure, root) != 0) return false;
+        std::string log;
+        if (runLogged(configure, root, log) != 0) {
+            showFailure(root, preset, log);
+            return false;
+        }
     }
     std::vector<std::string> command{"cmake", "--build", "--preset", preset};
     if (!target.empty()) command.insert(command.end(), {"--target", target});
-    return run(command, root) == 0;
+    std::string log;
+    if (runLogged(command, root, log) != 0) {
+        showFailure(root, preset, log);
+        return false;
+    }
+    return true;
 }
 
 // What makes a web build big, from the linker map reactx_add_app writes
@@ -1128,6 +1232,7 @@ int cmdBuild(const std::vector<std::string>& args) {
     bool native = isTerminal(manifest);
     for (const auto& a : args) {
         if (a == "--native") native = true;
+        else if (a == "--verbose") gVerbose = true;
         else fail("build: unknown option " + a);
     }
     std::string preset = native ? "native" : "web";
@@ -1147,6 +1252,10 @@ int cmdTest(const std::vector<std::string>& args) {
     Manifest manifest = readManifest(root).manifest;
     std::string filter;
     for (const auto& a : args) {
+        if (a == "--verbose") {
+            gVerbose = true;
+            continue;
+        }
         if (a.starts_with("-")) fail("test: unknown option " + a);
         if (!filter.empty()) fail("test: give at most one name (a part of the tests' names)");
         filter = a;
@@ -1230,6 +1339,8 @@ int cmdDev(const std::vector<std::string>& args) {
             auto parsed = rx::parsePort(args[++i]);
             if (!parsed) fail("dev: " + parsed.error());
             port = *parsed;
+        } else if (args[i] == "--verbose") {
+            gVerbose = true;
         } else if (args[i] == "--host" && i + 1 < args.size()) {
             host = args[++i];
         } else if (args[i] == "--allow-host" && i + 1 < args.size()) {

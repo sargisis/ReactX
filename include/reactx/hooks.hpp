@@ -69,7 +69,11 @@ template <class H>
 H& checkedHook(HookBase* hook) {
     // A new hook is named by its first use (nextHook just made it as an H).
     if (!hook->kind) hook->kind = &typeTag<H>;
-    else if (hook->kind != &typeTag<H>) throw std::logic_error("ReactX: hook order changed between renders");
+    else if (hook->kind != &typeTag<H>)
+        throw std::logic_error(
+            "ReactX: hook order changed between renders. A hook (useState, useEffect, useRef, ...) was called "
+            "inside an if, a loop or after an early return: call the same hooks in the same order on every render "
+            "(put the condition inside the hook, or make a child component for the conditional part).");
     return static_cast<H&>(*hook);
 }
 

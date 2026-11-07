@@ -6,6 +6,11 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Added
+
+- Build errors in plain words: `reactx build`, `dev` and `test` show only the errors in your own files (not the notes about templates, nor what follows from an earlier error), with the line of code and what usually causes it and what to do — props fields out of order, a handler with parameters it doesn't get, a setter given the wrong type, a typo (with the compiler's guess), a missing `;`, a library that isn't linked (`#include "rx/query.hpp"` or an undefined `rx::query::...` → add `reactx::query` to `target_link_libraries`), and more. Three mistakes: 562 lines of output before, 15 now. In Russian on a Russian system. Everything is in `build/<preset>/reactx-build.log`; `--verbose` (or `REACTX_VERBOSE=1`) shows it as it comes. A progress line replaces the build's own output.
+- "Hook order changed between renders" now says what causes it and how to fix it.
+
 ### Changed
 
 - Faster terminal apps with big trees: a commit no longer walks the whole tree twice to fix the focus (it keeps counts of nodes that can take or trap focus, and walks only when the focused node goes away or a trap appears). 20 new rows in a 10,000-row scrolling log: 32.7 → 12.0 ms.

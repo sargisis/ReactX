@@ -265,6 +265,10 @@ if (auto ok = server.tryStart(); !ok) std::println("{}", ok.error());
 server.run();
 ```
 
+## When the build fails
+
+(v1.6.0+) `reactx build` / `dev` / `test` print a short report: each error in the project's files with its line and a plain-words cause and fix (props fields out of order, a handler with the wrong parameters, a setter given another type, a missing `;`, a library not in `target_link_libraries`, ...). Read the "→" line first. The compiler's full output is in `build/native/reactx-build.log` or `build/web/reactx-build.log`; `reactx build --verbose` shows it as it comes.
+
 ## Libraries
 
 ReactX comes with libraries in `library/` (since v1.2.0; a preview: their API may still change in a minor release). They need no download: link the ones you use in CMakeLists.txt, e.g. `target_link_libraries(my_app PRIVATE reactx::query reactx::forms)`. Only linked ones are compiled, and an unused one adds nothing to a `.wasm`. Use them before writing your own: a date picker, validation, animations, a server API.

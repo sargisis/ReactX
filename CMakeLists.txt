@@ -421,7 +421,7 @@ if(REACTX_BUILD_TOOLS)
   target_link_libraries(reactx_serve PRIVATE reactx_net)
 
   # The CLI: reactx new / dev / build / add (tools/reactx.cpp).
-  add_executable(reactx_cli tools/reactx.cpp)
+  add_executable(reactx_cli tools/reactx.cpp tools/explain.cpp)
   target_link_libraries(reactx_cli PRIVATE reactx reactx_net reactx_reflection)  # reactx.json via json::from
   set_target_properties(reactx_cli PROPERTIES OUTPUT_NAME reactx)
   # Native projects are built with the compiler of the CLI (GCC 16+) unless CXX is set.

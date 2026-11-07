@@ -30,7 +30,8 @@ void TextRenderer::log(const std::string& line) {
 NodeHandle TextRenderer::createElement(std::string_view type) {
     NodeHandle h = next_++;
     nodes_[h].type = std::string(type);
-    log("create <" + std::string(type) + "> #" + std::to_string(h));
+    if (log_) log("create <" + std::string(type) + "> #" + std::to_string(h));
+    else ++ops_;  // no log: no text to build
     return h;
 }
 
@@ -39,24 +40,28 @@ NodeHandle TextRenderer::createText(std::string_view text) {
     Node& n = nodes_[h];
     n.isText = true;
     n.text = std::string(text);
-    log("create text \"" + n.text + "\" #" + std::to_string(h));
+    if (log_) log("create text \"" + n.text + "\" #" + std::to_string(h));
+    else ++ops_;  // no log: no text to build
     return h;
 }
 
 void TextRenderer::setText(NodeHandle h, std::string_view text) {
     node(h).text = std::string(text);
-    log("text #" + std::to_string(h) + " = \"" + std::string(text) + "\"");
+    if (log_) log("text #" + std::to_string(h) + " = \"" + std::string(text) + "\"");
+    else ++ops_;  // no log: no text to build
 }
 
 void TextRenderer::setProp(NodeHandle h, std::string_view name, const PropValue& value) {
     node(h).props.insert_or_assign(std::string(name), propToString(value));
-    log("set #" + std::to_string(h) + " " + std::string(name) + "=\"" + propToString(value) + "\"");
+    if (log_) log("set #" + std::to_string(h) + " " + std::string(name) + "=\"" + propToString(value) + "\"");
+    else ++ops_;  // no log: no text to build
 }
 
 void TextRenderer::removeProp(NodeHandle h, std::string_view name) {
     auto& props = node(h).props;
     if (auto it = props.find(name); it != props.end()) props.erase(it);
-    log("unset #" + std::to_string(h) + " " + std::string(name));
+    if (log_) log("unset #" + std::to_string(h) + " " + std::string(name));
+    else ++ops_;  // no log: no text to build
 }
 
 void TextRenderer::insertChild(NodeHandle parent, NodeHandle child, std::size_t index) {
@@ -65,20 +70,23 @@ void TextRenderer::insertChild(NodeHandle parent, NodeHandle child, std::size_t 
     index = std::min(index, kids.size());
     kids.insert(kids.begin() + static_cast<std::ptrdiff_t>(index), child);
     node(child).parent = parent;
-    log("insert #" + std::to_string(child) + " into #" + std::to_string(parent) + " at " +
+    if (log_) log("insert #" + std::to_string(child) + " into #" + std::to_string(parent) + " at " +
         std::to_string(index));
+    else ++ops_;  // no log: no text to build
 }
 
 void TextRenderer::removeChild(NodeHandle parent, NodeHandle child) {
     auto& kids = node(parent).children;
     if (auto it = std::ranges::find(kids, child); it != kids.end()) kids.erase(it);
     node(child).parent = 0;
-    log("remove #" + std::to_string(child) + " from #" + std::to_string(parent));
+    if (log_) log("remove #" + std::to_string(child) + " from #" + std::to_string(parent));
+    else ++ops_;  // no log: no text to build
 }
 
 void TextRenderer::destroyNode(NodeHandle h) {
     nodes_.erase(h);
-    log("destroy #" + std::to_string(h));
+    if (log_) log("destroy #" + std::to_string(h));
+    else ++ops_;  // no log: no text to build
 }
 
 void TextRenderer::commit() {

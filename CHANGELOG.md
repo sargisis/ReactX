@@ -8,10 +8,15 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ### Added
 
+- Stress tests for `reactx::grid`, `realtime`, `db` and `jobs` (`ctest -L stress`; CI runs them under ThreadSanitizer and AddressSanitizer too): random tables against a plain reference, 40 WebSocket clients in 4 rooms, the db file cut at random places, 20,000 jobs with failures and cancels, cron against a minute-by-minute search.
 - `reactx::grid` in `library/grid` (`rx/grid.hpp`): `useGrid<T>(rows, {.columns, .id, .filter, .pageSize, .select})` — a data table on `ui::table` with sorting people expect (case-insensitive, "INC-2" before "INC-10", `.order` ranks values like Critical → Low, `.compare` for your own), a search box, your own filter, pages and selected rows; `view()` or the parts (`searchBox`, `table`, `pager`). Browser and terminal. Link `reactx::grid`.
 - `reactx::realtime` in `library/realtime` (`rx/realtime.hpp`): rooms and live messages over a WebSocket — `useChannel(url, room, {.onMessage})` in the app (browser and terminal; joins again after a reconnect; `members`, `publish`) and `Hub` on the server (`canJoin`, `canPublish`, `onPublish`, `publish(room, data)` from any thread, limits). A plain JSON protocol. Link `reactx::realtime`.
 - `reactx::db` in `library/db` (`rx/db.hpp`, native): an embedded store of JSON documents in one file — collections with `insert`, `get`, `put`, `update`, `remove`, `all`, `find`, `where` (+ `index`) and all-or-nothing `batch`; every change is appended and synced before the call returns, a half-written last change is dropped on open, the file is compacted by itself. Thread-safe. Link `reactx::db`.
 - `reactx::jobs` in `library/jobs` (`rx/jobs.hpp`, native): background jobs on worker threads — `add`, `after`, `every`, `cron("0 3 * * *")` in local time, retries with backoff, `onFailed`, `cancel`, `stats`, `wait`. Link `reactx::jobs`.
+
+### Fixed
+
+- `useWebSocket` in a terminal app could hang for good when the app sent while the server was sending a lot back: the client held its lock through a blocking write, so its reading thread stopped and both sides waited on each other's full buffers. Writes now go under their own lock and the reading thread never waits for one (`tests/test_websocket.cpp`: big messages echoed while more are sent).
 
 ## [1.6.0] — 2026-11-07
 

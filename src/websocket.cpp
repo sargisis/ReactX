@@ -203,18 +203,44 @@ using Incoming = std::variant<Opened, Message, Closed>;
 
 // Shared by the UI side and the socket thread.
 struct Shared {
-    std::mutex mutex;  // guards everything below
+    std::mutex mutex;  // guards everything below; never held while writing to the socket
     int fd = -1;
     std::deque<Incoming> inbox;
     bool open = false;
     bool closing = false;  // close() was called: the thread stops soon
+    // One writer at a time, and the fd stays open while it is held. Taken
+    // before `mutex`. The socket thread only try-locks it: it must keep
+    // reading, or both ends can wait on each other's full buffers (the app
+    // blocked in send() while the server, blocked sending to us, stops reading).
+    std::mutex writeMutex;
 };
+
+// Writes a whole frame. wait = false (the socket thread): give up at once if
+// another write is going on or the socket can't take the start of it now.
+bool writeFrame(Shared& s, std::string_view frame, bool wait) {
+    std::unique_lock w(s.writeMutex, std::defer_lock);
+    if (wait) w.lock();
+    else if (!w.try_lock()) return false;
+    int fd = -1;
+    {
+        std::scoped_lock lock(s.mutex);
+        fd = s.fd;
+    }
+    if (fd < 0) return false;
+    if (wait) return sendAll(fd, frame);
+    ssize_t n = ::send(fd, frame.data(), frame.size(), MSG_NOSIGNAL | MSG_DONTWAIT);
+    if (n <= 0) return false;  // try again later: nothing of the frame went out
+    return sendAll(fd, frame.substr(static_cast<std::size_t>(n)));  // a rare partial write: finish the frame
+}
 
 void runSocket(std::shared_ptr<Shared> s, Target t) {
     auto finish = [&](int code, std::string why) {
-        std::scoped_lock lock(s->mutex);
+        {
+            std::scoped_lock lock(s->mutex);
+            if (s->fd >= 0) ::shutdown(s->fd, SHUT_RDWR);  // a write blocked in send() returns now
+        }
+        std::scoped_lock lock(s->writeMutex, s->mutex);
         if (s->fd >= 0) {
-            ::shutdown(s->fd, SHUT_RDWR);
             ::close(s->fd);
             s->fd = -1;
         }
@@ -263,6 +289,7 @@ void runSocket(std::shared_ptr<Shared> s, Target t) {
     std::string reason = "connection dropped";
     auto now = [] { return std::chrono::steady_clock::now(); };
     std::optional<std::chrono::steady_clock::time_point> closingSince;
+    std::optional<std::string> pendingPong;  // a pong that couldn't go out yet
     for (bool done = false; !done;) {
         int error = 0;
         while (auto frame = ws::take(buffer, /*expectMasked=*/false, error)) {
@@ -272,13 +299,17 @@ void runSocket(std::shared_ptr<Shared> s, Target t) {
                 std::scoped_lock lock(s->mutex);
                 if (!s->closing) s->inbox.push_back(Message{std::move(event.data)});
             } else if (event.kind == Kind::Ping) {
-                std::scoped_lock lock(s->mutex);
-                if (s->fd >= 0) sendAll(s->fd, ws::encode(ws::Pong, event.data, true));
+                std::string pong = ws::encode(ws::Pong, event.data, true);
+                if (!writeFrame(*s, pong, /*wait=*/false)) pendingPong = std::move(pong);
             } else if (event.kind == Kind::Close) {
                 code = event.code == 1005 ? 1000 : event.code;
                 reason = event.data.empty() ? "closed (" + std::to_string(code) + ")" : event.data;
-                std::scoped_lock lock(s->mutex);
-                if (!s->closing && s->fd >= 0) sendAll(s->fd, ws::encode(ws::Close, ws::closePayload(code), true));
+                bool answer = false;
+                {
+                    std::scoped_lock lock(s->mutex);
+                    answer = !s->closing;
+                }
+                if (answer) writeFrame(*s, ws::encode(ws::Close, ws::closePayload(code), true), /*wait=*/false);
                 done = true;
                 break;
             } else if (event.kind == Kind::Error) {
@@ -287,8 +318,7 @@ void runSocket(std::shared_ptr<Shared> s, Target t) {
             }
         }
         if (error) {
-            std::scoped_lock lock(s->mutex);
-            if (s->fd >= 0) sendAll(s->fd, ws::encode(ws::Close, ws::closePayload(error), true));
+            writeFrame(*s, ws::encode(ws::Close, ws::closePayload(error), true), /*wait=*/false);
             code = error;
             reason = "protocol error";
             break;
@@ -299,6 +329,7 @@ void runSocket(std::shared_ptr<Shared> s, Target t) {
             if (s->closing && !closingSince) closingSince = now();
         }
         if (closingSince && now() - *closingSince > std::chrono::seconds(1)) break;  // the server didn't answer the close
+        if (pendingPong && writeFrame(*s, *pendingPong, /*wait=*/false)) pendingPong.reset();
         pollfd p{.fd = fd, .events = POLLIN, .revents = 0};
         int ready = ::poll(&p, 1, 100);
         if (ready == 0 || (ready < 0 && errno == EINTR)) continue;
@@ -327,19 +358,26 @@ public:
     }
 
     bool send(const std::string& text) override {
-        std::scoped_lock lock(shared_->mutex);
-        return shared_->open && !shared_->closing && shared_->fd >= 0 &&
-               sendAll(shared_->fd, ws::encode(ws::Text, text, /*mask=*/true));
+        {
+            std::scoped_lock lock(shared_->mutex);
+            if (!shared_->open || shared_->closing || shared_->fd < 0) return false;
+        }
+        // Not under `mutex`: a slow server mustn't stop the socket thread from reading.
+        return writeFrame(*shared_, ws::encode(ws::Text, text, /*mask=*/true), /*wait=*/true);
     }
 
     void close() override {
         if (closed_) return;
         closed_ = true;
         if (stopPoll_) stopPoll_();
-        std::scoped_lock lock(shared_->mutex);
-        if (shared_->closing) return;
-        shared_->closing = true;
-        if (shared_->open && shared_->fd >= 0) sendAll(shared_->fd, ws::encode(ws::Close, ws::closePayload(1000), true));
+        bool wasOpen = false;
+        {
+            std::scoped_lock lock(shared_->mutex);
+            if (shared_->closing) return;
+            shared_->closing = true;
+            wasOpen = shared_->open && shared_->fd >= 0;
+        }
+        if (wasOpen) writeFrame(*shared_, ws::encode(ws::Close, ws::closePayload(1000), true), /*wait=*/true);
     }
 
 private:

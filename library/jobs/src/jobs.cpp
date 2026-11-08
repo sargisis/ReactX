@@ -235,11 +235,11 @@ struct Queue::State {
             if (ok) {
                 ++done;
                 job->attempt = 0;
-            } else if (job->kind == Kind::Once && job->attempt < job->retry.attempts) {
+            } else if (job->kind == Kind::Once && job->attempt < job->retry.attempts && !job->cancelled) {
                 auto delay = duration<double, std::milli>(job->retry.delay) *
                              std::pow(job->retry.backoff, static_cast<double>(job->attempt - 1));
                 auto wait = std::min(duration_cast<milliseconds>(delay), job->retry.maxDelay);
-                if (!job->cancelled && !stopping) push(now + wait, job);
+                if (!stopping) push(now + wait, job);
                 cv.notify_all();
                 continue;
             } else {
@@ -248,7 +248,7 @@ struct Queue::State {
                 job->attempt = 0;
             }
             if (job->kind == Kind::Once) {
-                finishOnce(job);
+                if (!job->cancelled) finishOnce(job);  // cancel() during the run finished it already
             } else if (!job->cancelled) {
                 if (job->kind == Kind::Every) push(now + job->period, job);
                 else if (auto at = next(job->cron, now)) push(*at, job);

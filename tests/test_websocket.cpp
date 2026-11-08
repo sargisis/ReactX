@@ -7,6 +7,7 @@
 #include <unistd.h>
 
 #include <atomic>
+#include <cstdlib>
 #include <chrono>
 #include <functional>
 #include <iostream>
@@ -274,6 +275,43 @@ TEST(use_websocket_connects_sends_and_receives) {
     CHECK(flushUntil(root, r, "open"));
     root.render(h("box", {}, {}));  // unmount: closes, no more reconnects
     CHECK(waitFor([&] { return server.server.webSockets("/ws").empty(); }));
+}
+
+// The native client must keep reading while the app is sending: here the
+// server echoes big messages while the client still sends more. A client
+// that held its lock through a blocking write stopped reading, the server
+// then stopped reading too, and both waited for ever.
+TEST(client_keeps_reading_while_a_big_send_blocks) {
+    Running r([](HttpServer& s) {
+        s.webSocket("/echo", {.onMessage = [](const WebSocketPtr& w, const std::string& m) { w->send(m); }});
+    });
+    std::atomic<int> echoed{0};
+    auto client = detail::WebSocketClient::connect("ws://127.0.0.1:" + std::to_string(r.port()) + "/echo",
+                                                   {.onMessage = [&](const std::string&) { ++echoed; }});
+    bool open = false;
+    CHECK(waitFor([&] {
+        detail::runDueTimers();
+        return open = client->send("hi");
+    }));
+    constexpr int count = 24;  // 24 x 900 KB: much more than the sockets' buffers
+    std::atomic<bool> sent{false};
+    std::thread sender([&] {
+        const std::string big(900 * 1024, 'x');
+        for (int i = 0; i < count; ++i) client->send(big);
+        sent = true;
+    });
+    const bool finished = waitFor([&] { return sent.load(); }, 20s);
+    CHECK(finished);
+    if (!finished) {  // stuck: the old deadlock; don't hang the test run
+        std::cerr << "  FAIL client and server wait on each other\n";
+        std::_Exit(1);
+    }
+    sender.join();
+    CHECK(waitFor([&] {
+        detail::runDueTimers();
+        return echoed == count + 1;
+    }, 20s));
+    client->close();
 }
 
 TEST(use_websocket_reports_errors) {

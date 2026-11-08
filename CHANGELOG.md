@@ -6,6 +6,12 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+## [1.7.0] — 2026-11-08
+
+Four more libraries that come with ReactX — a data table (`reactx::grid`), live rooms over a WebSocket (`reactx::realtime`), and for servers an embedded document store (`reactx::db`) and background jobs (`reactx::jobs`) — with stress tests, and a fix for `useWebSocket` in terminal apps, which could hang under load. Nothing else changes for existing apps.
+
+**Update:** `reactx upgrade`, then `reactx update` in each project; link the libraries you want (`target_link_libraries(my_app PRIVATE reactx::grid)`, a server: `reactx::db reactx::jobs reactx::realtime`).
+
 ### Added
 
 - Stress tests for `reactx::grid`, `realtime`, `db` and `jobs` (`ctest -L stress`; CI runs them under ThreadSanitizer and AddressSanitizer too): random tables against a plain reference, 40 WebSocket clients in 4 rooms, the db file cut at random places, 20,000 jobs with failures and cancels, cron against a minute-by-minute search.
@@ -643,7 +649,8 @@ The first release.
 - **A documentation site** built with ReactX: https://sargisis.github.io/ReactX/, published by GitHub Actions through the `gh-pages` branch.
 - The version in one place (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; new projects from `reactx new` use ReactX by release tag.
 
-[Unreleased]: https://github.com/sargisis/ReactX/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/sargisis/ReactX/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/sargisis/ReactX/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/sargisis/ReactX/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/sargisis/ReactX/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/sargisis/ReactX/compare/v1.3.0...v1.4.0

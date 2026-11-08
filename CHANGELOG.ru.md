@@ -6,6 +6,12 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ## [Не выпущено]
 
+## [1.7.0] — 2026-11-08
+
+Ещё четыре библиотеки, которые идут вместе с ReactX, — таблица данных (`reactx::grid`), живые комнаты через WebSocket (`reactx::realtime`), а для серверов встроенное хранилище документов (`reactx::db`) и фоновые задачи (`reactx::jobs`) — со стресс-тестами, и исправление `useWebSocket` в терминальных приложениях, который мог зависнуть под нагрузкой. В остальном для существующих приложений ничего не меняется.
+
+**Обновление:** `reactx upgrade`, затем `reactx update` в каждом проекте; подключите нужные библиотеки (`target_link_libraries(my_app PRIVATE reactx::grid)`, сервер: `reactx::db reactx::jobs reactx::realtime`).
+
 ### Добавлено
 
 - Стресс-тесты для `reactx::grid`, `realtime`, `db` и `jobs` (`ctest -L stress`; CI гоняет их и под ThreadSanitizer, и под AddressSanitizer): случайные таблицы против простой эталонной реализации, 40 WebSocket-клиентов в 4 комнатах, файл db, обрезанный в случайных местах, 20 000 задач с ошибками и отменами, cron против перебора по минутам.
@@ -643,7 +649,8 @@ ReactX без установки компиляторов: готовый `react
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v1.6.0...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/sargisis/ReactX/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/sargisis/ReactX/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/sargisis/ReactX/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/sargisis/ReactX/compare/v1.3.0...v1.4.0

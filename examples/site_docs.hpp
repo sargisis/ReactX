@@ -189,7 +189,7 @@ inline const std::vector<Page>& pages() {
                                 "в терминале); (v1.4.0+) reactx::icons — 51 линейная иконка; (v1.5.0+) "
                                 "reactx::forms — проверка форм и JSON, reactx::api — JSON API на HttpServer, "
                                 "reactx::auth — вход (пароли, сессии, CSRF), reactx::log и reactx::config — логи и настройки, "
-                                "reactx::calendar, reactx::dnd и reactx::motion — выбор даты, перетаскивание и анимации; (в следующем релизе) "
+                                "reactx::calendar, reactx::dnd и reactx::motion — выбор даты, перетаскивание и анимации; (v1.7.0+) "
                                 "reactx::grid — таблица данных с сортировкой, поиском, фильтрами и страницами, reactx::realtime — живые "
                                 "сообщения в комнатах через WebSocket, reactx::db — встроенное хранилище JSON-документов и reactx::jobs — "
                                 "фоновые задачи с повторами и расписанием cron. Это предварительная версия: "
@@ -199,15 +199,15 @@ inline const std::vector<Page>& pages() {
                 {"reactx update", "Переводит проект на новейший релиз ReactX: находит теги в репозитории из reactx.json, "
                                   "выбирает самый новый по SemVer (без -rc) и записывает его в rev. --check только проверяет, "
                                   "--to — конкретная версия. Следующий reactx build скачает её сам.",
-                 "reactx update --check   # ReactX v1.5.0 → v1.6.0 is available\n"
-                 "reactx update           # записывает v1.6.0 в reactx.json\n"
+                 "reactx update --check   # ReactX v1.6.0 → v1.7.0 is available\n"
+                 "reactx update           # записывает v1.7.0 в reactx.json\n"
                  "reactx update --to v0.3.0\n"
                  "reactx build"},
                 {"reactx.json", "Всё, что нужно проекту, в одном файле.",
                  "{\n"
                  "  \"name\": \"my-app\",\n"
                  "  \"template\": \"web\",\n"
-                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v1.6.0\" },\n"
+                 "  \"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v1.7.0\" },\n"
                  "  \"dependencies\": { \"fmt\": { \"git\": \"...\", \"rev\": \"11.0.2\", \"target\": \"fmt::fmt\" } },\n"
                  "  \"web\": { \"base\": \"/\", \"proxy\": { \"/api\": \"http://127.0.0.1:5000\" } }\n"
                  "}"},
@@ -229,7 +229,7 @@ inline const std::vector<Page>& pages() {
                                      "остаётся опциональной (reactx::reflection, нативные сборки) и пока вне этого обещания.", ""},
                 {"Версия в коде", "Номер версии записан в одном месте — project(ReactX VERSION ...) в CMakeLists.txt; "
                                   "из него генерируется reactx/version.hpp.",
-                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"1.6.0\"\n"
+                 "#include \"reactx/version.hpp\"\n\nstd::println(\"{}\", rx::version());   // \"1.7.0\"\n"
                  "static_assert(REACTX_VERSION_MAJOR == 1);"},
                 {"Обновить reactx", "Два шага: сам инструмент, потом каждый проект. reactx upgrade заменяет reactx новейшим релизом "
                                     "(проверяя SHA-256); до v0.14.0 — запустите установщик ещё раз. Раз в день reactx сам проверяет "
@@ -239,7 +239,7 @@ inline const std::vector<Page>& pages() {
                  "cd my-app && reactx update && reactx build"},
                 {"Обновить проект", "reactx update находит новейший релиз и записывает его в reactx.json; reactx build скачивает его. "
                                "Вручную — поменяйте rev на новый тег.",
-                 "reactx update\n# или в reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v1.6.0\" }"},
+                 "reactx update\n# или в reactx.json:\n\"reactx\": { \"git\": \"https://github.com/sargisis/ReactX.git\", \"rev\": \"v1.7.0\" }"},
             },
         },
         {

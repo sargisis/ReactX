@@ -1,0 +1,16 @@
+# reactx::realtime — rooms and live messages over a WebSocket: useChannel in the
+# app (browser and terminal), Hub on the server (native).
+set(sources src/channel.cpp)
+if(NOT EMSCRIPTEN)
+  list(APPEND sources src/hub.cpp)
+endif()
+add_library(reactx_realtime STATIC ${sources})
+add_library(reactx::realtime ALIAS reactx_realtime)
+target_include_directories(reactx_realtime PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(reactx_realtime PUBLIC reactx)
+if(NOT EMSCRIPTEN)
+  target_link_libraries(reactx_realtime PUBLIC reactx_net)
+endif()
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  target_compile_options(reactx_realtime PRIVATE -Wall -Wextra -Wpedantic)
+endif()

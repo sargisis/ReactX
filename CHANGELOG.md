@@ -6,6 +6,13 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Added
+
+- `reactx::grid` in `library/grid` (`rx/grid.hpp`): `useGrid<T>(rows, {.columns, .id, .filter, .pageSize, .select})` — a data table on `ui::table` with sorting people expect (case-insensitive, "INC-2" before "INC-10", `.order` ranks values like Critical → Low, `.compare` for your own), a search box, your own filter, pages and selected rows; `view()` or the parts (`searchBox`, `table`, `pager`). Browser and terminal. Link `reactx::grid`.
+- `reactx::realtime` in `library/realtime` (`rx/realtime.hpp`): rooms and live messages over a WebSocket — `useChannel(url, room, {.onMessage})` in the app (browser and terminal; joins again after a reconnect; `members`, `publish`) and `Hub` on the server (`canJoin`, `canPublish`, `onPublish`, `publish(room, data)` from any thread, limits). A plain JSON protocol. Link `reactx::realtime`.
+- `reactx::db` in `library/db` (`rx/db.hpp`, native): an embedded store of JSON documents in one file — collections with `insert`, `get`, `put`, `update`, `remove`, `all`, `find`, `where` (+ `index`) and all-or-nothing `batch`; every change is appended and synced before the call returns, a half-written last change is dropped on open, the file is compacted by itself. Thread-safe. Link `reactx::db`.
+- `reactx::jobs` in `library/jobs` (`rx/jobs.hpp`, native): background jobs on worker threads — `add`, `after`, `every`, `cron("0 3 * * *")` in local time, retries with backoff, `onFailed`, `cancel`, `stats`, `wait`. Link `reactx::jobs`.
+
 ## [1.6.0] — 2026-11-07
 
 Build errors in plain words instead of hundreds of compiler lines, a lazy first value for `useState`, and a faster core: re-renders, hooks and big terminal trees. Nothing changes for existing apps.

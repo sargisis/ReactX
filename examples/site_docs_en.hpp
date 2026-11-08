@@ -172,7 +172,9 @@ inline const std::vector<Page>& pagesEn() {
                               "(v1.4.0+) reactx::icons draws 51 line icons; (v1.5.0+) reactx::forms validates forms and JSON, "
                               "and reactx::api builds a JSON API on HttpServer, reactx::auth adds sign-in (passwords, sessions, CSRF), "
                               "reactx::log and reactx::config give logs and settings, reactx::calendar, reactx::dnd and "
-                              "reactx::motion a date picker, drag and drop and animations. They are a preview: the API may still change in a minor release.",
+                              "reactx::motion a date picker, drag and drop and animations; (in the next release) reactx::grid a data table with sorting, "
+                              "search, filters and pages, reactx::realtime live messages in rooms over a WebSocket, reactx::db an embedded "
+                              "store of JSON documents and reactx::jobs background jobs with retries and cron schedules. They are a preview: the API may still change in a minor release.",
                  "# CMakeLists.txt\ntarget_link_libraries(my_app PRIVATE reactx::charts reactx::i18n)\n\n"
                  "reactx add fmt https://github.com/fmtlib/fmt.git --rev 11.0.2 --target fmt::fmt\nreactx remove fmt"},
                 {"reactx update", "Moves your project to the newest ReactX release. --check only tells you whether there is one.",

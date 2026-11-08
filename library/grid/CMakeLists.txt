@@ -1,0 +1,8 @@
+# reactx::grid — a data table: sorting people expect, search, filters, pages and row selection, on ui::table.
+add_library(reactx_grid STATIC src/grid.cpp)
+add_library(reactx::grid ALIAS reactx_grid)
+target_include_directories(reactx_grid PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(reactx_grid PUBLIC reactx)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  target_compile_options(reactx_grid PRIVATE -Wall -Wextra -Wpedantic)
+endif()

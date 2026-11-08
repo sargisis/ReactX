@@ -189,7 +189,10 @@ inline const std::vector<Page>& pages() {
                                 "в терминале); (v1.4.0+) reactx::icons — 51 линейная иконка; (v1.5.0+) "
                                 "reactx::forms — проверка форм и JSON, reactx::api — JSON API на HttpServer, "
                                 "reactx::auth — вход (пароли, сессии, CSRF), reactx::log и reactx::config — логи и настройки, "
-                                "reactx::calendar, reactx::dnd и reactx::motion — выбор даты, перетаскивание и анимации. Это предварительная версия: "
+                                "reactx::calendar, reactx::dnd и reactx::motion — выбор даты, перетаскивание и анимации; (в следующем релизе) "
+                                "reactx::grid — таблица данных с сортировкой, поиском, фильтрами и страницами, reactx::realtime — живые "
+                                "сообщения в комнатах через WebSocket, reactx::db — встроенное хранилище JSON-документов и reactx::jobs — "
+                                "фоновые задачи с повторами и расписанием cron. Это предварительная версия: "
                                 "API ещё может меняться в минорном релизе.",
                  "# CMakeLists.txt\ntarget_link_libraries(my_app PRIVATE reactx::charts reactx::i18n)\n\n"
                  "reactx add fmt https://github.com/fmtlib/fmt.git --rev 11.0.2 --target fmt::fmt\nreactx remove fmt"},

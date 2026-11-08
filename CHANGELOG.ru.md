@@ -6,6 +6,13 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ## [Не выпущено]
 
+### Добавлено
+
+- `reactx::grid` в `library/grid` (`rx/grid.hpp`): `useGrid<T>(rows, {.columns, .id, .filter, .pageSize, .select})` — таблица данных на `ui::table` с сортировкой, которую ждут люди (без учёта регистра, «INC-2» раньше «INC-10», `.order` задаёт порядок значений вроде Critical → Low, `.compare` — своя), поиском, своим фильтром, страницами и выбором строк; `view()` или по частям (`searchBox`, `table`, `pager`). Браузер и терминал. Подключите `reactx::grid`.
+- `reactx::realtime` в `library/realtime` (`rx/realtime.hpp`): комнаты и живые сообщения через WebSocket — `useChannel(url, room, {.onMessage})` в приложении (браузер и терминал; после переподключения снова входит в комнату; `members`, `publish`) и `Hub` на сервере (`canJoin`, `canPublish`, `onPublish`, `publish(room, data)` из любого потока, лимиты). Простой JSON-протокол. Подключите `reactx::realtime`.
+- `reactx::db` в `library/db` (`rx/db.hpp`, нативно): встроенное хранилище JSON-документов в одном файле — коллекции с `insert`, `get`, `put`, `update`, `remove`, `all`, `find`, `where` (+ `index`) и `batch` «всё или ничего»; каждое изменение дописывается и сбрасывается на диск до возврата, недописанное последнее изменение отбрасывается при открытии, файл сам сжимается. Потокобезопасно. Подключите `reactx::db`.
+- `reactx::jobs` в `library/jobs` (`rx/jobs.hpp`, нативно): фоновые задачи в рабочих потоках — `add`, `after`, `every`, `cron("0 3 * * *")` по местному времени, повторы с растущей паузой, `onFailed`, `cancel`, `stats`, `wait`. Подключите `reactx::jobs`.
+
 ## [1.6.0] — 2026-11-07
 
 Ошибки сборки человеческим языком вместо сотен строк компилятора, ленивое первое значение `useState` и более быстрое ядро: перерисовка, хуки и большие деревья в терминале. В существующих приложениях ничего не меняется.

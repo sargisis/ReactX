@@ -1,4 +1,4 @@
-# Libraries that come with ReactX (charts, i18n, query, markdown, icons, forms, log, motion, dnd, calendar; api, auth and config for servers). Link the ones an app uses:
+# Libraries that come with ReactX (charts, i18n, query, markdown, icons, forms, log, motion, dnd, calendar, grid, realtime; api, auth, config, db and jobs for servers). Link the ones an app uses:
 #   target_link_libraries(my_app PRIVATE reactx::charts reactx::i18n)
 # In an app's build only the linked ones are compiled (EXCLUDE_FROM_ALL in the
 # root CMakeLists.txt), and an unused library adds nothing to a .wasm.
@@ -15,9 +15,13 @@ add_subdirectory(log)
 add_subdirectory(motion)
 add_subdirectory(dnd)
 add_subdirectory(calendar)
+add_subdirectory(grid)
+add_subdirectory(realtime)
 # Server libraries: native only.
 if(NOT EMSCRIPTEN)
   add_subdirectory(api)
   add_subdirectory(auth)
   add_subdirectory(config)
+  add_subdirectory(db)
+  add_subdirectory(jobs)
 endif()

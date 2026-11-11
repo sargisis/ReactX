@@ -6,6 +6,12 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ## [Не выпущено]
 
+## [1.7.1] — 2026-11-11
+
+Исправление кликабельных строк таблицы: галочка, кнопка или ссылка в строке `ui::table` больше не выбирает заодно и строку, так что выбор строк в `reactx::grid` (`.select = true`) снова работает. И вкладка `grid` на странице демо библиотек. API не меняется.
+
+**Обновление:** `reactx upgrade`, затем `reactx update` в каждом проекте.
+
 ### Добавлено
 
 - Вкладка `grid` на странице демо библиотек (`web_libraries.html#grid`): 60 инцидентов с сортировкой, поиском, фильтром по статусу, страницами и выбором строк.
@@ -659,7 +665,8 @@ ReactX без установки компиляторов: готовый `react
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v1.7.0...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v1.7.1...HEAD
+[1.7.1]: https://github.com/sargisis/ReactX/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/sargisis/ReactX/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/sargisis/ReactX/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/sargisis/ReactX/compare/v1.4.0...v1.5.0

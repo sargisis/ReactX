@@ -6,6 +6,12 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+## [1.7.1] — 2026-11-11
+
+A fix for clickable table rows: a checkbox, button or link in a `ui::table` row no longer selects the row too, so selecting rows in `reactx::grid` (`.select = true`) works again. Plus a `grid` tab on the library demos page. No API changes.
+
+**Update:** `reactx upgrade`, then `reactx update` in each project.
+
 ### Added
 
 - A `grid` tab on the library demos page (`web_libraries.html#grid`): 60 incidents with sorting, search, a status filter, pages and selected rows.
@@ -659,7 +665,8 @@ The first release.
 - **A documentation site** built with ReactX: https://sargisis.github.io/ReactX/, published by GitHub Actions through the `gh-pages` branch.
 - The version in one place (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; new projects from `reactx new` use ReactX by release tag.
 
-[Unreleased]: https://github.com/sargisis/ReactX/compare/v1.7.0...HEAD
+[Unreleased]: https://github.com/sargisis/ReactX/compare/v1.7.1...HEAD
+[1.7.1]: https://github.com/sargisis/ReactX/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/sargisis/ReactX/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/sargisis/ReactX/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/sargisis/ReactX/compare/v1.4.0...v1.5.0

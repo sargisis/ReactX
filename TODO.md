@@ -25,13 +25,13 @@
 Комментарий от пользователя: *«Good job but it does not feel native»* — скорее всего имеется в виду ощущение задержки при первой загрузке `.wasm`.
 
 ### Задачи:
-- [ ] **`<link rel="preload">` для `index.wasm`** в `web/site_shell.html`
+- [x] **`<link rel="preload">` для `index.wasm`** в `web/site_shell.html` (сделано)
   ```html
   <link rel="preload" href="index.wasm" as="fetch" type="application/wasm" crossorigin>
   ```
   Цель: срезать LCP с 2.6s до ~2.0s.
 
-- [ ] **Skeleton screen / loading placeholder** — пока `.wasm` грузится, показывать заглушку с контуром страницы, а не пустой экран или просто «Loading…». Цель: FCP остаётся быстрым, пользователь видит структуру сразу.
+- [ ] **Skeleton screen / loading placeholder** (главная и docs уже пререндерятся в HTML; заглушка нужна остальным страницам вместо «loading ReactX») — пока `.wasm` грузится, показывать заглушку с контуром страницы, а не пустой экран или просто «Loading…». Цель: FCP остаётся быстрым, пользователь видит структуру сразу.
 
 - [ ] **Service Worker для кеширования `.wasm`** — при повторном заходе страница открывается мгновенно (< 0.5s). `.wasm` скачивается один раз.
 
@@ -75,26 +75,27 @@ Preact — это самый компактный и чистый React-совм
 
 ### Базовые UI-атомы (Atomic Design по совету Aton B.):
 > *«A component library of atoms to compose any UI pattern is more useful than having to build whole UIs.»*
-- [ ] **`Button`** (primary, secondary, outline, ghost, loading state, disabled)
-- [ ] **`Input` / `TextField`** (controlled/uncontrolled, error states, clearable, icons)
+- [x] **`Button`** (`ui::button`) (primary, secondary, outline, ghost, loading state, disabled)
+- [x] **`Input` / `TextField`** (`ui::input`, `.error`, `.type`) (controlled/uncontrolled, error states, clearable, icons)
 - [ ] **`Badge` / `Tag`** (статусные метки, варианты цветов)
-- [ ] **`Card`** (header, content, footer, border/elevation tokens)
-- [ ] **`Stack` / `Box`** (типизированные Flexbox-примитивы: Row, Column, gap, wrap)
-- [ ] **`Dialog` / `Modal`** (оверлей, a11y, focus trap, Esc для закрытия)
-- [ ] **`Dropdown` / `Menu`** (всплывающее меню, навигация стрелками)
-- [ ] **`Tooltip`** (подсказки при наведении с автопозиционированием)
+- [x] **`Card`** (`ui::card`) (header, content, footer, border/elevation tokens)
+- [x] **`Stack` / `Box`** (`ui::stack`) (типизированные Flexbox-примитивы: Row, Column, gap, wrap)
+- [x] **`Dialog` / `Modal`** (`ui::modal`, `ui::confirm`) (оверлей, a11y, focus trap, Esc для закрытия)
+- [ ] **`Dropdown` / `Menu`** (всплывающее меню, навигация стрелками; есть только `ui::select`)
+- [x] **`Tooltip`** (`ui::tooltip`) (подсказки при наведении с автопозиционированием)
 
 ### Высокоуровневые компоненты (`rx::ui` расширение):
-- [ ] Виртуализированный список (для таблиц 10k+ строк без лагов)
-- [ ] Богатые формы с валидацией через C++26 рефлексию
+- [x] Виртуализированный список (`ui::useVirtualList`, v0.14; `ui::table` + `reactx::grid`)
+- [ ] Богатые формы с валидацией через C++26 рефлексию (валидация есть: `ui::useForm`, `reactx::forms`; генерации формы из struct нет)
   - Идея: `rx::form<MyStruct>()` автоматически генерирует форму из struct-полей
-- [ ] Графики и чарты (SVG-based, без внешних зависимостей)
-- [ ] Toast / Snackbar уведомления
+- [x] Графики и чарты (`reactx::charts`, v1.2)
+- [x] Toast / Snackbar уведомления (`ui::toast`, v0.10)
 
 ### Бэкенд (`rx::net` расширение):
-- [ ] WebSockets и Server-Sent Events (SSE) — сейчас главный пробел
-- [ ] JWT/Bearer авторизация middleware
-- [ ] SQLite-обёртка (типизированные запросы через рефлексию)
+- [x] WebSockets (`useWebSocket`, v0.13; `reactx::realtime`, v1.7)
+- [ ] Server-Sent Events (SSE)
+- [ ] JWT/Bearer авторизация middleware (есть `reactx::auth`: пароли, сессии, CSRF — без JWT)
+- [x] ~~SQLite-обёртка~~ → встроенное хранилище `reactx::db` (JSON-документы, v1.7)
 - [ ] gzip middleware для ответов
 
 ---
@@ -105,7 +106,7 @@ Preact — это самый компактный и чистый React-совм
   - 1000 элементов списка, перемешивание ключей
   - Цель: убедиться что C++ даёт реальное преимущество
 - [ ] **Виртуализация DOM-дерева** — для очень глубоких деревьев
-- [ ] **Мемоизация** — `memo` пока не сравнивает children, исправить
+- [ ] **Мемоизация** — `memo` пока не сравнивает children (элементы с children всегда перерисовываются, см. `include/reactx/memo.hpp`)
 
 ---
 
@@ -146,13 +147,15 @@ Preact — это самый компактный и чистый React-совм
 - [x] Полный фреймворк: reconciler, хуки, роутер, DOM, терминал
 - [x] WebAssembly + нативный терминал из одного кода
 - [x] Сайт документации (EN + RU) на GitHub Pages
-- [x] CLI: `new`, `dev`, `build`, `add`, `remove`, `update`, `--help`
+- [x] CLI: `new`, `dev`, `build`, `test`, `add`, `remove`, `update`, `upgrade`, `install`, `--help`
 - [x] HTTP/1.1 сервер + `reactx dev --proxy` для внешних бэкендов (Flask и т.д.)
 - [x] Docker образ + devcontainer
 - [x] Санитайзеры, фаззинг, статический анализ в CI
 - [x] SECURITY.md (EN + RU)
 - [x] Lighthouse: 96 Performance / 100 SEO / 100 Best Practices
 - [x] 10k+ просмотров на LinkedIn за первые сутки 🚀
+- [x] v1.0.0 (2026-11-02); 17 библиотек в `library/` (v1.2–v1.7)
+- [x] JS interop (`reactx/js.hpp`, v0.9)
 
 ---
 

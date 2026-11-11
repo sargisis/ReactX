@@ -258,6 +258,27 @@ TEST(table_lines_up_columns_and_sorts) {
     CHECK(contains(s.text(), "picked:bolt"));
 }
 
+// A button in a clickable row: a click on it doesn't select the row too.
+Element RowWithButton(const Props&) {
+    auto [picks, setPicks] = useState(0);
+    auto [presses, setPresses] = useState(0);
+    return h("box", {}, {
+        ui::table({.columns = {{.title = "Name"}, {.title = "", .width = 8}},
+                   .rows = {{.cells = {"bolt", ui::button({.label = "Del", .onClick = [setPresses] { setPresses([](int n) { return n + 1; }); }})},
+                             .key = "bolt",
+                             .onSelect = [setPicks] { setPicks([](int n) { return n + 1; }); }}}}),
+        h("text", {}, {"picks:" + std::to_string(picks) + " presses:" + std::to_string(presses)}),
+    });
+}
+
+TEST(table_row_ignores_clicks_from_controls_in_it) {
+    Screen s(h(RowWithButton), 30, 8);
+    s.click("Del");
+    CHECK(contains(s.text(), "picks:0 presses:1"));
+    s.click("bolt");
+    CHECK(contains(s.text(), "picks:1 presses:1"));
+}
+
 TEST(table_shows_empty_text) {
     Screen s(ui::table({.columns = {{.title = "Name"}}, .emptyText = "Nothing here"}), 30, 6);
     CHECK(contains(s.text(), "Name") && contains(s.text(), "Nothing here"));

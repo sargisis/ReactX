@@ -6,6 +6,16 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Added
+
+- A `grid` tab on the library demos page (`web_libraries.html#grid`): 60 incidents with sorting, search, a status filter, pages and selected rows.
+
+### Fixed
+
+- `reactx::grid` with `.select = true`: a click on a row's checkbox selected the row and unselected it again at once, so nothing was selected (in the browser and with the mouse in a terminal).
+- `ui::table`: a button, checkbox or link in a cell of a clickable row (`onSelect`) also selected the row; now only the control's own handler runs. Space on a checkbox in a row doesn't select the row twice either.
+- The library demos page could be wider than a phone screen when a table was wider than the page.
+
 ## [1.7.0] — 2026-11-08
 
 Four more libraries that come with ReactX — a data table (`reactx::grid`), live rooms over a WebSocket (`reactx::realtime`), and for servers an embedded document store (`reactx::db`) and background jobs (`reactx::jobs`) — with stress tests, and a fix for `useWebSocket` in terminal apps, which could hang under load. Nothing else changes for existing apps.

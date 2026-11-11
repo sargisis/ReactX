@@ -294,7 +294,7 @@ int main() {
     CHECK(pickedRow == "washer");
     js("rxTest.keyClass('rx-table__row', 'Enter', 0)");
     CHECK(pickedRow == "bolt");
-    CHECK(has("class=\"rx-table__row rx-table__row--click\" role=\"row\" tabindex=\"0\""));
+    CHECK(has("class=\"rx-table__row rx-table__row--click\" data-rx-skip-controls role=\"row\" tabindex=\"0\""));
 
     std::cout << "forms: textarea, radios, slider, progress, errors\n";
     mountDom(h(WebForm));

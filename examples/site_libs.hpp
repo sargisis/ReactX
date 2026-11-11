@@ -1,5 +1,5 @@
-// Live demos of the libraries in library/ (charts, icons, markdown, query,
-// i18n) for web_libraries.html. Included by web_libraries.cpp inside its
+// Live demos of the UI libraries in library/ (query, forms, grid, markdown,
+// calendar, dnd, motion, charts, icons, i18n) for web_libraries.html. Included by web_libraries.cpp inside its
 // namespace, after tr() and useEnglish(); the library headers are included at
 // the top of that file.
 
@@ -381,7 +381,78 @@ Element CalendarDemo(const Props&) {
     });
 }
 
-constexpr const char* kLibraryTabs[] = {"query", "forms", "markdown", "calendar", "dnd", "motion", "charts", "icons", "i18n"};
+// ---- grid ----
+
+struct Incident {
+    std::string id, title, severity, status;
+    int age = 0;  // hours
+};
+
+std::vector<Incident> makeIncidents(bool en) {
+    const char* titlesEn[] = {"Login page is slow", "Payments time out", "Search returns nothing", "Emails sent twice",
+                              "Dark mode flickers", "Export to CSV fails", "Avatar upload 500", "Cache misses after deploy",
+                              "Wrong time zone in reports", "Mobile menu won't close"};
+    const char* titlesRu[] = {"Медленный вход", "Платежи отваливаются по таймауту", "Поиск ничего не находит", "Письма уходят дважды",
+                              "Тёмная тема мигает", "Экспорт в CSV падает", "Загрузка аватара: 500", "Промахи кеша после выкладки",
+                              "Не тот часовой пояс в отчётах", "Мобильное меню не закрывается"};
+    const char* severities[] = {"Critical", "High", "Medium", "Low"};
+    const char* statuses[] = {"open", "investigating", "fixed"};
+    std::vector<Incident> out;
+    for (int i = 1; i <= 60; ++i) {
+        const auto n = static_cast<std::size_t>(i);
+        out.push_back({.id = "INC-" + std::to_string(i),
+                       .title = en ? titlesEn[(n * 7) % 10] : titlesRu[(n * 7) % 10],
+                       .severity = severities[(n * 5 + n / 3) % 4],
+                       .status = statuses[(n * n + n / 2) % 3],
+                       .age = static_cast<int>((n * 37) % 240) + 1});
+    }
+    return out;
+}
+
+Element GridDemo(const Props&) {
+    bool en = useEnglish();
+    const auto& incidents = useMemo([en] { return makeIncidents(en); }, deps(en));
+    auto [status, setStatus] = useState(std::string{});
+    auto [clicked, setClicked] = useState(std::string{});
+    auto g = grid::useGrid<Incident>(incidents, {
+        .columns = {
+            {.title = "ID", .text = [](const Incident& i) { return i.id; }, .width = 8},
+            {.title = tr(en, "Title", "Название"), .text = [](const Incident& i) { return i.title; }},
+            {.title = tr(en, "Severity", "Важность"), .text = [](const Incident& i) { return i.severity; },
+             .cell = [](const Incident& i) { return h("span", {{"className", "lib-sev lib-sev-" + i.severity}}, {i.severity}); },
+             .order = {"Critical", "High", "Medium", "Low"}, .width = 10},
+            {.title = tr(en, "Status", "Статус"), .text = [](const Incident& i) { return i.status; }, .width = 13},
+            {.title = tr(en, "Age, h", "Часов"), .text = [](const Incident& i) { return std::to_string(i.age); },
+             .width = 7, .align = ui::Align::End},
+        },
+        .id = [](const Incident& i) { return i.id; },
+        .filter = [status](const Incident& i) { return status.empty() || i.status == status; },
+        .pageSize = 10,
+        .select = true,
+        .searchPlaceholder = tr(en, "Search...", "Поиск..."),
+        .emptyText = tr(en, "Nothing found", "Ничего не найдено"),
+    });
+    std::string picked;
+    for (const auto& id : g.selected) picked += (picked.empty() ? "" : ", ") + id;
+    return h("div", {{"className", "live-pane"}}, {
+        h("div", {{"className", "lib-split"}}, {
+            g.searchBox(),
+            ui::select({.label = tr(en, "Status", "Статус"), .value = status,
+                        .options = {{"", tr(en, "Any", "Любой")}, {"open", "open"}, {"investigating", "investigating"}, {"fixed", "fixed"}},
+                        .onChange = [setStatus](const std::string& v) { setStatus(v); }}),
+        }),
+        g.table(),
+        g.pager(),
+        ui::text({.text = g.selected.empty() ? tr(en, "Tick rows to select them.", "Отметьте строки, чтобы выбрать их.")
+                                             : tr(en, "Selected: ", "Выбрано: ") + picked,
+                  .muted = true}),
+        ui::text({.text = tr(en, "Click a header to sort: severity by its own order, IDs naturally (INC-2 before INC-10). The same code draws it in a terminal.",
+                             "Клик по заголовку сортирует: важность — в своём порядке, ID — естественно (INC-2 раньше INC-10). Тот же код рисует таблицу в терминале."),
+                  .muted = true}),
+    });
+}
+
+constexpr const char* kLibraryTabs[] = {"query", "forms", "grid", "markdown", "calendar", "dnd", "motion", "charts", "icons", "i18n"};
 
 struct LibraryDemosProps {
     int initial = 0;  // the open tab (web_libraries.html#icons opens "icons")
@@ -393,13 +464,14 @@ Element LibraryDemos(const LibraryDemosProps& p) {
     return h("div", {{"className", "live"}}, {
         ui::tabs({.tabs = {{kLibraryTabs[0], {h(QueryDemo)}},
                            {kLibraryTabs[1], {h(FormsDemo)}},
-                           {kLibraryTabs[2], {h(MarkdownDemo)}},
-                           {kLibraryTabs[3], {h(CalendarDemo)}},
-                           {kLibraryTabs[4], {h(DndDemo)}},
-                           {kLibraryTabs[5], {h(MotionDemo)}},
-                           {kLibraryTabs[6], {h(ChartsDemo)}},
-                           {kLibraryTabs[7], {h(IconsDemo)}},
-                           {kLibraryTabs[8], {h(I18nDemo)}}},
+                           {kLibraryTabs[2], {h(GridDemo)}},
+                           {kLibraryTabs[3], {h(MarkdownDemo)}},
+                           {kLibraryTabs[4], {h(CalendarDemo)}},
+                           {kLibraryTabs[5], {h(DndDemo)}},
+                           {kLibraryTabs[6], {h(MotionDemo)}},
+                           {kLibraryTabs[7], {h(ChartsDemo)}},
+                           {kLibraryTabs[8], {h(IconsDemo)}},
+                           {kLibraryTabs[9], {h(I18nDemo)}}},
                   .initial = p.initial}),
         ui::text({.text = tr(en, "Each library: target_link_libraries(my_app PRIVATE reactx::<name>).",
                              "Каждая библиотека: target_link_libraries(my_app PRIVATE reactx::<имя>)."),

@@ -481,6 +481,7 @@ Element TableView(const TableProps& p) {
         Element e = h("box", {{"direction", "row"}, {"gap", 1}}, std::move(cells));
         if (row.onSelect) {
             e.props.set("focusable", true);
+            e.props.set("skipControls", true);  // a checkbox or button in a cell doesn't select the row too
             e.props.set("scrollIntoView", row.selected);
             e.props.set("onClick", row.onSelect);
         }

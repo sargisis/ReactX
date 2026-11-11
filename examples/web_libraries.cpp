@@ -23,6 +23,7 @@
 #include "rx/charts.hpp"
 #include "rx/dnd.hpp"
 #include "rx/forms.hpp"
+#include "rx/grid.hpp"
 #include "rx/i18n.hpp"
 #include "rx/icons.hpp"
 #include "rx/markdown.hpp"
@@ -40,7 +41,7 @@ std::string tr(bool en, std::string_view english, std::string_view russian) { re
 #include "site_libs.hpp"
 
 constexpr const char* kCss = R"css(
-#app { max-width: 1040px; }
+#app { max-width: 1040px; width: 100%; min-width: 0; box-sizing: border-box; }
 body { place-items: start center; }
 .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
 .top a { color: var(--muted); }
@@ -65,6 +66,9 @@ body { place-items: start center; }
 .lib-bar { height: 10px; border-radius: 6px; background: var(--border); overflow: hidden; max-width: 420px; }
 .lib-bar > div { height: 100%; background: var(--accent); }
 .lib-spring { display: inline-block; padding: 4px 12px; border-radius: 99px; background: var(--accent); color: var(--accent-text); font-size: 13px; width: max-content; }
+.lib-sev { font-size: 12px; padding: 1px 8px; border-radius: 99px; border: 1px solid var(--border); white-space: nowrap; }
+.lib-sev-Critical { color: #fff; background: #c62828; border-color: #c62828; }
+.lib-sev-High { color: #fff; background: #b45309; border-color: #b45309; }
 .lib-row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 )css";
 

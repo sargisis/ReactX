@@ -637,7 +637,7 @@ void TerminalRenderer::setProp(NodeHandle h, std::string_view name, const PropVa
 void TerminalRenderer::propChanged(NodeHandle h, std::string_view name) {
     // Props that only change how a node is drawn don't touch the layout.
     static constexpr std::string_view drawOnly[] = {"color", "bg", "bold", "dim", "underline", "title",
-                                                    "focusable", "arrowKeys", "trapFocus", "opaque", "scrollIntoView", "followEnd", "key"};
+                                                    "focusable", "arrowKeys", "trapFocus", "opaque", "scrollIntoView", "followEnd", "skipControls", "key"};
     if (std::ranges::contains(drawOnly, name) || name.starts_with("on")) return;
     layout_->changed(*this, h);
     if (name == "position")  // fixed nodes leave their parent's layout
@@ -1550,12 +1550,18 @@ bool TerminalRenderer::handleMouse(Root& root, const MouseInput& m) {
             NodeHandle target = captured_ && findNode(captured_) ? captured_ : hit;
             bool handled = sendPointer(root, pathOf(target), "onPointerUp", e);
             // A click is a press and a release over the same node (or inside
-            // it): it goes to their nearest common ancestor and bubbles.
+            // it): it goes to their nearest common ancestor and bubbles. A node
+            // with skipControls doesn't get it from a focusable node inside it.
             auto down = pathOf(pressed_);
             for (NodeHandle h : pathOf(hit)) {
                 if (std::ranges::find(down, h) == down.end()) continue;
-                bool clicked = false;
-                for (NodeHandle c : pathOf(h)) clicked = (findNode(c) && root.dispatch(c, "onClick")) || clicked;
+                bool clicked = false, control = false;
+                for (NodeHandle c : pathOf(h)) {
+                    const Node* n = findNode(c);
+                    if (!n) continue;
+                    if (!(control && flag(n->props, "skipControls"))) clicked = root.dispatch(c, "onClick") || clicked;
+                    if ((n = findNode(c)) && isFocusable(*n)) control = true;
+                }
                 handled = handled || clicked;
                 break;
             }

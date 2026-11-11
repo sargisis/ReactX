@@ -602,6 +602,7 @@ Element TableView(const TableProps& p) {
         if (row.selected) e.props.set("aria-selected", "true");
         if (row.onSelect) {
             e.props.set("tabindex", "0");
+            e.props.set("data-rx-skip-controls", "");  // a checkbox or button in a cell doesn't select the row too
             e.props.set("onClick", row.onSelect);
             e.props.set("onKey", KeyHandler([select = row.onSelect](const KeyEvent& k) {
                             if (k.key == "Enter" || k.key == " ") select();

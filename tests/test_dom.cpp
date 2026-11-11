@@ -43,6 +43,7 @@ Element App(const Props&) {
     auto [submits, setSubmits] = useState(0);
     auto [order, setOrder] = useState(std::string("abc"));
     auto [upper, setUpper] = useState(false);
+    auto [skip, setSkip] = useState(0);
 
     std::vector<Element> items;
     for (char c : order) items.push_back(h(Item, {{"key", std::string(1, c)}, {"name", std::string(1, c)}}));
@@ -72,6 +73,11 @@ Element App(const Props&) {
         h("button", {{"id", "upper"}, {"onClick", [setUpper] { setUpper(true); }}}, {"upper"}),
         // Controlled and never changed by its handler: clicks are undone.
         h("input", {{"type", "checkbox"}, {"id", "locked"}, {"checked", true}, {"onChange", [] {}}}),
+        // data-rx-skip-controls: no clicks from a button inside (a clickable table row).
+        h("div", {{"id", "skiprow"}, {"data-rx-skip-controls", true}, {"onClick", [setSkip] { setSkip([](int c) { return c + 10; }); }}}, {
+            h("button", {{"id", "skipbtn"}, {"onClick", [setSkip] { setSkip([](int c) { return c + 1; }); }}}, {"skip=" + std::to_string(skip)}),
+            h("span", {{"id", "skipcell"}}, {"cell"}),
+        }),
         h("form", {{"id", "form"}, {"onSubmit", [setSubmits] { setSubmits([](int s) { return s + 1; }); }}}, {
             h("button", {{"type", "submit"}}, {"go"}),
         }),
@@ -146,6 +152,10 @@ int main() {
     CHECK(has("count=132"));  // the data-rx-self div skipped, the outer div ran
     js("rxTest.click('self')");
     CHECK(has("count=1142"));
+    js("rxTest.click('skipbtn')");
+    CHECK(has(">skip=1<"));  // the button ran, the row with data-rx-skip-controls didn't
+    js("rxTest.click('skipcell')");
+    CHECK(has(">skip=11<"));
 
     std::cout << "input is controlled\n";
     js("rxTest.type('name', 'ann')");

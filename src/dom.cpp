@@ -231,13 +231,18 @@ EM_JS(void, rx_js_listen, (int app, double rootId), {
     };
     // Like React: the handler of the target runs, then those of all its
     // ancestors. An element with data-rx-self only gets clicks on itself
-    // (a dialog backdrop must not close on clicks inside the dialog).
+    // (a dialog backdrop must not close on clicks inside the dialog). One with
+    // data-rx-skip-controls doesn't get clicks and keys that come from a control
+    // inside it (a checkbox or a button in a clickable table row).
     const send = function(e, name, text) {
         const path = [];
+        let control = false;
         for (let el = e.target; el; el = el.parentNode) {
             const selfOnly = name === "onClick" && el !== e.target && el.getAttribute("data-rx-self") !== null;
-            if (el.__rxId !== undefined && !selfOnly) path.push(el.__rxId);
+            const fromControl = control && (name === "onClick" || name === "onKey") && el.getAttribute("data-rx-skip-controls") !== null;
+            if (el.__rxId !== undefined && !selfOnly && !fromControl) path.push(el.__rxId);
             if (el === root) break;
+            if (["INPUT", "BUTTON", "A", "SELECT", "TEXTAREA", "LABEL"].includes(el.tagName) || el.isContentEditable) control = true;
         }
         let handled = false;
         for (const id of path) {

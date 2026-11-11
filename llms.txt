@@ -169,6 +169,8 @@ return ui::table({.columns = {{.title = "Name", .sortable = true},
                   .onSort = [setSortBy](int column) { setSortBy(column); }, .emptyText = "No items"});
 ```
 
+A cell may hold any element (a button, a checkbox, a link): a click on it runs only its handler, not the row's `onSelect` too.
+
 Consistent names (v0.20.0+): elements inside a component always go in `.children` — `ui::list({.title, .children = items})` (`.items` is the old name, still works), like `card`, `stack`, `modal`, `tooltip`; `ui::radioGroup` lays out with `.direction = ui::Direction::Row` like `stack` (`.row = true` is the old way); (v1.0.0+) in a terminal it is one Tab stop, like in the browser, and the arrows pick the option. Every form field (`input`, `textarea`, `select`, `checkbox`, `radioGroup`, `slider`, like `button`) takes `.disabled = true`: shown, not editable, skipped by Tab. API promise: nothing is renamed in place; deprecated names work until 2.0.
 
 Forms (v0.16.0+): `ui::useForm<T>` keeps a form's values in your struct and checks them with your function; a field's error shows once that field changed, or after a submit was tried. Every field takes `.error` (shown under it, marked invalid; `slider` since v1.0.0):

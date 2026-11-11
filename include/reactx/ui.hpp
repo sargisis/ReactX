@@ -73,6 +73,10 @@ const Theme& useTheme();
 //           onConfirm, onCancel (also Escape and a click outside)
 // Toaster   shows what ui::toast() sends; put one in the app, last inside a
 //           box that fills the screen (like Modal)
+// Badge     text, variant: a small label (v1.8.0+)
+// Menu      label, alignEnd, disabled, children: ui-menu-item elements
+//           (label, onSelect, danger, disabled): a button that opens a list
+//           of actions (v1.8.0+)
 
 Element Button(const Props& props);
 Element Input(const Props& props);
@@ -92,12 +96,15 @@ Element Textarea(const Props& props);    // value, onChange, placeholder, label,
 Element RadioGroup(const Props& props);  // label, value, onChange, row, error, children: ui-option elements
 Element Slider(const Props& props);      // label, value, min, max, step, onChange (int), showValue
 Element Progress(const Props& props);    // value, max, label, variant
+Element Badge(const Props& props);       // text, variant (v1.8.0+)
+Element Menu(const Props& props);        // label, alignEnd, disabled, children: ui-menu-item elements (v1.8.0+)
 
 // ---- typed helpers ----
 // Every field has a default, so you only name the ones you need (and GCC's
 // -Wmissing-field-initializers stays quiet).
 
-enum class Variant { Default, Primary, Danger, Success };
+// Warning (v1.8.0+): the theme's warning color (a badge, a toast, a progress bar).
+enum class Variant { Default, Primary, Danger, Success, Warning };
 
 struct ButtonProps {
     std::string label{};
@@ -389,6 +396,41 @@ struct TooltipProps {
     std::string key{};
 };
 Element tooltip(TooltipProps props);
+
+// (v1.8.0+) A small label next to text: a status, a count, a tag.
+//   ui::badge({.text = "Critical", .variant = ui::Variant::Danger})
+// Browser: a pill (Default is outlined, the others filled); terminal: the text
+// on the variant's color, Default as [text].
+struct BadgeProps {
+    std::string text{};
+    Variant variant = Variant::Default;
+    std::string key{};
+};
+Element badge(BadgeProps props);
+
+// (v1.8.0+) A button that opens a list of actions; picking one runs its
+// onSelect and closes the list.
+//   ui::menu({.label = "Actions",
+//             .items = {{.label = "Rename", .onSelect = rename},
+//                       {.label = "Delete", .onSelect = remove, .danger = true}}})
+// Keys: Up / Down move between the items, Enter picks, Escape closes (Tab too,
+// in the browser). Browser: the list opens over the page, a click outside
+// closes it, the focus comes back to the button. Terminal: the list opens
+// under the button and moves what is below it down.
+struct MenuItem {
+    std::string label{};
+    Callback onSelect{};
+    bool danger = false;    // red, for "Delete"
+    bool disabled = false;  // shown, can't be picked
+};
+struct MenuProps {
+    std::string label{};
+    std::vector<MenuItem> items{};
+    bool alignEnd = false;  // browser: the list lines up with the button's right edge (a menu at the right of a toolbar)
+    bool disabled = false;
+    std::string key{};
+};
+Element menu(MenuProps props);
 
 // "Delete it?": a modal with a message and two buttons.
 //   ui::confirm({.title = "Delete the task?", .open = asking, .danger = true,

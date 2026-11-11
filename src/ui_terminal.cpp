@@ -29,6 +29,7 @@ Element Button(const Props& p) {
     std::string color = variant == "primary"   ? t.accent
                         : variant == "danger"  ? t.danger
                         : variant == "success" ? t.success
+                        : variant == "warning" ? t.warning
                                                : t.text;
     return h("button", {{"color", color}, {"bold", variant != "default"}, {"onClick", p.get<Callback>("onClick")}},
              {label});
@@ -374,7 +375,8 @@ Element Progress(const Props& p) {
     int value = p.get<int>("value"), max = std::max(p.get<int>("max", 100), 1);
     int percent = value * 100 / max;
     std::string variant = p.get<std::string>("variant", "primary");
-    const std::string& color = variant == "success" ? t.success : variant == "danger" ? t.danger : t.accent;
+    const std::string& color = variant == "success" ? t.success : variant == "danger" ? t.danger
+                               : variant == "warning" ? t.warning : t.accent;
     constexpr int kWidth = 24;
     int filled = value * kWidth / max;
     std::string bar;
@@ -401,6 +403,56 @@ Element Tooltip(const Props& p) {
              std::move(parts));
 }
 
+// The text on the variant's color; Default as [text].
+Element Badge(const Props& p) {
+    const Theme& t = useTheme();
+    std::string text = p.get<std::string>("text");
+    std::string v = p.get<std::string>("variant", "default");
+    if (v == "default") return h("text", {{"color", t.muted}, {"wrap", false}, {"flexShrink", 0}}, {"[" + text + "]"});
+    const std::string& color = v == "primary" ? t.accent : v == "danger" ? t.danger : v == "success" ? t.success : t.warning;
+    return h("text", {{"color", "black"}, {"bg", color}, {"bold", true}, {"wrap", false}, {"flexShrink", 0}}, {" " + text + " "});
+}
+
+// The list opens under the button, in the flow (a terminal has no layer to put
+// it over the page next to the button). It holds the focus until it closes.
+Element Menu(const Props& p) {
+    const Theme& t = useTheme();
+    auto [open, setOpen] = useState(false);
+    std::string label = p.get<std::string>("label");
+    if (p.get<bool>("disabled"))
+        return h("box", {{"direction", "row"}}, {h("text", {{"color", t.muted}, {"dim", true}, {"wrap", false}}, {"[ " + label + " ▾ ]"})});
+    Element button = h("button", {{"color", t.text}, {"onClick", [setOpen] { setOpen([](bool o) { return !o; }); }}},
+                       {label + (open ? " ▴" : " ▾")});
+    if (!open) return h("box", {{"direction", "row"}}, {std::move(button)});
+    std::vector<Element> items;
+    for (const Element& item : p.children()) {
+        std::string text = item.props.get<std::string>("label");
+        if (item.props.get<bool>("disabled")) {
+            items.push_back(h("text", {{"key", item.key}, {"color", t.muted}, {"dim", true}, {"wrap", false}}, {"  " + text}));
+            continue;
+        }
+        auto onSelect = item.props.get<Callback>("onSelect");
+        items.push_back(h("button", {{"key", item.key},
+                                     {"color", item.props.get<bool>("danger") ? t.danger : t.text},
+                                     {"onClick", [setOpen, onSelect] {
+                                          setOpen(false);
+                                          if (onSelect) onSelect();
+                                      }}},
+                          {text}));
+    }
+    return h("box", {}, {
+        h("box", {{"direction", "row"}}, {std::move(button)}),
+        // In a row: the list is as wide as its items, not the whole column.
+        h("box", {{"direction", "row"}}, {
+            h("box", {{"border", true}, {"color", t.muted}, {"paddingX", 1}, {"trapFocus", true},
+                      {"onKey", [setOpen](const KeyEvent& e) {
+                           if (e.key == "Escape") setOpen(false);
+                       }}},
+              std::move(items)),
+        }),
+    });
+}
+
 namespace {
 
 struct ToastViewProps {
@@ -415,7 +467,8 @@ Element ToastView(const ToastViewProps& p) {
     useTimeout([id] { detail::dismissToast(id); },
                p.item.duration.count() > 0 ? std::optional(p.item.duration) : std::nullopt);
     const std::string& v = p.item.variant;
-    std::string color = v == "primary" ? t.accent : v == "danger" ? t.danger : v == "success" ? t.success : t.muted;
+    std::string color = v == "primary" ? t.accent : v == "danger" ? t.danger : v == "success" ? t.success
+                      : v == "warning" ? t.warning : t.muted;
     return h("box", {{"border", true}, {"opaque", true}, {"color", color}, {"bg", t.surface}, {"paddingX", 1},
                      {"onClick", [id] { detail::dismissToast(id); }}},
              {h("text", {{"color", t.text}}, {p.item.text})});

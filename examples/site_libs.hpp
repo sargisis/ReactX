@@ -411,15 +411,21 @@ std::vector<Incident> makeIncidents(bool en) {
 
 Element GridDemo(const Props&) {
     bool en = useEnglish();
-    const auto& incidents = useMemo([en] { return makeIncidents(en); }, deps(en));
+    const auto& generated = useMemo([en] { return makeIncidents(en); }, deps(en));
     auto [status, setStatus] = useState(std::string{});
-    auto [clicked, setClicked] = useState(std::string{});
+    auto [fixedIds, setFixedIds] = useState(std::set<std::string>{});  // marked fixed from the menu
+    std::vector<Incident> incidents = generated;
+    for (auto& i : incidents)
+        if (fixedIds.contains(i.id)) i.status = "fixed";
     auto g = grid::useGrid<Incident>(incidents, {
         .columns = {
             {.title = "ID", .text = [](const Incident& i) { return i.id; }, .width = 8},
             {.title = tr(en, "Title", "Название"), .text = [](const Incident& i) { return i.title; }},
             {.title = tr(en, "Severity", "Важность"), .text = [](const Incident& i) { return i.severity; },
-             .cell = [](const Incident& i) { return h("span", {{"className", "lib-sev lib-sev-" + i.severity}}, {i.severity}); },
+             .cell = [](const Incident& i) {
+                 const auto v = i.severity == "Critical" ? ui::Variant::Danger : i.severity == "High" ? ui::Variant::Warning : ui::Variant::Default;
+                 return ui::badge({.text = i.severity, .variant = v});
+             },
              .order = {"Critical", "High", "Medium", "Low"}, .width = 10},
             {.title = tr(en, "Status", "Статус"), .text = [](const Incident& i) { return i.status; }, .width = 13},
             {.title = tr(en, "Age, h", "Часов"), .text = [](const Incident& i) { return std::to_string(i.age); },
@@ -437,9 +443,27 @@ Element GridDemo(const Props&) {
     return h("div", {{"className", "live-pane"}}, {
         h("div", {{"className", "lib-split"}}, {
             g.searchBox(),
-            ui::select({.label = tr(en, "Status", "Статус"), .value = status,
-                        .options = {{"", tr(en, "Any", "Любой")}, {"open", "open"}, {"investigating", "investigating"}, {"fixed", "fixed"}},
-                        .onChange = [setStatus](const std::string& v) { setStatus(v); }}),
+            ui::stack({.direction = ui::Direction::Row, .gap = 1, .align = ui::Align::Center, .children = {
+                ui::select({.label = tr(en, "Status", "Статус"), .value = status,
+                            .options = {{"", tr(en, "Any", "Любой")}, {"open", "open"}, {"investigating", "investigating"}, {"fixed", "fixed"}},
+                            .onChange = [setStatus](const std::string& v) { setStatus(v); }}),
+                ui::menu({.label = tr(en, "Actions", "Действия"),
+                          .items = {{.label = tr(en, "Mark selected as fixed", "Отметить выбранные исправленными"),
+                                     .onSelect = [setFixedIds, chosen = g.selected] {
+                                         setFixedIds([chosen](std::set<std::string> ids) {
+                                             ids.insert(chosen.begin(), chosen.end());
+                                             return ids;
+                                         });
+                                     },
+                                     .disabled = g.selected.empty()},
+                                    {.label = tr(en, "Clear selection", "Снять выбор"),
+                                     .onSelect = [setSelected = g.setSelected] { setSelected({}); },
+                                     .disabled = g.selected.empty()},
+                                    {.label = tr(en, "Reset statuses", "Сбросить статусы"),
+                                     .onSelect = [setFixedIds] { setFixedIds(std::set<std::string>{}); },
+                                     .danger = true}},
+                          .alignEnd = true}),
+            }}),
         }),
         g.table(),
         g.pager(),

@@ -2,6 +2,7 @@
 // terminal (ui_terminal.cpp) and browser (ui_web.cpp) implementations: they
 // only turn the structs into props for the components.
 #include <algorithm>
+#include <cstddef>
 #include <string>
 #include <utility>
 #include <vector>
@@ -19,6 +20,7 @@ const char* variantName(Variant v) {
         case Variant::Primary: return "primary";
         case Variant::Danger: return "danger";
         case Variant::Success: return "success";
+        case Variant::Warning: return "warning";
         default: return "default";
     }
 }
@@ -220,6 +222,24 @@ Element progress(ProgressProps p) {
 
 Element tooltip(TooltipProps p) {
     return withKey(h(Tooltip, {{"text", std::move(p.text)}}, std::move(p.children)), p.key);
+}
+
+Element badge(BadgeProps p) {
+    return withKey(h(Badge, {{"text", std::move(p.text)}, {"variant", variantName(p.variant)}}), p.key);
+}
+
+Element menu(MenuProps p) {
+    std::vector<Element> items;
+    for (std::size_t i = 0; i < p.items.size(); ++i) {
+        auto& it = p.items[i];
+        items.push_back(h("ui-menu-item", {{"key", std::to_string(i)},
+                                           {"label", std::move(it.label)},
+                                           {"onSelect", std::move(it.onSelect)},
+                                           {"danger", it.danger},
+                                           {"disabled", it.disabled}}));
+    }
+    return withKey(h(Menu, {{"label", std::move(p.label)}, {"alignEnd", p.alignEnd}, {"disabled", p.disabled}}, std::move(items)),
+                   p.key);
 }
 
 Element confirm(ConfirmProps p) {

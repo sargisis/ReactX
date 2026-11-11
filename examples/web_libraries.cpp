@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <iterator>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -66,9 +67,6 @@ body { place-items: start center; }
 .lib-bar { height: 10px; border-radius: 6px; background: var(--border); overflow: hidden; max-width: 420px; }
 .lib-bar > div { height: 100%; background: var(--accent); }
 .lib-spring { display: inline-block; padding: 4px 12px; border-radius: 99px; background: var(--accent); color: var(--accent-text); font-size: 13px; width: max-content; }
-.lib-sev { font-size: 12px; padding: 1px 8px; border-radius: 99px; border: 1px solid var(--border); white-space: nowrap; }
-.lib-sev-Critical { color: #fff; background: #c62828; border-color: #c62828; }
-.lib-sev-High { color: #fff; background: #b45309; border-color: #b45309; }
 .lib-row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 )css";
 

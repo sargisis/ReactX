@@ -285,7 +285,7 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 
 | Компонент | Что умеет |
 |---|---|
-| `button` | `label`, `onClick`, `variant` (`Default`, `Primary`, `Danger`, `Success`), `disabled` (не получает фокус) |
+| `button` | `label`, `onClick`, `variant` (`Default`, `Primary`, `Danger`, `Success`, (v1.8) `Warning`), `disabled` (не получает фокус) |
 | `input` | `value`, `onChange(text)`, `onSubmit(text)` по Enter, `placeholder`, `label`; Escape очищает; в строке `stack` занимает свободное место; `labelAbove` — подпись на своей строке (поля формы выровнены); клик по подписи ставит фокус в поле; (v1.0) `type`: `ui::InputType::Password` (точки в терминале), `Email`, `Number`, `Search`, `Tel`, `Url` |
 | `checkbox` | `label`, `checked`, `onToggle` (Enter / Space), `onChange(bool)` с новым состоянием |
 | `tabs` | вкладки `{label, content}`, `initial`; Enter на заголовке открывает вкладку; (v1.1) `active` + `onChange(int)` — открытая вкладка в вашем состоянии (переключение горячей клавишей) |
@@ -303,6 +303,8 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 | `confirm` | `title`, `message`, `open`, `confirmLabel`, `cancelLabel`, `danger`, `onConfirm`, `onCancel` (ещё Escape и клик мимо) — готовое «Удалить?» |
 | `toast` / `toaster` | `ui::toast({.text, .variant, .duration})` из любого обработчика или эффекта показывает сообщение в углу, которое исчезает само (`duration = 0` — до клика); один `ui::toaster()` в приложении |
 | `tooltip` | `text`, `children`: подсказка, пока указатель над ними (и, в браузере, пока у них фокус) |
+| `badge` | (v1.8) `text`, `variant`: маленькая метка — статус, счётчик, тег (в браузере «таблетка», в терминале текст на цвете варианта) |
+| `menu` | (v1.8) `label`, `items` (`{label, onSelect, danger, disabled}`), `alignEnd`, `disabled`: кнопка, которая открывает список действий; ↑ ↓, Enter, Escape; в браузере список открывается поверх страницы и закрывается кликом мимо, в терминале — под кнопкой |
 | `card` | `title`, `children`: панель с рамкой |
 | `stack` | `direction` (`Column`, `Row`), `gap` (клетки / шаги по 8px), `align`, `justify` (`Between`, …), `wrap`, `children`: раскладка без CSS |
 | `text` | `text`, `muted`: абзац |

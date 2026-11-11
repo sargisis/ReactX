@@ -297,7 +297,7 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 
 | Component | Does |
 |---|---|
-| `button` | `label`, `onClick`, `variant` (`Default`, `Primary`, `Danger`, `Success`), `disabled` (doesn't take focus) |
+| `button` | `label`, `onClick`, `variant` (`Default`, `Primary`, `Danger`, `Success`, (v1.8) `Warning`), `disabled` (doesn't take focus) |
 | `input` | `value`, `onChange(text)`, `onSubmit(text)` on Enter, `placeholder`, `label`; Escape clears it; takes the free room in a `stack` row; `labelAbove` puts the label on its own line (forms line up); a click on the label focuses the field; (v1.0) `type`: `ui::InputType::Password` (dots in a terminal), `Email`, `Number`, `Search`, `Tel`, `Url` |
 | `checkbox` | `label`, `checked`, `onToggle` (Enter / Space), `onChange(bool)` with the new state |
 | `tabs` | tabs `{label, content}`, `initial`; Enter on a title opens the tab; (v1.1) `active` + `onChange(int)` keep the open tab in your state (switch it from a shortcut) |
@@ -315,6 +315,8 @@ ui::themeProvider(ui::Theme{.accent = "magenta"}, {
 | `confirm` | `title`, `message`, `open`, `confirmLabel`, `cancelLabel`, `danger`, `onConfirm`, `onCancel` (also Escape and a click outside) — a ready "Delete it?" |
 | `toast` / `toaster` | `ui::toast({.text, .variant, .duration})` from any handler or effect shows a message in a corner that goes away by itself (`duration = 0`: until clicked); put one `ui::toaster()` in the app |
 | `tooltip` | `text`, `children`: shows while the pointer is over them (and while they have focus in the browser) |
+| `badge` | (v1.8) `text`, `variant`: a small label — a status, a count, a tag (a pill in the browser, the text on the variant's color in a terminal) |
+| `menu` | (v1.8) `label`, `items` (`{label, onSelect, danger, disabled}`), `alignEnd`, `disabled`: a button that opens a list of actions; Up / Down, Enter, Escape; in the browser the list opens over the page and a click outside closes it, in a terminal it opens under the button |
 | `card` | `title`, `children`: a bordered panel |
 | `stack` | `direction` (`Column`, `Row`), `gap` (cells / 8px steps), `align`, `justify` (`Between`, …), `wrap`, `children`: layout without CSS |
 | `text` | `text`, `muted`: a paragraph |

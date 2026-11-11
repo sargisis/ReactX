@@ -1392,7 +1392,9 @@ Element Textarea(const Props& props);
 Element RadioGroup(const Props& props);
 Element Slider(const Props& props);
 Element Progress(const Props& props);
-enum class Variant { Default, Primary, Danger, Success };
+Element Badge(const Props& props);
+Element Menu(const Props& props);
+enum class Variant { Default, Primary, Danger, Success, Warning };
 struct ButtonProps {
 std::string label{};
 Callback onClick{};
@@ -1619,6 +1621,26 @@ std::vector<Element> children{};
 std::string key{};
 };
 Element tooltip(TooltipProps props);
+struct BadgeProps {
+std::string text{};
+Variant variant = Variant::Default;
+std::string key{};
+};
+Element badge(BadgeProps props);
+struct MenuItem {
+std::string label{};
+Callback onSelect{};
+bool danger = false;
+bool disabled = false;
+};
+struct MenuProps {
+std::string label{};
+std::vector<MenuItem> items{};
+bool alignEnd = false;
+bool disabled = false;
+std::string key{};
+};
+Element menu(MenuProps props);
 struct ConfirmProps {
 std::string title{};
 std::string message{};

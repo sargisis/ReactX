@@ -462,7 +462,7 @@ inline const std::vector<Page>& pagesEn() {
         {
             "ui", "Ready components (rx::ui)", "Buttons, inputs, selects, dialogs, toasts, tooltips and lists with a theme.",
             {
-                {"Components", "button, input, checkbox, select, tabs, modal, confirm, list and listItem, tooltip, card, stack "
+                {"Components", "button, input, checkbox, select, tabs, modal, confirm, list and listItem, tooltip, badge, menu, card, stack "
                                "and text. The same code works in the terminal and in the browser. In forms, .labelAbove = true "
                                "puts the label of an input or select on its own line, so the fields line up; a checkbox's "
                                ".onChange gets the new state. .type = ui::InputType::Password hides what is typed (dots "
@@ -523,6 +523,12 @@ inline const std::vector<Page>& pagesEn() {
                  "                .onChange = setSortFn}),\n"
                  "    ui::tooltip({.text = \"Asks first\", .children = {ui::button({.label = \"Clear\"})}}),\n"
                  "}})"},
+                {"Badge and menu", "(v1.8.0+) ui::badge is a small label: a status, a count, a tag. ui::menu is a button "
+                                   "that opens a list of actions: Up / Down move, Enter picks, Escape closes; in the browser "
+                                   "the list opens over the page, in a terminal under the button.",
+                 "ui::badge({.text = \"Critical\", .variant = ui::Variant::Danger})\n"
+                 "ui::menu({.label = \"Actions\", .items = {{.label = \"Rename\", .onSelect = renameFn},\n"
+                 "                                          {.label = \"Delete\", .onSelect = removeFn, .danger = true}}})"},
                 {"Theme", "ui::themeProvider passes colors to every ui component below it. In the browser each color name "
                           "has a light and a dark shade (prefers-color-scheme) with text at 4.5:1 contrast (WCAG AA); "
                           "\"#rrggbb\" is used as it is. ui::card's .level sets its title's heading level (h3 by default).",

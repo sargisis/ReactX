@@ -279,6 +279,40 @@ TEST(table_row_ignores_clicks_from_controls_in_it) {
     CHECK(contains(s.text(), "picks:1 presses:1"));
 }
 
+TEST(badge_draws_its_text) {
+    Screen s(h("box", {{"direction", "row"}, {"gap", 1}}, {ui::badge({.text = "draft"}), ui::badge({.text = "Critical", .variant = ui::Variant::Danger})}), 30, 3);
+    CHECK(contains(s.text(), "[draft]  Critical"));  // " Critical " on red (trailing spaces are trimmed)
+}
+
+std::string menuPicked;
+
+Element MenuApp(const Props&) {
+    return h("box", {}, {
+        ui::menu({.label = "Actions",
+                  .items = {{.label = "Rename", .onSelect = [] { menuPicked = "rename"; }},
+                            {.label = "Archive", .disabled = true},
+                            {.label = "Remove", .onSelect = [] { menuPicked = "remove"; }, .danger = true}}}),
+        h("text", {}, {"below"}),
+    });
+}
+
+TEST(menu_opens_picks_and_closes) {
+    Screen s(h(MenuApp), 30, 10);
+    CHECK(contains(s.text(), "Actions ▾") && !contains(s.text(), "Rename"));
+    s.press("Enter");  // the button has the focus
+    CHECK(contains(s.text(), "Rename") && contains(s.text(), "Archive") && contains(s.text(), "Actions ▴"));
+    s.press("Down");   // Rename -> Remove (Archive can't take the focus)
+    s.press("Enter");
+    CHECK(menuPicked == "remove" && !contains(s.text(), "Rename"));
+    s.press("Enter");  // open again: the focus came back to the button
+    CHECK(contains(s.text(), "Rename"));
+    s.press("Escape");
+    CHECK(!contains(s.text(), "Rename") && contains(s.text(), "below"));
+    s.click("Actions");
+    s.click("Rename");
+    CHECK(menuPicked == "rename" && !contains(s.text(), "Rename"));
+}
+
 TEST(table_shows_empty_text) {
     Screen s(ui::table({.columns = {{.title = "Name"}}, .emptyText = "Nothing here"}), 30, 6);
     CHECK(contains(s.text(), "Name") && contains(s.text(), "Nothing here"));

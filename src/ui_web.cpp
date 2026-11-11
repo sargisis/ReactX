@@ -3,9 +3,11 @@
 #include <emscripten.h>
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "reactx/dom.hpp"
 #include "reactx/hooks.hpp"
@@ -34,7 +36,7 @@ constexpr const char* kCss = R"css(
           --rx-c-magenta: #e879f9; --rx-c-cyan: #22d3ee; --rx-c-gray: #9ca3af; --rx-c-bright-red: #fca5a5;
           --rx-c-bright-green: #86efac; --rx-c-bright-yellow: #fde047; --rx-c-bright-blue: #93c5fd;
           --rx-c-bright-magenta: #f0abfc; --rx-c-bright-cyan: #67e8f9;
-          --rx-accent: #60a5fa; --rx-danger: #f87171; --rx-success: #4ade80; --rx-on-accent: #0b1220;
+          --rx-accent: #60a5fa; --rx-danger: #f87171; --rx-success: #4ade80; --rx-warning: #facc15; --rx-on-accent: #0b1220;
           --rx-border: #374151; --rx-surface: #1f2430; --rx-muted: #9ca3af; --rx-hover: rgb(255 255 255 / 0.06); }
 }
 .rx-theme { display: contents; }
@@ -50,6 +52,7 @@ constexpr const char* kCss = R"css(
 .rx-btn--success { background: var(--rx-success); border-color: var(--rx-success); color: var(--rx-on-accent); }
 .rx-btn--danger { color: var(--rx-danger); }
 .rx-btn--danger:hover:not(:disabled) { border-color: var(--rx-danger); }
+.rx-btn--warning { border-color: var(--rx-warning); }
 .rx-btn:disabled { opacity: .45; cursor: not-allowed; }
 
 .rx-field { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
@@ -71,6 +74,7 @@ constexpr const char* kCss = R"css(
 .rx-progress__bar { height: 100%; border-radius: inherit; background: var(--rx-accent); transition: width .25s ease; }
 .rx-progress--success .rx-progress__bar { background: var(--rx-success); }
 .rx-progress--danger .rx-progress__bar { background: var(--rx-danger); }
+.rx-progress--warning .rx-progress__bar { background: var(--rx-warning); }
 .rx-field__label { color: var(--rx-muted); white-space: nowrap; }
 .rx-stack--row > .rx-field--input { flex: 1 1 10em; min-width: 0; }
 .rx-field--above { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 4px; }
@@ -151,6 +155,31 @@ constexpr const char* kCss = R"css(
 .rx-toast--primary { border-left-color: var(--rx-accent); }
 .rx-toast--success { border-left-color: var(--rx-success); }
 .rx-toast--danger { border-left-color: var(--rx-danger); }
+.rx-toast--warning { border-left-color: var(--rx-warning); }
+
+.rx-badge { display: inline-block; font-size: .78em; font-weight: 600; line-height: 1.5; padding: 0 8px; border-radius: 999px;
+            border: 1px solid var(--rx-border); color: var(--rx-muted); white-space: nowrap; vertical-align: middle; }
+.rx-badge--primary { background: var(--rx-accent); border-color: var(--rx-accent); color: var(--rx-on-accent); }
+.rx-badge--success { background: var(--rx-success); border-color: var(--rx-success); color: var(--rx-on-accent); }
+.rx-badge--danger { background: var(--rx-danger); border-color: var(--rx-danger); color: var(--rx-on-accent); }
+.rx-badge--warning { background: var(--rx-warning); border-color: var(--rx-warning); color: #111827; }
+
+.rx-menu { position: relative; display: inline-flex; }
+.rx-menu__arrow { margin-left: 6px; font-size: .8em; }
+.rx-menu__backdrop { position: fixed; inset: 0; z-index: 999; }
+.rx-menu__list {
+  position: absolute; top: calc(100% + 4px); left: 0; z-index: 1000; min-width: 100%; width: max-content;
+  max-width: calc(100vw - 32px); box-sizing: border-box; display: flex; flex-direction: column; padding: 4px;
+  background: var(--rx-surface); border: 1px solid var(--rx-border); border-radius: var(--rx-radius);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18); animation: rx-fade .12s ease-out;
+}
+.rx-menu__list--end { left: auto; right: 0; }
+.rx-menu__item { font: inherit; text-align: left; padding: 7px 12px; border: none; border-radius: 6px; background: none;
+                 color: inherit; cursor: pointer; white-space: nowrap; }
+.rx-menu__item:hover:not(:disabled), .rx-menu__item:focus { background: var(--rx-hover); outline: none; }
+.rx-menu__item:focus-visible { outline: 2px solid var(--rx-accent); outline-offset: -2px; }
+.rx-menu__item--danger { color: var(--rx-danger); }
+.rx-menu__item:disabled { color: var(--rx-muted); cursor: default; }
 .rx-toast:focus-visible { outline: 2px solid var(--rx-accent); outline-offset: 2px; }
 .rx-table { display: flex; flex-direction: column; min-height: 0; width: 100%; max-width: 100%; box-sizing: border-box;
             border: 1px solid var(--rx-border); border-radius: var(--rx-radius); overflow-x: auto; overflow-y: hidden; }
@@ -521,6 +550,77 @@ Element Tooltip(const Props& p) {
                       {"onFocus", [setShown] { setShown(true); }},
                       {"onBlur", [setShown] { setShown(false); }}},
              std::move(parts));
+}
+
+Element Badge(const Props& p) {
+    ensureStyles();
+    return h("span", {{"className", "rx-badge rx-badge--" + p.get<std::string>("variant", "default")}}, {p.get<std::string>("text")});
+}
+
+Element Menu(const Props& p) {
+    ensureStyles();
+    auto [open, setOpen] = useState(false);
+    auto& refs = useRef<std::vector<NodeRef>>();  // one per item, for the arrow keys
+    const std::string id = useId();
+    const auto& items = p.children();
+    while (refs.size() < items.size()) refs.push_back(NodeRef::create());
+    const std::string label = p.get<std::string>("label");
+    const bool off = p.get<bool>("disabled");
+
+    std::vector<Element> parts;
+    parts.push_back(h("button", {{"type", "button"},
+                                 {"className", "rx-btn rx-menu__button"},
+                                 {"aria-haspopup", "menu"},
+                                 {"aria-expanded", open ? "true" : "false"},
+                                 {"aria-controls", open ? id : std::string{}},
+                                 {"disabled", off},
+                                 {"onClick", off ? Callback{} : Callback([setOpen] { setOpen([](bool o) { return !o; }); })}},
+                      {label, h("span", {{"className", "rx-menu__arrow"}, {"aria-hidden", "true"}}, {"▾"})}));
+    if (open && !off) {
+        Callback close = [setOpen] { setOpen(false); };
+        // The items that can be picked, in order: Up / Down go to the next one, round the end.
+        std::vector<NodeRef> enabled;
+        std::vector<int> place(items.size(), -1);  // item -> its place in `enabled`
+        for (std::size_t i = 0; i < items.size(); ++i)
+            if (!items[i].props.get<bool>("disabled")) {
+                place[i] = static_cast<int>(enabled.size());
+                enabled.push_back(refs[i]);
+            }
+        std::vector<Element> list;
+        for (std::size_t i = 0; i < items.size(); ++i) {
+            const Props& item = items[i].props;
+            auto onSelect = item.get<Callback>("onSelect");
+            Element e = h("button", {{"key", items[i].key},
+                                     {"type", "button"},
+                                     {"role", "menuitem"},
+                                     {"className", item.get<bool>("danger") ? "rx-menu__item rx-menu__item--danger" : "rx-menu__item"},
+                                     {"disabled", item.get<bool>("disabled")},
+                                     {"ref", refs[i]},
+                                     {"onClick", [close, onSelect] {
+                                          close();
+                                          if (onSelect) onSelect();
+                                      }}},
+                          {item.get<std::string>("label")});
+            if (place[i] >= 0)
+                e.props.set("onKey", KeyHandler([enabled, at = place[i]](const KeyEvent& k) {
+                                const int n = static_cast<int>(enabled.size());
+                                if (k.key == "Down") enabled[static_cast<std::size_t>((at + 1) % n)].focus();
+                                else if (k.key == "Up") enabled[static_cast<std::size_t>((at + n - 1) % n)].focus();
+                            }));
+            list.push_back(std::move(e));
+        }
+        parts.push_back(h("div", {{"className", "rx-menu__backdrop"}, {"onClick", close}}));
+        parts.push_back(h("div", {{"className", p.get<bool>("alignEnd") ? "rx-menu__list rx-menu__list--end" : "rx-menu__list"},
+                                  {"role", "menu"},
+                                  {"id", id},
+                                  {"aria-label", label},
+                                  {"data-rx-trap", true},  // focus on the first item; back to the button on close
+                                  {"onKey", [close](const KeyEvent& e) {
+                                       if (e.key == "Escape" || e.key == "Tab") close();
+                                   }}},
+                          std::move(list)));
+    }
+    return h("span", {{"className", "rx-menu"}}, std::move(parts));
 }
 
 namespace {

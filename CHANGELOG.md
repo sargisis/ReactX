@@ -6,6 +6,13 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Added
+
+- `ui::badge({.text, .variant})`: a small label — a status, a count, a tag. A pill in the browser (Default outlined, the others filled), the text on the variant's color in a terminal (Default as `[text]`).
+- `ui::menu({.label, .items = {{.label, .onSelect, .danger, .disabled}}, .alignEnd})`: a button that opens a list of actions. Up / Down move between the items (disabled ones are skipped), Enter picks, Escape closes. In the browser the list opens over the page (ARIA `menu` / `menuitem`), a click outside or Tab closes it and the focus comes back to the button; in a terminal it opens under the button. Props versions `ui::Badge` and `ui::Menu` too.
+- `ui::Variant::Warning`: the theme's warning color for a badge, a button's border, a progress bar and a toast.
+- The `grid` demo uses both: badges for severities, an "Actions" menu for the selected rows.
+
 ## [1.7.1] — 2026-11-11
 
 A fix for clickable table rows: a checkbox, button or link in a `ui::table` row no longer selects the row too, so selecting rows in `reactx::grid` (`.select = true`) works again. Plus a `grid` tab on the library demos page. No API changes.

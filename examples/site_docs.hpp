@@ -512,7 +512,7 @@ inline const std::vector<Page>& pages() {
         {
             "ui", "Компоненты rx::ui", "Готовые кнопки, поля, списки выбора, окна, уведомления, подсказки и списки с темой.",
             {
-                {"Компоненты", "button, input, checkbox, select, tabs, modal, confirm, list и listItem, tooltip, card, stack и text. "
+                {"Компоненты", "button, input, checkbox, select, tabs, modal, confirm, list и listItem, tooltip, badge, menu, card, stack и text. "
                                "Один и тот же код работает в терминале и в браузере. Свойства — назначенные инициализаторы C++20. "
                                "В формах .labelAbove = true ставит подпись поля или списка на отдельную строку, и поля выравниваются; "
                                ".onChange у checkbox получает новое состояние. .type = ui::InputType::Password скрывает "
@@ -572,6 +572,12 @@ inline const std::vector<Page>& pages() {
                  "                .onChange = setSortFn}),\n"
                  "    ui::tooltip({.text = \"Спросит заранее\", .children = {ui::button({.label = \"Очистить\"})}}),\n"
                  "}})"},
+                {"Метка и меню", "(v1.8.0+) ui::badge — маленькая метка: статус, счётчик, тег. ui::menu — кнопка, которая "
+                                 "открывает список действий: ↑ ↓ — по пунктам, Enter выбирает, Escape закрывает; в браузере "
+                                 "список открывается поверх страницы, в терминале — под кнопкой.",
+                 "ui::badge({.text = \"Срочно\", .variant = ui::Variant::Danger})\n"
+                 "ui::menu({.label = \"Действия\", .items = {{.label = \"Переименовать\", .onSelect = renameFn},\n"
+                 "                                            {.label = \"Удалить\", .onSelect = removeFn, .danger = true}}})"},
                 {"Тема", "ui::themeProvider передаёт ui::Theme через контекст; в браузере она превращается в CSS-переменные. "
                          "У каждого имени цвета есть светлый и тёмный оттенок (prefers-color-scheme) с контрастом текста 4.5:1 "
                          "(WCAG AA); \"#rrggbb\" используется как есть. .level у ui::card задаёт уровень заголовка (по умолчанию h3).",

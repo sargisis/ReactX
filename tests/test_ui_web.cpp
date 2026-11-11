@@ -29,6 +29,7 @@ std::string js(const std::string& code) { return emscripten_run_script_string(co
 std::string html() { return js("rxTest.html()"); }
 bool has(const std::string& part) { return html().find(part) != std::string::npos; }
 std::string focused() { return js("rxTest.focused()"); }
+std::string menuPicked;
 
 int clicks = 0;
 std::string submitted;
@@ -332,6 +333,36 @@ int main() {
     }));
     CHECK(has("type=\"password\"") && has("type=\"email\""));
     CHECK(has("aria-invalid=\"true\"") && has("<span class=\"rx-field__error\" role=\"alert\">Too many</span>"));
+
+    std::cout << "badge and menu\n";
+    mountDom(h("div", {}, {
+        ui::badge({.text = "Critical", .variant = ui::Variant::Danger}),
+        ui::badge({.text = "draft"}),
+        ui::menu({.label = "Actions",
+                  .items = {{.label = "Rename", .onSelect = [] { menuPicked = "rename"; }},
+                            {.label = "Archive", .disabled = true},
+                            {.label = "Remove", .onSelect = [] { menuPicked = "remove"; }, .danger = true}}}),
+    }));
+    CHECK(has("<span class=\"rx-badge rx-badge--danger\">Critical</span>") && has("rx-badge rx-badge--default"));
+    CHECK(has("aria-expanded=\"false\"") && js("rxTest.countClass('rx-menu__list')") == "0");
+    js("rxTest.focusText('Actions▾')");
+    js("rxTest.clickText('Actions▾')");
+    CHECK(js("rxTest.countClass('rx-menu__list')") == "1" && has("aria-expanded=\"true\"") && has("role=\"menu\""));
+    CHECK(focused() == "Rename");  // the first item
+    js("rxTest.keyFocused('ArrowDown')");
+    CHECK(focused() == "Remove");  // Archive is disabled: skipped
+    js("rxTest.keyFocused('ArrowDown')");
+    CHECK(focused() == "Rename");  // round the end
+    js("rxTest.keyFocused('ArrowUp')");
+    CHECK(focused() == "Remove");
+    js("rxTest.keyFocused('Escape')");
+    CHECK(js("rxTest.countClass('rx-menu__list')") == "0" && focused() == "Actions▾");
+    js("rxTest.clickText('Actions▾')");
+    js("rxTest.clickText('Remove')");
+    CHECK(menuPicked == "remove" && js("rxTest.countClass('rx-menu__list')") == "0");
+    js("rxTest.clickText('Actions▾')");
+    js("rxTest.clickClass('rx-menu__backdrop')");  // a click outside
+    CHECK(menuPicked == "remove" && js("rxTest.countClass('rx-menu__list')") == "0");
 
     std::cout << (failures ? "FAILED: " + std::to_string(failures) : std::string("OK, all tests passed")) << '\n';
     return failures ? 1 : 0;

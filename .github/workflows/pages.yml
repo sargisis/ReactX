@@ -1,5 +1,5 @@
-# Builds and tests ReactX (GCC 16 and Emscripten; ASan+UBSan+LSan and TSan),
-# then publishes the site to GitHub Pages:
+# Builds and tests ReactX (GCC 16, Clang and Emscripten; ASan+UBSan+LSan and TSan;
+# a GCC 14 compatibility report), then publishes the site to GitHub Pages:
 #   https://sargisis.github.io/ReactX/
 # The site is pushed to the gh-pages branch (Settings -> Pages -> Deploy from a
 # branch -> gh-pages / (root)). Compiled files (ccache) and Emscripten are kept
@@ -93,6 +93,80 @@ jobs:
         run: cmake --build build -j --target reactx_cli_tests && ccache -s
       - name: Test
         run: ctest --test-dir build --output-on-failure -R reactx_cli_e2e_tests
+
+  # The same code with Clang (and GCC 16's standard library, which ReactX needs
+  # natively): keeps ReactX from depending on GCC itself. The CLI is left out
+  # (it reads reactx.json with C++26 reflection, which Clang doesn't have), and
+  # so is the module (CMake would need clang-scan-deps).
+  clang:
+    name: Native build and tests (Clang, libstdc++ 16)
+    runs-on: ubuntu-24.04
+    container: gcc:16
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: |
+          apt-get update && apt-get install -y --no-install-recommends cmake ninja-build ccache wget
+          # The newest Clang release from apt.llvm.org (the image's Debian has an older one).
+          codename=$(. /etc/os-release && echo "$VERSION_CODENAME")
+          wget -qO /etc/apt/trusted.gpg.d/apt.llvm.org.asc https://apt.llvm.org/llvm-snapshot.gpg.key
+          for v in 24 23 22 21; do
+            echo "deb http://apt.llvm.org/$codename/ llvm-toolchain-$codename-$v main" > /etc/apt/sources.list.d/llvm.list
+            if apt-get update -q && apt-get install -y --no-install-recommends clang-$v; then
+              echo "CXX=clang++-$v" >> "$GITHUB_ENV"; echo "CC=clang-$v" >> "$GITHUB_ENV"; clang++-$v --version; break
+            fi
+          done
+          grep -q '^CXX=' "$GITHUB_ENV"  # no Clang installed: fail here, not in CMake
+          echo "CCACHE_DIR=$GITHUB_WORKSPACE/.ccache" >> "$GITHUB_ENV"; echo "CCACHE_MAXSIZE=500M" >> "$GITHUB_ENV"; echo "CCACHE_BASEDIR=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+      - name: Restore the compiler cache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-clang-${{ github.sha }}
+          restore-keys: ccache-clang-
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER="$CXX" -DCMAKE_C_COMPILER="$CC"
+          -DCMAKE_CXX_FLAGS_DEBUG=-g1 -DREACTX_BUILD_TOOLS=OFF -DREACTX_MODULES=OFF
+      - name: Build
+        run: cmake --build build -j && ccache -s
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -LE "slow|fuzz"
+
+  # What keeps ReactX from building with GCC 14 (Ubuntu 24.04, Debian 13): every
+  # source file compiled on its own, the errors listed in the job summary. Only a
+  # report for now, so it never turns the run red.
+  gcc14-report:
+    name: GCC 14 compatibility report
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile each file with GCC 14
+        run: |
+          g++-14 --version | head -1
+          mkdir -p gen/reactx deps
+          v=$(grep -oP 'project\(ReactX VERSION \K[0-9.]+' CMakeLists.txt); IFS=. read -r ma mi pa <<< "$v"
+          sed -e "s/@PROJECT_VERSION@/$v/" -e "s/@PROJECT_VERSION_MAJOR@/$ma/" -e "s/@PROJECT_VERSION_MINOR@/$mi/" \
+              -e "s/@PROJECT_VERSION_PATCH@/$pa/" cmake/version.hpp.in > gen/reactx/version.hpp
+          wget -qO- https://github.com/facebook/yoga/archive/refs/tags/v3.2.1.tar.gz | tar xz -C deps
+          incs="-Iinclude -Igen -Ideps/yoga-3.2.1 $(printf -- '-I%s ' library/*/include)"
+          ok=0; bad=0; : > errors.txt; : > failed.txt
+          # Left out: browser-only files (need Emscripten), the CLI (needs reflection,
+          # GCC 16+) and its test (needs paths from CMake).
+          skip='^(src/(dom|prerender|ui_web)\.cpp|tools/reactx\.cpp|tests/test_(dom.*|web.*|ui_web|module|cli)\.cpp)$'
+          for f in src/*.cpp library/*/src/*.cpp tools/*.cpp tests/*.cpp library/*/tests/*.cpp; do
+            [[ "$f" =~ $skip ]] && continue
+            if g++-14 -std=c++2c -fsyntax-only $incs "$f" 2> err.txt; then ok=$((ok+1)); else
+              bad=$((bad+1)); echo "$f" >> failed.txt; { grep -E "error" err.txt || true; } | sed -E 's/^[^ ]*: (fatal )?error: //' >> errors.txt; fi
+          done
+          {
+            echo "## GCC 14: $ok files compile, $bad don't"
+            echo; echo "### Files"; echo; sed 's/^/- /' failed.txt
+            echo; echo "### Most common errors"; echo; echo '```'
+            sort errors.txt | uniq -c | sort -rn | head -40 || true
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
 
   # Memory errors, leaks and undefined behaviour stop the run on the first
   # finding: -fno-sanitize-recover makes UBSan fatal (by default it only

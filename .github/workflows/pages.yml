@@ -124,10 +124,12 @@ jobs:
           path: .ccache
           key: ccache-clang-${{ github.sha }}
           restore-keys: ccache-clang-
+      # GCC 16 lives in /usr/local in this image: without --gcc-toolchain Clang
+      # takes Debian's older libstdc++.
       - name: Configure
         run: >
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER="$CXX" -DCMAKE_C_COMPILER="$CC"
-          -DCMAKE_CXX_FLAGS_DEBUG=-g1 -DREACTX_BUILD_TOOLS=OFF -DREACTX_MODULES=OFF
+          -DCMAKE_CXX_FLAGS=--gcc-toolchain=/usr/local -DCMAKE_CXX_FLAGS_DEBUG=-g1 -DREACTX_BUILD_TOOLS=OFF -DREACTX_MODULES=OFF
       - name: Build
         run: cmake --build build -j && ccache -s
       - name: Test

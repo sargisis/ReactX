@@ -8,6 +8,7 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ### Fixed
 
+- `reactx::jobs`: `Queue::every` crashed when ReactX was built with Clang (it read the job's period after moving the job away; GCC happened to evaluate the arguments in the other order).
 - ReactX builds with Clang 23 (with libstdc++ 16), and its tests pass: `TextRenderer` no longer uses a dynamic `std::format` width that Clang can't check there, and the module test compiles under Clang. Only the `reactx` CLI still needs GCC 16 (it reads `reactx.json` with C++26 reflection).
 
 ## [1.8.0] — 2026-11-22

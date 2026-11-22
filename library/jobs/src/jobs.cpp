@@ -304,7 +304,10 @@ std::uint64_t Queue::every(milliseconds period, std::string name, Work work) {
     job->work = std::move(work);
     job->kind = Kind::Every;
     job->period = std::max(period, milliseconds(1));
-    return state_->enqueue(std::move(job), Clock::now() + job->period);
+    // The time first: the order of arguments is unspecified, and Clang moves
+    // `job` before reading job->period (a null pointer by then).
+    auto at = Clock::now() + job->period;
+    return state_->enqueue(std::move(job), at);
 }
 
 std::expected<std::uint64_t, std::string> Queue::cron(std::string_view spec, std::string name, Work work) {

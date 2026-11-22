@@ -96,7 +96,8 @@ void TextRenderer::commit() {
 void TextRenderer::print(std::string& out, NodeHandle h, int depth) const {
     const Node& n = nodes_.at(h);
     auto to = std::back_inserter(out);
-    std::string indent = std::format("{:{}}", "", depth * 2);  // depth * 2 spaces
+    // Not std::format("{:{}}", ...): Clang can't check a dynamic width with libstdc++ 16.
+    std::string indent(static_cast<std::size_t>(depth) * 2, ' ');
     if (n.isText) {
         std::format_to(to, "{}\"{}\"\n", indent, n.text);
         return;

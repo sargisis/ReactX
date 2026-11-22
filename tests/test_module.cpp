@@ -3,10 +3,19 @@
 #include <stdexcept>
 #include <string>
 
-// Editors (clangd, the VS Code C/C++ extension) can't read GCC's module files: show them the headers.
+// Editors (clangd, the VS Code C/C++ extension) can't read GCC's module files: show them the headers
+// (the same ones modules/reactx.cppm exports, so a Clang build of this test compiles too).
 #if defined(__INTELLISENSE__) || defined(__clang__)
+#include "reactx/fetch.hpp"
+#include "reactx/json.hpp"
+#include "reactx/path.hpp"
 #include "reactx/reactx.hpp"
+#include "reactx/router.hpp"
+#include "reactx/terminal.hpp"
 #include "reactx/text_renderer.hpp"
+#include "reactx/ui.hpp"
+#include "reactx/version.hpp"
+#include "reactx/websocket.hpp"
 #else
 import reactx;
 #endif

@@ -6,6 +6,10 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Fixed
+
+- ReactX builds with Clang 23 (with libstdc++ 16), and its tests pass: `TextRenderer` no longer uses a dynamic `std::format` width that Clang can't check there, and the module test compiles under Clang. Only the `reactx` CLI still needs GCC 16 (it reads `reactx.json` with C++26 reflection).
+
 ## [1.8.0] — 2026-11-22
 
 Two new `rx::ui` components — `ui::badge` and `ui::menu` — and a warning color, plus faster first builds: ccache now works across projects, and Yoga and the ReactX release are downloaded once per computer, so a second new project configures with no network and builds in 4.5 s instead of 13 s. Nothing changes for existing apps.

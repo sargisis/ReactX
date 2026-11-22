@@ -6,6 +6,12 @@ In English: [CHANGELOG.md](CHANGELOG.md).
 
 ## [Не выпущено]
 
+## [1.8.0] — 2026-11-22
+
+Два новых компонента `rx::ui` — `ui::badge` и `ui::menu` — и цвет предупреждения, а ещё быстрая первая сборка: ccache работает между проектами, а Yoga и релиз ReactX скачиваются один раз на компьютер, так что второй новый проект конфигурируется без сети и собирается за 4,5 с вместо 13. В существующих приложениях ничего не меняется.
+
+**Обновление:** `reactx upgrade`, затем `reactx update` в каждом проекте. Кэш загрузки ReactX работает в проекте, созданном новым CLI (`reactx new`); старые проекты получат кэш Yoga после `reactx update`.
+
 ### Добавлено
 
 - `ui::badge({.text, .variant})`: маленькая метка — статус, счётчик, тег. В браузере «таблетка» (Default с рамкой, остальные залитые), в терминале текст на цвете варианта (Default как `[text]`).
@@ -677,7 +683,8 @@ ReactX без установки компиляторов: готовый `react
 - **Сайт с документацией** на ReactX: https://sargisis.github.io/ReactX/, публикуется GitHub Actions через ветку `gh-pages`.
 - Версия в одном месте (`project(ReactX VERSION ...)`) → `reactx/version.hpp`, `rx::version()`; новые проекты из `reactx new` подключают ReactX по тегу релиза.
 
-[Не выпущено]: https://github.com/sargisis/ReactX/compare/v1.7.1...HEAD
+[Не выпущено]: https://github.com/sargisis/ReactX/compare/v1.8.0...HEAD
+[1.8.0]: https://github.com/sargisis/ReactX/compare/v1.7.1...v1.8.0
 [1.7.1]: https://github.com/sargisis/ReactX/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/sargisis/ReactX/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/sargisis/ReactX/compare/v1.5.0...v1.6.0

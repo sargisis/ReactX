@@ -1,5 +1,5 @@
 # Builds and tests ReactX (GCC 16, Clang and Emscripten; ASan+UBSan+LSan and TSan;
-# a GCC 14 compatibility report), then publishes the site to GitHub Pages:
+# a GCC 15 compatibility report), then publishes the site to GitHub Pages:
 #   https://sargisis.github.io/ReactX/
 # The site is pushed to the gh-pages branch (Settings -> Pages -> Deploy from a
 # branch -> gh-pages / (root)). Compiled files (ccache) and Emscripten are kept
@@ -135,18 +135,19 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure -LE "slow|fuzz"
 
-  # What keeps ReactX from building with GCC 14 (Ubuntu 24.04, Debian 13): every
-  # source file compiled on its own, the errors listed in the job summary. Only a
-  # report for now, so it never turns the run red.
-  gcc14-report:
-    name: GCC 14 compatibility report
+  # What keeps ReactX from building with GCC 15 (the first GCC with std::flat_map;
+  # GCC 14 stops there): every source file compiled on its own, the errors listed
+  # in the job summary. Only a report for now, so it never turns the run red.
+  gcc15-report:
+    name: GCC 15 compatibility report
     runs-on: ubuntu-24.04
+    container: gcc:15
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-      - name: Compile each file with GCC 14
+      - name: Compile each file with GCC 15
         run: |
-          g++-14 --version | head -1
+          g++ --version | head -1
           mkdir -p gen/reactx deps
           v=$(grep -oP 'project\(ReactX VERSION \K[0-9.]+' CMakeLists.txt); IFS=. read -r ma mi pa <<< "$v"
           sed -e "s/@PROJECT_VERSION@/$v/" -e "s/@PROJECT_VERSION_MAJOR@/$ma/" -e "s/@PROJECT_VERSION_MINOR@/$mi/" \
@@ -159,11 +160,11 @@ jobs:
           skip='^(src/(dom|prerender|ui_web)\.cpp|tools/reactx\.cpp|tests/test_(dom.*|web.*|ui_web|module|cli)\.cpp)$'
           for f in src/*.cpp library/*/src/*.cpp tools/*.cpp tests/*.cpp library/*/tests/*.cpp; do
             [[ "$f" =~ $skip ]] && continue
-            if g++-14 -std=c++2c -fsyntax-only $incs "$f" 2> err.txt; then ok=$((ok+1)); else
+            if g++ -std=c++2c -fsyntax-only $incs "$f" 2> err.txt; then ok=$((ok+1)); else
               bad=$((bad+1)); echo "$f" >> failed.txt; { grep -E "error" err.txt || true; } | sed -E 's/^[^ ]*: (fatal )?error: //' >> errors.txt; fi
           done
           {
-            echo "## GCC 14: $ok files compile, $bad don't"
+            echo "## GCC 15: $ok files compile, $bad don't"
             echo; echo "### Files"; echo; sed 's/^/- /' failed.txt
             echo; echo "### Most common errors"; echo; echo '```'
             sort errors.txt | uniq -c | sort -rn | head -40 || true

@@ -15,6 +15,7 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 
 ### Changed
 
+- New projects need no network after the first one: Yoga's tarball and the ReactX release of a project made by `reactx new` are downloaded once per computer into `~/.cache/reactx` (`$XDG_CACHE_HOME/reactx`, `%LOCALAPPDATA%\reactx` on Windows; `REACTX_CACHE_DIR` moves it, `-DREACTX_CACHE_DIR=` turns it off). The web and native builds of one project share them too. Only release tags (`vX.Y.Z`) are cached; a branch or a commit in `reactx.json` is fetched as before. Projects made earlier keep their CMakeLists.txt: they get the Yoga cache after `reactx update`, the ReactX one only in a new project.
 - ccache now works across projects: ReactX passes it `base_dir` (the top-level project) and `hash_dir=false`, so a new project (or a second checkout) gets ReactX and Yoga from the cache instead of compiling them again — ReactX's library in a second project 11 → 4.5 s. Needs ccache 4.8+ (older versions are used as before); `CCACHE_BASEDIR` / `CCACHE_NOHASHDIR` you set yourself win. Compiler messages show paths relative to the build folder.
 
 

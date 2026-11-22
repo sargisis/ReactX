@@ -55,6 +55,25 @@ if(REACTX_CCACHE AND NOT CMAKE_CXX_COMPILER_LAUNCHER)
     set(CMAKE_C_COMPILER_LAUNCHER ${launcher})
   endif()
 endif()
+# Downloads shared by every project on this computer: Yoga's tarball here, and
+# a ReactX release in a project made by `reactx new` (its CMakeLists.txt sets
+# this variable before ReactX is fetched). $REACTX_CACHE_DIR, else
+# $XDG_CACHE_HOME/reactx, ~/.cache/reactx or %LOCALAPPDATA%/reactx;
+# -DREACTX_CACHE_DIR= (empty) turns it off.
+if(NOT DEFINED REACTX_CACHE_DIR)
+  set(cache_dir)
+  if(DEFINED ENV{REACTX_CACHE_DIR})
+    set(cache_dir "$ENV{REACTX_CACHE_DIR}")
+  elseif(DEFINED ENV{XDG_CACHE_HOME})
+    set(cache_dir "$ENV{XDG_CACHE_HOME}/reactx")
+  elseif(DEFINED ENV{HOME})
+    set(cache_dir "$ENV{HOME}/.cache/reactx")
+  elseif(DEFINED ENV{LOCALAPPDATA})
+    set(cache_dir "$ENV{LOCALAPPDATA}/reactx")
+  endif()
+  file(TO_CMAKE_PATH "${cache_dir}" cache_dir)
+  set(REACTX_CACHE_DIR "${cache_dir}" CACHE PATH "Downloads shared by all ReactX projects (empty: off)")
+endif()
 # ccache can't cache a compile that is scanned for C++ modules, and only code
 # that writes `import reactx;` needs the scan (the examples, the module test;
 # the module itself is always scanned): the rest of ReactX goes without it.
@@ -374,9 +393,34 @@ if(TARGET yoga::yogacore)
   message(STATUS "ReactX: using installed Yoga")
 else()
   include(FetchContent)
+  set(yoga_url https://github.com/facebook/yoga/archive/refs/tags/v3.2.1.tar.gz)
+  set(yoga_sha256 86b399ac31fd820d8ffa823c3fae31bb690b6fc45301b2a8a966c09b5a088b55)
+  # The tarball is downloaded once per computer (REACTX_CACHE_DIR above), so
+  # new projects need no network. Downloaded here, not with FetchContent's
+  # DOWNLOAD_DIR: CMake 3.30+ (policy CMP0168) ignores that. A file appears in
+  # the cache only whole and with the right hash; FetchContent checks it again.
+  if(REACTX_CACHE_DIR)
+    set(yoga_file ${REACTX_CACHE_DIR}/downloads/yoga-v3.2.1.tar.gz)
+    if(NOT EXISTS ${yoga_file})
+      string(RANDOM LENGTH 8 yoga_tmp)
+      set(yoga_tmp ${yoga_file}.tmp-${yoga_tmp})
+      file(DOWNLOAD ${yoga_url} ${yoga_tmp} STATUS yoga_status)
+      list(GET yoga_status 0 yoga_failed)
+      if(NOT yoga_failed)
+        file(SHA256 ${yoga_tmp} yoga_got)
+        if(yoga_got STREQUAL yoga_sha256)
+          file(RENAME ${yoga_tmp} ${yoga_file} RESULT yoga_failed)  # another project may be first
+        endif()
+      endif()
+      file(REMOVE ${yoga_tmp})
+    endif()
+    if(EXISTS ${yoga_file})
+      set(yoga_url ${yoga_file})
+    endif()
+  endif()
   FetchContent_Declare(yoga
-    URL https://github.com/facebook/yoga/archive/refs/tags/v3.2.1.tar.gz
-    URL_HASH SHA256=86b399ac31fd820d8ffa823c3fae31bb690b6fc45301b2a8a966c09b5a088b55
+    URL ${yoga_url}
+    URL_HASH SHA256=${yoga_sha256}
     SOURCE_SUBDIR yoga  # only the library, not Yoga's own tests
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
   )

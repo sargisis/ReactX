@@ -549,7 +549,7 @@ Supported: `bool`, numbers, strings, `std::optional`, sequences, maps with strin
 <details>
 <summary><b>Building from source</b></summary>
 
-The only dependency is [Yoga](https://github.com/facebook/yoga) v3.2.1 (MIT); CMake downloads it (offline: `-DFETCHCONTENT_SOURCE_DIR_YOGA=/path/to/yoga`).
+The only dependency is [Yoga](https://github.com/facebook/yoga) v3.2.1 (MIT); CMake downloads it once per computer into `~/.cache/reactx` (`REACTX_CACHE_DIR` to move it, `-DREACTX_CACHE_DIR=` to turn it off), together with the ReactX release of a project made by `reactx new`, so the next projects need no network (offline from the start: `-DFETCHCONTENT_SOURCE_DIR_YOGA=/path/to/yoga`).
 
 ```sh
 cmake --preset debug -DCMAKE_CXX_COMPILER=g++-16   # or release

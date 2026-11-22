@@ -537,7 +537,7 @@ rx::json::Value v = rx::json::to(*m);
 <details>
 <summary><b>Сборка из исходников</b></summary>
 
-Зависимость одна — [Yoga](https://github.com/facebook/yoga) v3.2.1 (MIT), CMake скачает её сам (без интернета: `-DFETCHCONTENT_SOURCE_DIR_YOGA=/путь/к/yoga`).
+Зависимость одна — [Yoga](https://github.com/facebook/yoga) v3.2.1 (MIT), CMake скачает её один раз на компьютер в `~/.cache/reactx` (`REACTX_CACHE_DIR` — другая папка, `-DREACTX_CACHE_DIR=` — выключить) вместе с релизом ReactX для проекта из `reactx new`, так что следующим проектам сеть не нужна (совсем без интернета: `-DFETCHCONTENT_SOURCE_DIR_YOGA=/путь/к/yoga`).
 
 ```sh
 cmake --preset debug -DCMAKE_CXX_COMPILER=g++-16   # или release

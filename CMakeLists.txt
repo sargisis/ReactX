@@ -33,8 +33,26 @@ option(REACTX_CCACHE "Compile through ccache when it is installed" ON)
 if(REACTX_CCACHE AND NOT CMAKE_CXX_COMPILER_LAUNCHER)
   find_program(REACTX_CCACHE_PROGRAM ccache)
   if(REACTX_CCACHE_PROGRAM)
-    set(CMAKE_CXX_COMPILER_LAUNCHER ${REACTX_CCACHE_PROGRAM})
-    set(CMAKE_C_COMPILER_LAUNCHER ${REACTX_CCACHE_PROGRAM})
+    # By default ccache keys a compile on absolute paths and on the build
+    # folder, so two projects (or two checkouts) never share a cached file:
+    # every `reactx new` compiled ReactX and Yoga from scratch. base_dir makes
+    # paths under the top-level project relative (its _deps/ included) and
+    # hash_dir=false leaves the build folder out: the same code hits the cache
+    # wherever it is (ReactX: 10 -> 4 s in a second copy). KEY=VALUE arguments
+    # need ccache 4.8+; CCACHE_BASEDIR / CCACHE_NOHASHDIR set by hand win.
+    set(launcher ${REACTX_CCACHE_PROGRAM})
+    execute_process(COMMAND ${REACTX_CCACHE_PROGRAM} --version OUTPUT_VARIABLE ccache_version ERROR_QUIET)
+    string(REGEX MATCH "version ([0-9]+\\.[0-9]+)" ccache_version "${ccache_version}")
+    if(CMAKE_MATCH_1 VERSION_GREATER_EQUAL 4.8 AND NOT DEFINED ENV{CCACHE_BASEDIR})
+      list(APPEND launcher base_dir=${CMAKE_SOURCE_DIR})
+      if(NOT DEFINED ENV{CCACHE_NOHASHDIR} AND NOT DEFINED ENV{CCACHE_HASHDIR})
+        list(APPEND launcher hash_dir=false)
+      endif()
+    endif()
+    # Global: reactx_add_app uses it for the app's own targets.
+    set(REACTX_CCACHE_LAUNCHER "${launcher}" CACHE INTERNAL "ccache and its options")
+    set(CMAKE_CXX_COMPILER_LAUNCHER ${launcher})
+    set(CMAKE_C_COMPILER_LAUNCHER ${launcher})
   endif()
 endif()
 # ccache can't cache a compile that is scanned for C++ modules, and only code

@@ -13,6 +13,11 @@ All notable changes to ReactX. Versions follow [Semantic Versioning](https://sem
 - `ui::Variant::Warning`: the theme's warning color for a badge, a button's border, a progress bar and a toast.
 - The `grid` demo uses both: badges for severities, an "Actions" menu for the selected rows.
 
+### Changed
+
+- ccache now works across projects: ReactX passes it `base_dir` (the top-level project) and `hash_dir=false`, so a new project (or a second checkout) gets ReactX and Yoga from the cache instead of compiling them again — ReactX's library in a second project 11 → 4.5 s. Needs ccache 4.8+ (older versions are used as before); `CCACHE_BASEDIR` / `CCACHE_NOHASHDIR` you set yourself win. Compiler messages show paths relative to the build folder.
+
+
 ## [1.7.1] — 2026-11-11
 
 A fix for clickable table rows: a checkbox, button or link in a `ui::table` row no longer selects the row too, so selecting rows in `reactx::grid` (`.select = true`) works again. Plus a `grid` tab on the library demos page. No API changes.

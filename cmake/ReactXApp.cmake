@@ -19,9 +19,9 @@
 # project hasn't chosen a compiler launcher of its own.
 function(_reactx_use_ccache target)
   get_target_property(launcher ${target} CXX_COMPILER_LAUNCHER)
-  if(REACTX_CCACHE AND REACTX_CCACHE_PROGRAM AND NOT launcher)
-    set_target_properties(${target} PROPERTIES CXX_COMPILER_LAUNCHER ${REACTX_CCACHE_PROGRAM}
-                                               C_COMPILER_LAUNCHER ${REACTX_CCACHE_PROGRAM})
+  if(REACTX_CCACHE AND REACTX_CCACHE_LAUNCHER AND NOT launcher)
+    set_target_properties(${target} PROPERTIES CXX_COMPILER_LAUNCHER "${REACTX_CCACHE_LAUNCHER}"
+                                               C_COMPILER_LAUNCHER "${REACTX_CCACHE_LAUNCHER}")
   endif()
 endfunction()
 

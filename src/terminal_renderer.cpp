@@ -5,13 +5,16 @@
 #include <charconv>
 #include <cmath>
 #include <deque>
-#include <inplace_vector>
 #include <mdspan>
 #include <span>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <version>
+#if defined(__cpp_lib_inplace_vector)
+#include <inplace_vector>
+#endif
 
 #include "reactx/terminal.hpp"
 #include "reactx/parse.hpp"
@@ -551,9 +554,17 @@ struct TerminalRenderer::Layout {
 // The cells of one repaint.
 struct TerminalRenderer::Frame {
     struct Cell {
-        // One character (a glyph: a code point and its marks), no heap (C++26).
-        // Empty: the right half of the wide character in the cell before.
-        std::inplace_vector<char, 16> ch{' '};
+        // One character (a glyph: a code point and its marks), no heap: C++26
+        // std::inplace_vector (GCC 16+), else a short std::string (no heap
+        // either: up to 15 bytes fit in the string itself). Empty: the right
+        // half of the wide character in the cell before.
+#if defined(__cpp_lib_inplace_vector)
+        static constexpr std::size_t kMaxBytes = 16;
+        std::inplace_vector<char, kMaxBytes> ch{' '};
+#else
+        static constexpr std::size_t kMaxBytes = 15;
+        std::string ch = " ";
+#endif
         bool continuation() const { return ch.empty(); }
         Style style;
         std::string_view text() const { return {ch.data(), ch.size()}; }
@@ -748,7 +759,7 @@ void TerminalRenderer::put(Frame& frame, int x, int y, const Rect& clip, std::st
             } else {
                 claim(x);
                 Frame::Cell& cell = at(x);
-                if (g.text.size() <= cell.ch.capacity()) cell.ch.assign(g.text.begin(), g.text.end());
+                if (g.text.size() <= Frame::Cell::kMaxBytes) cell.ch.assign(g.text.begin(), g.text.end());
                 else cell.ch.assign(g.text.begin(), g.text.begin() + static_cast<std::ptrdiff_t>(detail::utf8SeqLength(static_cast<unsigned char>(g.text[0]))));
                 cell.style = style;
                 if (g.width == 2) {

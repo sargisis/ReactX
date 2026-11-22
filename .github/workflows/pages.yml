@@ -146,6 +146,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Compile each file with GCC 15
+        shell: bash  # the container's default is sh
         run: |
           g++ --version | head -1
           mkdir -p gen/reactx deps
